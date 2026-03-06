@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="assets_backend" inherit_id="web.assets_backend" name="Custom Purchase Flow: hide Edit when not draft">
+        <xpath expr="//script[@src='/web/static/src/js/views/form/form_controller.js']" position="after">
+            <script type="text/javascript" src="/custom_purchase_flow/static/src/js/form_controller.js"/>
+        </xpath>
+    </template>
+
+    <template id="assets_backend_rfq_dashboard" inherit_id="web.assets_backend" name="Custom Purchase Flow: RFQ dashboard behavior">
+        <xpath expr="." position="inside">
+            <script type="text/javascript" src="/custom_purchase_flow/static/src/js/purchase_rfq_dashboard.js"/>
+            <script type="text/javascript" src="/custom_purchase_flow/static/src/js/purchase_state_badges.js"/>
+            <link rel="stylesheet" type="text/scss" href="/custom_purchase_flow/static/src/scss/purchase_state_badges.scss"/>
+        </xpath>
+    </template>
+</odoo>

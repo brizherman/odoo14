@@ -1,0 +1,10 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_hide_edit_flag,po.hide.edit.flag,model_purchase_order_hide_edit_flag,base.group_user,1,1,1,1
+access_reject_wizard_coordinator,purchase.order.reject.wizard coordinator,model_purchase_order_reject_wizard,custom_purchase_flow.group_purchase_coordinator,1,0,0,0
+access_reject_wizard_direction,purchase.order.reject.wizard direction,model_purchase_order_reject_wizard,custom_purchase_flow.group_purchase_direction,1,1,1,1
+access_reject_wizard_dept,purchase.order.reject.wizard dept,model_purchase_order_reject_wizard,custom_purchase_flow.group_purchase_dept,1,0,0,0
+access_reject_wizard_cashier,purchase.order.reject.wizard cashier,model_purchase_order_reject_wizard,custom_purchase_flow.group_purchase_cashier,1,0,0,0
+access_purchase_order_tracking_wizard,purchase.order.tracking.wizard,model_purchase_order_tracking_wizard,base.group_user,1,1,1,1
+access_receipt_date_wizard_manager,purchase.order.receipt.date.wizard manager,model_purchase_order_receipt_date_wizard,purchase.group_purchase_manager,1,1,1,1
+access_receipt_date_wizard_direction,purchase.order.receipt.date.wizard direction,model_purchase_order_receipt_date_wizard,custom_purchase_flow.group_purchase_direction,1,1,1,1
+access_receipt_date_wizard_dept,purchase.order.receipt.date.wizard dept,model_purchase_order_receipt_date_wizard,custom_purchase_flow.group_purchase_dept,1,1,1,1

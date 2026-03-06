@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates>
+    <!-- Override the standard purchase dashboard with 8 custom state cards -->
+    <t t-name="purchase.PurchaseDashboard">
+        <div class="o_purchase_dashboard container">
+            <div class="o_rfq_status_row d-flex flex-wrap justify-content-around align-items-stretch">
+                <!-- 1. Borrador — pink #d63384 (info bucket) -->
+                <div class="o_rfq_card_wrapper flex-grow-1 mx-1 mb-2 text-center">
+                    <div class="card o_rfq_dashboard_square h-100"
+                         data-state="draft">
+                        <div class="card-body py-2 px-1">
+                            <div class="o_rfq_state_header mb-1">
+                                <div class="text-muted small">1. Borrador</div>
+                                <div class="badge o_rfq_state_count mt-1"
+                                     style="background-color:#d63384;color:#ffffff;">
+                                    <t t-esc="values.rfq_state_counts ? (values.rfq_state_counts['draft'] || 0) : 0"/>
+                                </div>
+                            </div>
+                            <div class="o_rfq_state_description small text-muted">
+                                <div>Coordinador</div>
+                                <div>Crea PO</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="o_rfq_flow_arrow mx-1 text-muted d-none d-md-flex align-items-center">→</div>
+
+                <!-- 2. Por Aprobar — indigo #6610f2 (primary bucket) -->
+                <div class="o_rfq_card_wrapper flex-grow-1 mx-1 mb-2 text-center">
+                    <div class="card o_rfq_dashboard_square h-100"
+                         data-state="to approve">
+                        <div class="card-body py-2 px-1">
+                            <div class="o_rfq_state_header mb-1">
+                                <div class="text-muted small">2. Por Aprobar</div>
+                                <div class="badge o_rfq_state_count mt-1"
+                                     style="background-color:#6610f2;color:#ffffff;">
+                                    <t t-esc="values.rfq_state_counts ? (values.rfq_state_counts['to approve'] || 0) : 0"/>
+                                </div>
+                            </div>
+                            <div class="o_rfq_state_description small text-muted">
+                                <div>Direction</div>
+                                <div>Aprueba o Rechaza</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="o_rfq_flow_arrow mx-1 text-muted d-none d-md-flex align-items-center">→</div>
+
+                <!-- 3. Aprobada — green #198754 (success bucket) -->
+                <div class="o_rfq_card_wrapper flex-grow-1 mx-1 mb-2 text-center">
+                    <div class="card o_rfq_dashboard_square h-100"
+                         data-state="approved">
+                        <div class="card-body py-2 px-1">
+                            <div class="o_rfq_state_header mb-1">
+                                <div class="text-muted small">3. Aprobada</div>
+                                <div class="badge o_rfq_state_count mt-1"
+                                     style="background-color:#198754;color:#ffffff;">
+                                    <t t-esc="values.rfq_state_counts ? (values.rfq_state_counts['approved'] || 0) : 0"/>
+                                </div>
+                            </div>
+                            <div class="o_rfq_state_description small text-muted">
+                                <div>Depto Compras</div>
+                                <div>Por enviar a Proveedor</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="o_rfq_flow_arrow mx-1 text-muted d-none d-md-flex align-items-center">→</div>
+
+                <!-- 4. Enviada a Proveedor — amber #f59e0b (warning bucket) -->
+                <div class="o_rfq_card_wrapper flex-grow-1 mx-1 mb-2 text-center">
+                    <div class="card o_rfq_dashboard_square h-100"
+                         data-state="sent">
+                        <div class="card-body py-2 px-1">
+                            <div class="o_rfq_state_header mb-1">
+                                <div class="text-muted small">4. Enviada a Proveedor</div>
+                                <div class="badge o_rfq_state_count mt-1"
+                                     style="background-color:#f59e0b;color:#000000;">
+                                    <t t-esc="values.rfq_state_counts ? (values.rfq_state_counts['sent'] || 0) : 0"/>
+                                </div>
+                            </div>
+                            <div class="o_rfq_state_description small text-muted">
+                                <div>Depto de Compras</div>
+                                <div>PO enviada a proveedor esperandolo</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="o_rfq_flow_arrow mx-1 text-muted d-none d-md-flex align-items-center">→</div>
+
+                <!-- 5. Pendiente de Pago — orange #fd7e14 (muted bucket) -->
+                <div class="o_rfq_card_wrapper flex-grow-1 mx-1 mb-2 text-center">
+                    <div class="card o_rfq_dashboard_square h-100"
+                         data-state="pending_payment">
+                        <div class="card-body py-2 px-1">
+                            <div class="o_rfq_state_header mb-1">
+                                <div class="text-muted small">5. Pendiente de Pago</div>
+                                <div class="badge o_rfq_state_count mt-1"
+                                     style="background-color:#fd7e14;color:#ffffff;">
+                                    <t t-esc="values.rfq_state_counts ? (values.rfq_state_counts['pending_payment'] || 0) : 0"/>
+                                </div>
+                            </div>
+                            <div class="o_rfq_state_description small text-muted">
+                                <div>Depto de Compras</div>
+                                <div>Pendiente de pago contado o credito</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="o_rfq_flow_arrow mx-1 text-muted d-none d-md-flex align-items-center">→</div>
+
+                <!-- 6. PO Surtiendo — amber #f59e0b (warning bucket, same as sent) -->
+                <div class="o_rfq_card_wrapper flex-grow-1 mx-1 mb-2 text-center">
+                    <div class="card o_rfq_dashboard_square h-100"
+                         data-state="purchase">
+                        <div class="card-body py-2 px-1">
+                            <div class="o_rfq_state_header mb-1">
+                                <div class="text-muted small">6. PO Surtiendo</div>
+                                <div class="badge o_rfq_state_count mt-1"
+                                     style="background-color:#f59e0b;color:#000000;">
+                                    <t t-esc="values.rfq_state_counts ? (values.rfq_state_counts['purchase'] || 0) : 0"/>
+                                </div>
+                            </div>
+                            <div class="o_rfq_state_description small text-muted">
+                                <div>Depto de Compras</div>
+                                <div>Esta surtiendo, esperamos # Guia</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="o_rfq_flow_arrow mx-1 text-muted d-none d-md-flex align-items-center">→</div>
+
+                <!-- 7. PO En Tránsito — purple #9333ea (danger bucket) -->
+                <div class="o_rfq_card_wrapper flex-grow-1 mx-1 mb-2 text-center">
+                    <div class="card o_rfq_dashboard_square h-100"
+                         data-state="in_transit">
+                        <div class="card-body py-2 px-1">
+                            <div class="o_rfq_state_header mb-1">
+                                <div class="text-muted small">7. PO En Tránsito</div>
+                                <div class="badge o_rfq_state_count mt-1"
+                                     style="background-color:#9333ea;color:#ffffff;">
+                                    <t t-esc="values.rfq_state_counts ? (values.rfq_state_counts['in_transit'] || 0) : 0"/>
+                                </div>
+                            </div>
+                            <div class="o_rfq_state_description small text-muted">
+                                <div>Depto de Compras</div>
+                                <div>Proveedor envio PO</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="o_rfq_flow_arrow mx-1 text-muted d-none d-md-flex align-items-center">→</div>
+
+                <!-- 8. PO Llegó — green #198754 (success bucket) -->
+                <div class="o_rfq_card_wrapper flex-grow-1 mx-1 mb-2 text-center">
+                    <div class="card o_rfq_dashboard_square h-100"
+                         data-state="arrived">
+                        <div class="card-body py-2 px-1">
+                            <div class="o_rfq_state_header mb-1">
+                                <div class="text-muted small">8. PO Llegó</div>
+                                <div class="badge o_rfq_state_count mt-1"
+                                     style="background-color:#198754;color:#ffffff;">
+                                    <t t-esc="values.rfq_state_counts ? (values.rfq_state_counts['arrived'] || 0) : 0"/>
+                                </div>
+                            </div>
+                            <div class="o_rfq_state_description small text-muted">
+                                <div>Cajera o Coordinador</div>
+                                <div>Ya llego, aun no se recibe en sistema</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </t>
+</templates>

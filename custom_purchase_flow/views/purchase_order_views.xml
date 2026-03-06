@@ -1,0 +1,780 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- ================================================================
+             FORM VIEW — Inherited from purchase.purchase_order_form
+             ================================================================ -->
+        <record id="view_purchase_order_form_custom" model="ir.ui.view">
+            <field name="name">purchase.order.form.custom</field>
+            <field name="model">purchase.order</field>
+            <field name="inherit_id" ref="purchase.purchase_order_form"/>
+            <field name="arch" type="xml">
+
+                <!-- 6.2 Replace native statusbar — correct order matching the custom flow -->
+                <xpath expr="//field[@name='state'][@widget='statusbar']" position="replace">
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,to approve,approved,sent,pending_payment,purchase,in_transit,arrived,hecho"
+                           readonly="1"/>
+                </xpath>
+
+                <!-- 6.3 Hide: Send by Email (draft) completely -->
+                <xpath expr="//button[@name='action_rfq_send'][@states='draft']" position="replace">
+                    <button name="action_rfq_send" states="draft" string="Send by Email"
+                            type="object" context="{'send_rfq':True}"
+                            invisible="1"
+                            groups="base.group_no_one"/>
+                </xpath>
+
+                <!-- 6.3 Hide: Print RFQ (draft) completely -->
+                <xpath expr="//button[@name='print_quotation'][@states='draft']" position="replace">
+                    <button name="print_quotation" string="Print RFQ" type="object" states="draft"
+                            invisible="1"
+                            groups="base.group_no_one"/>
+                </xpath>
+
+                <!-- 6.3 Hide: Re-Send by Email (sent) completely -->
+                <xpath expr="//button[@name='action_rfq_send'][@states='sent']" position="replace">
+                    <button name="action_rfq_send" states="sent" string="Re-Send by Email"
+                            type="object" context="{'send_rfq':True}"
+                            invisible="1"
+                            groups="base.group_no_one"/>
+                </xpath>
+
+                <!-- 6.3 Hide: Print RFQ (sent) completely -->
+                <xpath expr="//button[@name='print_quotation'][@states='sent']" position="replace">
+                    <button name="print_quotation" string="Print RFQ" type="object" states="sent"
+                            invisible="1"
+                            groups="base.group_no_one"/>
+                </xpath>
+
+                <!-- 6.3 Hide: Send PO by Email (purchase) -->
+                <xpath expr="//button[@name='action_rfq_send'][@states='purchase']" position="replace">
+                    <button name="action_rfq_send" states="purchase" string="Send PO by Email"
+                            type="object" context="{'send_rfq':False}"
+                            groups="base.group_no_one"/>
+                </xpath>
+
+                <!-- 6.3 Hide: original Cancel button -->
+                <xpath expr="//button[@name='button_cancel']" position="replace">
+                    <button name="button_cancel" string="Cancel" type="object"
+                            invisible="1"
+                            groups="base.group_no_one"/>
+                </xpath>
+
+                <!-- 6.3 Restrict: Done button (final step) to Coordinator and Purchase Dept -->
+                <xpath expr="//button[@name='button_done']" position="replace">
+                    <button name="button_done"
+                            type="object"
+                            string="Done"
+                            states="arrived"
+                            class="oe_highlight"
+                            groups="custom_purchase_flow.group_purchase_coordinator,custom_purchase_flow.group_purchase_dept"/>
+                </xpath>
+
+                <!-- 6.3 Hide: Unlock button -->
+                <xpath expr="//button[@name='button_unlock']" position="replace">
+                    <button name="button_unlock" type="object" string="Unlock" states="done"
+                            groups="base.group_no_one"/>
+                </xpath>
+
+                <!-- 6.3 Hide: Confirm Order (sent) completely — we use \"Surtiendo\" instead -->
+                <xpath expr="//button[@id='bid_confirm']" position="replace">
+                    <button name="button_confirm" type="object" states="sent"
+                            string="Confirm Order" class="oe_highlight" id="bid_confirm"
+                            invisible="1"
+                            groups="base.group_no_one"/>
+                </xpath>
+
+                <!-- 6.4 Hide native "Confirm Order" (draft) for everyone; show only "Solicitar Aprobación" -->
+                <xpath expr="//button[@id='draft_confirm']" position="replace">
+                    <button name="button_confirm" type="object" states="draft"
+                            string="Confirm Order" id="draft_confirm"
+                            invisible="1"
+                            groups="base.group_no_one"/>
+                </xpath>
+                <!-- Our draft action: Coordinador, Direction and Purchase Dept can submit for approval -->
+                <xpath expr="//button[@id='draft_confirm']" position="after">
+                    <button name="action_request_approval"
+                            type="object"
+                            states="draft"
+                            string="Solicitar Aprobación"
+                            class="oe_highlight"
+                            groups="custom_purchase_flow.group_purchase_coordinator,custom_purchase_flow.group_purchase_direction,custom_purchase_flow.group_purchase_dept"/>
+                </xpath>
+
+                <!-- 6.5 Restrict native Approve Order to Direction group -->
+                <xpath expr="//button[@name='button_approve']" position="replace">
+                    <button name="button_approve"
+                            type="object"
+                            states="to approve"
+                            string="Aprobar Orden"
+                            class="oe_highlight"
+                            groups="custom_purchase_flow.group_purchase_direction"/>
+                </xpath>
+
+                <!-- 6.6 Add Reject button (after Approve Order) -->
+                <xpath expr="//button[@name='button_approve']" position="after">
+                    <button name="action_open_reject_wizard"
+                            type="object"
+                            states="to approve"
+                            string="Rechazar"
+                            class="btn-secondary"
+                            groups="custom_purchase_flow.group_purchase_direction"/>
+                </xpath>
+
+                <!-- Add Cambiar a Borrador button for Direction in 'to approve' -->
+                <xpath expr="//button[@name='action_open_reject_wizard']" position="after">
+                    <button name="action_set_to_draft"
+                            type="object"
+                            states="to approve"
+                            string="Cambiar a Borrador"
+                            class="btn-secondary"
+                            groups="custom_purchase_flow.group_purchase_direction"/>
+                </xpath>
+
+                <!-- 6.7 Add Send to Vendor button -->
+                <xpath expr="//button[@name='action_open_reject_wizard']" position="after">
+                    <button name="action_send_to_vendor"
+                            type="object"
+                            states="approved"
+                            string="Enviar a Proveedor"
+                            class="oe_highlight"
+                            groups="custom_purchase_flow.group_purchase_dept,custom_purchase_flow.group_purchase_direction"/>
+                </xpath>
+
+                <!-- Purchase Dept: Cambiar a Aprobada (revert from sent to approved) -->
+                <xpath expr="//button[@name='action_send_to_vendor']" position="after">
+                    <button name="action_set_to_approved"
+                            type="object"
+                            string="Regresar a Aprobada"
+                            class="btn-secondary"
+                            attrs="{'invisible': [('state', '!=', 'sent')]}"
+                            groups="custom_purchase_flow.group_purchase_dept"/>
+                </xpath>
+
+                <!-- Direction: same Regresar a Aprobada option when in Enviada a Proveedor -->
+                <xpath expr="//button[@name='action_send_to_vendor']" position="after">
+                    <button name="action_set_to_approved"
+                            type="object"
+                            string="Regresar a Aprobada"
+                            class="btn-secondary"
+                            attrs="{'invisible': [('state', '!=', 'sent')]}"
+                            groups="custom_purchase_flow.group_purchase_direction"/>
+                </xpath>
+
+                <!-- Purchase Dept: Cancelar (en Borrador y Aprobada; Enviada a Proveedor uses shared block below)
+                     Placed AFTER 'Solicitar Aprobación' so the order is:
+                     [Solicitar Aprobación] [Cancelar] -->
+                <xpath expr="//button[@name='action_request_approval']" position="after">
+                    <button name="button_cancel"
+                            type="object"
+                            string="Cancelar"
+                            class="btn-secondary"
+                            attrs="{'invisible': [('state', 'not in', ['draft', 'approved'])]}"
+                            groups="custom_purchase_flow.group_purchase_dept"/>
+                </xpath>
+
+                <!-- Coordinador: Cancelar solo en Borrador, also AFTER 'Solicitar Aprobación' -->
+                <xpath expr="//button[@name='action_request_approval']" position="after">
+                    <button name="button_cancel"
+                            type="object"
+                            string="Cancelar"
+                            class="btn-secondary"
+                            attrs="{'invisible': [('state', '!=', 'draft')]}"
+                            groups="custom_purchase_flow.group_purchase_coordinator"/>
+                </xpath>
+
+                <!-- Direction: technical Cancel placeholder; real buttons come from shared blocks below. -->
+                <xpath expr="//button[@name='action_request_approval']" position="after">
+                    <button name="button_cancel"
+                            type="object"
+                            string="Cancelar"
+                            class="btn-secondary"
+                            invisible="1"
+                            attrs="{}"
+                            groups="base.group_no_one"/>
+                </xpath>
+
+                <!-- Purchase Dept: Cambiar a Borrador (solo en Por Aprobar; no en Aprobada, Enviada a Proveedor ni Pendiente de Pago) -->
+                <xpath expr="//button[@name='action_send_to_vendor']" position="after">
+                    <button name="action_set_to_draft"
+                            type="object"
+                            string="Cambiar a Borrador"
+                            class="btn-secondary"
+                            attrs="{'invisible': [('state', '!=', 'to approve')]}"
+                            groups="custom_purchase_flow.group_purchase_dept"/>
+                </xpath>
+
+                <!-- 6.8 Add Surtiendo button (sent only) for Purchase Dept.
+                     (base definition kept but used only for technical grouping) -->
+                <xpath expr="//button[@name='action_send_to_vendor']" position="after">
+                    <button name="action_set_fulfilling"
+                            type="object"
+                            string="Surtiendo"
+                            class="oe_highlight"
+                            attrs="{'invisible': [('state', '!=', 'sent')]}"
+                            groups="base.group_no_one"/>
+                </xpath>
+
+                <!-- Direction: technical Surtiendo placeholder; real buttons come from shared blocks below. -->
+                <xpath expr="//button[@name='action_send_to_vendor']" position="after">
+                    <button name="action_set_fulfilling"
+                            type="object"
+                            string="Surtiendo"
+                            class="oe_highlight"
+                            invisible="1"
+                            attrs="{}"
+                            groups="base.group_no_one"/>
+                </xpath>
+
+                <!-- 6.9 Add Pendiente de Pago button (sent only) - base version hidden -->
+                <xpath expr="//button[@name='action_set_fulfilling']" position="after">
+                    <button name="action_set_pending_payment"
+                            type="object"
+                            states="sent"
+                            string="Pendiente de Pago"
+                            class="btn-secondary"
+                            groups="base.group_no_one"/>
+                </xpath>
+
+                <!-- Direction: same Pendiente de Pago button (sent) via Purchase Dept button using shared groups -->
+
+                <!-- Purchase Dept & Direction: ordered buttons in Enviada a Proveedor (sent).
+                     Order: Surtiendo, Pendiente de Pago, Regresar a Aprobada, Cancelar -->
+                <xpath expr="//button[@name='action_send_to_vendor']" position="after">
+                    <button name="action_set_fulfilling"
+                            type="object"
+                            string="Surtiendo"
+                            class="oe_highlight"
+                            attrs="{'invisible': [('state', '!=', 'sent')]}"
+                            groups="custom_purchase_flow.group_purchase_dept,custom_purchase_flow.group_purchase_direction"/>
+                    <button name="action_set_pending_payment"
+                            type="object"
+                            states="sent"
+                            string="Pendiente de Pago"
+                            class="btn-secondary"
+                            groups="custom_purchase_flow.group_purchase_dept,custom_purchase_flow.group_purchase_direction"/>
+                    <button name="action_set_to_approved"
+                            type="object"
+                            string="Regresar a Aprobada"
+                            class="btn-secondary"
+                            attrs="{'invisible': [('state', '!=', 'sent')]}"
+                            groups="custom_purchase_flow.group_purchase_dept,custom_purchase_flow.group_purchase_direction"/>
+                    <button name="button_cancel"
+                            type="object"
+                            string="Cancelar"
+                            class="btn-secondary"
+                            attrs="{'invisible': [('state', '!=', 'sent')]}"
+                            groups="custom_purchase_flow.group_purchase_dept,custom_purchase_flow.group_purchase_direction"/>
+                </xpath>
+
+                <!-- Add button to edit Fecha Recepción via wizard (sent, pending_payment) -->
+                <xpath expr="//div[@name='date_planned_div']/field[@name='date_planned']" position="after">
+                    <button name="action_open_receipt_date_wizard"
+                            type="object"
+                            string="Editar fecha"
+                            class="btn-secondary"
+                            attrs="{'invisible': [('state', 'not in', ['sent', 'pending_payment'])]}"
+                            groups="custom_purchase_flow.group_purchase_dept,custom_purchase_flow.group_purchase_direction"/>
+                </xpath>
+
+                <!-- Purchase Dept & Direction: ordered buttons in Pendiente de Pago.
+                     Order: Surtiendo, Regresar a Enviada a Proveedor, Cancelar -->
+                <xpath expr="//button[@name='action_set_fulfilling']" position="after">
+                    <button name="action_set_fulfilling"
+                            type="object"
+                            string="Surtiendo"
+                            class="oe_highlight"
+                            attrs="{'invisible': [('state', '!=', 'pending_payment')]}"
+                            groups="custom_purchase_flow.group_purchase_dept,custom_purchase_flow.group_purchase_direction"/>
+                    <button name="action_set_to_sent"
+                            type="object"
+                            string="Regresar a Enviada a Proveedor"
+                            class="btn-secondary"
+                            attrs="{'invisible': [('state', '!=', 'pending_payment')]}"
+                            groups="custom_purchase_flow.group_purchase_dept,custom_purchase_flow.group_purchase_direction"/>
+                    <button name="button_cancel"
+                            type="object"
+                            string="Cancelar"
+                            class="btn-secondary"
+                            attrs="{'invisible': [('state', '!=', 'pending_payment')]}"
+                            groups="custom_purchase_flow.group_purchase_dept,custom_purchase_flow.group_purchase_direction"/>
+                </xpath>
+
+                <!-- 6.10 Add En Tránsito button (purchase) -->
+                <xpath expr="//button[@name='action_set_pending_payment']" position="after">
+                    <button name="action_set_in_transit"
+                            type="object"
+                            states="purchase"
+                            string="En Tránsito"
+                            class="oe_highlight"
+                            groups="custom_purchase_flow.group_purchase_dept"/>
+                </xpath>
+
+                <!-- 6.11 Add Llegó button (in_transit) -->
+                <xpath expr="//button[@name='action_set_in_transit']" position="after">
+                    <button name="action_set_arrived"
+                            type="object"
+                            states="in_transit"
+                            string="Llegó"
+                            class="oe_highlight"
+                            groups="custom_purchase_flow.group_purchase_cashier"/>
+                </xpath>
+
+                <!-- Regresar a PO Surtiendo (in_transit): Cashier y Purchase Dept -->
+                <xpath expr="//button[@name='action_set_in_transit']" position="after">
+                    <button name="action_revert_to_purchase"
+                            type="object"
+                            string="Regresar a PO Surtiendo"
+                            class="btn-secondary"
+                            attrs="{'invisible': [('state', '!=', 'in_transit')]}"
+                            groups="custom_purchase_flow.group_purchase_cashier,custom_purchase_flow.group_purchase_dept"/>
+                </xpath>
+
+                <!-- 6.12 Add Regresar a En Tránsito button (arrived) -->
+                <xpath expr="//button[@name='action_set_arrived']" position="after">
+                    <button name="action_revert_to_in_transit"
+                            type="object"
+                            states="arrived"
+                            string="Regresar a En Tránsito"
+                            class="btn-secondary"
+                            groups="custom_purchase_flow.group_purchase_cashier"/>
+                </xpath>
+
+                <!-- 6.13 Rejection reason banner (before sheet) -->
+                <xpath expr="//sheet" position="before">
+                    <div class="alert alert-warning"
+                         role="alert"
+                         attrs="{'invisible': [('rejection_reason', '=', False)]}">
+                        <strong>Rechazada:</strong>
+                        <field name="rejection_reason" readonly="1" nolabel="1"/>
+                    </div>
+                </xpath>
+
+                <!-- 6.14 Tracking fields group inside sheet (visible in purchase, in_transit and arrived) -->
+                <xpath expr="//notebook" position="before">
+                    <group string="Rastreo de Envío"
+                           attrs="{'invisible': [('state', 'not in', ['purchase', 'in_transit', 'arrived'])]}">
+                        <field name="tracking_number"
+                               attrs="{'readonly': [('state', '!=', 'in_transit')]}"/>
+                        <field name="no_tracking_reason"
+                               attrs="{'readonly': [('state', '!=', 'in_transit')]}"/>
+                        <button name="action_open_tracking_wizard"
+                                type="object"
+                                string="Editar Rastreo"
+                                class="btn-secondary"
+                                attrs="{'invisible': [('state', 'not in', ['purchase', 'in_transit', 'arrived'])]}"
+                                groups="custom_purchase_flow.group_purchase_dept,
+                                        custom_purchase_flow.group_purchase_cashier,
+                                        custom_purchase_flow.group_purchase_direction"/>
+                    </group>
+                </xpath>
+
+            </field>
+        </record>
+
+        <!-- ================================================================
+             TREE / LIST VIEW — Inherited from purchase.purchase_order_kpis_tree
+             Task 7.0
+             ================================================================ -->
+        <record id="view_purchase_order_tree_custom" model="ir.ui.view">
+            <field name="name">purchase.order.tree.custom</field>
+            <field name="model">purchase.order</field>
+            <field name="inherit_id" ref="purchase.purchase_order_kpis_tree"/>
+            <field name="arch" type="xml">
+                <!-- Replace KPI tree structure to enforce column order for all users -->
+                <xpath expr="//tree" position="replace">
+                    <tree string="Purchase Order"
+                          multi_edit="1"
+                          decoration-bf="message_unread==True"
+                          class="o_purchase_order"
+                          js_class="purchase_list_dashboard"
+                          sample="1"
+                          default_order="create_date desc, name desc">
+                        <header>
+                            <button name="action_create_invoice" type="object" string="Create Bills"/>
+                        </header>
+
+                        <!-- Column order required by business (and reflected in column chooser) -->
+                        <field name="name" string="Folio" readonly="1" decoration-bf="1"/>
+                        <field name="partner_id" readonly="1"/>
+                        <field name="company_id" readonly="1"
+                               options="{'no_create': True}"
+                               groups="base.group_multi_company"
+                               optional="show"/>
+                        <field name="order_limit_display"
+                               string="Límite Pedir"
+                               widget="badge"
+                               optional="show"
+                               decoration-success="order_limit_delta &gt;= 0 and order_limit_delta &lt;= 1"
+                               decoration-warning="order_limit_delta &gt;= 2 and order_limit_delta &lt;= 3"
+                               decoration-danger="order_limit_delta &gt;= 4"/>
+                        <field name="create_date" string="Fecha borrador" optional="show"/>
+                        <field name="sent_days_display"
+                               string="Limite Enviado"
+                               widget="badge"
+                               optional="show"
+                               decoration-success="sent_days_delta &gt;= 0 and sent_days_delta &lt;= 1"
+                               decoration-warning="sent_days_delta &gt;= 2 and sent_days_delta &lt;= 3"
+                               decoration-danger="sent_days_delta &gt;= 4"/>
+                        <field name="date_sent" string="Fecha Enviado" optional="show"/>
+                        <field name="date_planned"
+                               string="Fecha Recepción"
+                               optional="show"
+                               attrs="{'readonly': [('state', 'not in', ['sent', 'pending_payment'])]}"/>
+                        <field name="receipt_deadline"
+                               string="Límite Recepción"
+                               widget="remaining_days"
+                               optional="show"/>
+                        <field name="date_approve"
+                               string="Fecha PO Surtiendo"
+                               optional="hide"/>
+                        <field name="amount_total"
+                               sum="Total amount"
+                               string="Total"
+                               widget="monetary"
+                               optional="show"
+                               decoration-bf="1"/>
+                        <field name="state"
+                               widget="badge"
+                               optional="show"
+                               decoration-info="state == 'draft'"
+                               decoration-primary="state == 'to approve'"
+                               decoration-success="state in ('approved','arrived','hecho','done')"
+                               decoration-warning="state in ('sent','purchase')"
+                               decoration-danger="state == 'in_transit'"
+                               decoration-muted="state in ('pending_payment','cancel')"/>
+                        <field name="receipt_status" string="Estado recepción" optional="show"/>
+                        <field name="payment_term_id" string="Términos pago" optional="show"/>
+
+                        <!-- Hidden / less-used fields kept for completeness -->
+                        <field name="order_limit_delta" invisible="1"/>
+                        <field name="sent_days_delta" invisible="1"/>
+                        <field name="priority" optional="hide" widget="priority" nolabel="1"/>
+                        <field name="message_unread" invisible="1"/>
+                        <field name="partner_ref" optional="hide"/>
+                        <field name="user_id" optional="hide" widget="many2one_avatar_user"/>
+                        <field name="activity_ids" widget="list_activity" optional="hide"/>
+                        <field name="origin" optional="hide"/>
+                        <field name="amount_untaxed"
+                               sum="Total Untaxed amount"
+                               string="Untaxed"
+                               widget="monetary"
+                               optional="hide"/>
+                        <field name="currency_id" invisible="1"/>
+                        <field name="invoice_status" optional="hide"/>
+                    </tree>
+                </xpath>
+
+            </field>
+        </record>
+
+        <!-- ================================================================
+             TREE / LIST VIEW — Standard purchase.order tree (no dashboard)
+             Apply same per-state badge colors
+             ================================================================ -->
+        <record id="view_purchase_order_tree_badge_colors" model="ir.ui.view">
+            <field name="name">purchase.order.tree.badge.colors</field>
+            <field name="model">purchase.order</field>
+            <field name="inherit_id" ref="purchase.purchase_order_view_tree"/>
+            <field name="arch" type="xml">
+                <!-- Rename Reference column to Folio in standard tree -->
+                <xpath expr="//field[@name='name']" position="attributes">
+                    <attribute name="string">Folio</attribute>
+                </xpath>
+                <xpath expr="//field[@name='state']" position="replace">
+                    <field name="state"
+                           widget="badge"
+                           optional="show"
+                           decoration-info="state == 'draft'"
+                           decoration-primary="state == 'to approve'"
+                           decoration-success="state in ('approved','arrived','hecho','done')"
+                           decoration-warning="state in ('sent','purchase')"
+                           decoration-danger="state == 'in_transit'"
+                           decoration-muted="state in ('pending_payment','cancel')"/>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- ================================================================
+             SEARCH VIEW — Add filters for each custom state so dashboard
+             cards can activate them via search_default_* context keys.
+             ================================================================ -->
+        <record id="view_purchase_order_filter_custom_states" model="ir.ui.view">
+            <field name="name">purchase.order.filter.custom.states</field>
+            <field name="model">purchase.order</field>
+            <field name="inherit_id" ref="purchase.view_purchase_order_filter"/>
+            <field name="arch" type="xml">
+                <xpath expr="//search" position="inside">
+                    <filter name="rfq_state_draft" string="1. Borrador"
+                            domain="[('state', '=', 'draft')]"/>
+                    <filter name="rfq_state_to_approve" string="2. Por Aprobar"
+                            domain="[('state', '=', 'to approve')]"/>
+                    <filter name="rfq_state_approved" string="3. Aprobada"
+                            domain="[('state', '=', 'approved')]"/>
+                    <filter name="rfq_state_sent" string="4. Enviada a Proveedor"
+                            domain="[('state', '=', 'sent')]"/>
+                    <filter name="rfq_state_pending_payment" string="5. Pendiente de Pago"
+                            domain="[('state', '=', 'pending_payment')]"/>
+                    <filter name="rfq_state_purchase" string="6. PO Surtiendo"
+                            domain="[('state', '=', 'purchase')]"/>
+                    <filter name="rfq_state_in_transit" string="7. PO En Tránsito"
+                            domain="[('state', '=', 'in_transit')]"/>
+                    <filter name="rfq_state_arrived" string="8. PO Llegó"
+                            domain="[('state', '=', 'arrived')]"/>
+                    <filter name="rfq_state_hecho" string="9. Hecho"
+                            domain="[('state', '=', 'hecho')]"/>
+                    <filter name="rfq_state_done" string="Bloqueado"
+                            domain="[('state', '=', 'done')]"/>
+                    <filter name="rfq_state_cancel" string="Cancelado"
+                            domain="[('state', '=', 'cancel')]"/>
+                </xpath>
+                <!-- Hide some standard filters from the Filtros dropdown -->
+                <xpath expr="//filter[@name='my_purchases']" position="attributes">
+                    <attribute name="invisible">1</attribute>
+                </xpath>
+                <xpath expr="//filter[@name='starred']" position="attributes">
+                    <attribute name="invisible">1</attribute>
+                </xpath>
+                <xpath expr="//filter[@name='draft']" position="attributes">
+                    <attribute name="invisible">1</attribute>
+                </xpath>
+                <xpath expr="//filter[@name='approved']" position="attributes">
+                    <attribute name="invisible">1</attribute>
+                </xpath>
+                <xpath expr="//filter[@name='to_approve']" position="attributes">
+                    <attribute name="invisible">1</attribute>
+                </xpath>
+                <xpath expr="//filter[@name='draft_rfqs']" position="attributes">
+                    <attribute name="invisible">1</attribute>
+                </xpath>
+                <xpath expr="//filter[@name='activities_exception']" position="attributes">
+                    <attribute name="invisible">1</attribute>
+                </xpath>
+                <!-- Rename standard Waiting/Late RFQ filters -->
+                <xpath expr="//filter[@name='waiting_rfqs']" position="attributes">
+                    <attribute name="string">OC en Espera</attribute>
+                </xpath>
+                <xpath expr="//filter[@name='late_rfqs']" position="attributes">
+                    <attribute name="string">Límite Pedir</attribute>
+                </xpath>
+                <!-- Filter: POs whose scheduled receipt date is in the past and still open -->
+                <xpath expr="//filter[@name='order_date']" position="after">
+                    <filter name="receipt_deadline_date"
+                            string="Límite Recepción"
+                            domain="[('date_planned', '&lt;=', context_today().strftime('%Y-%m-%d')), ('state', 'not in', ['done', 'cancel'])]"/>
+                </xpath>
+                <xpath expr="//filter[@name='vendor']/.." position="replace">
+                    <group expand="0" string="Group By">
+                        <filter name="group_by_state" string="Estado" domain="[]" context="{'group_by': 'state'}"/>
+                        <filter string="Fecha de pedido" name="order_date" domain="[]" context="{'group_by': 'date_order'}"/>
+                        <filter string="Proveedor" name="vendor" domain="[]" context="{'group_by': 'partner_id'}"/>
+                        <filter string="Representante del Proveedor" name="representative" domain="[]" context="{'group_by': 'user_id'}"/>
+                    </group>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- ================================================================
+             SINGLE HEADER DEFINITION — one button per action
+             ================================================================ -->
+        <record id="view_purchase_order_header_custom" model="ir.ui.view">
+            <field name="name">purchase.order.header.custom</field>
+            <field name="model">purchase.order</field>
+            <field name="inherit_id" ref="purchase.purchase_order_form"/>
+            <field name="priority" eval="500"/>
+            <field name="arch" type="xml">
+                <xpath expr="//form/header" position="replace">
+                    <header>
+                        <!-- DRAFT -->
+                        <button name="action_request_approval"
+                                type="object"
+                                string="Solicitar Aprobación"
+                                class="oe_highlight"
+                                attrs="{'invisible': [('state', '!=', 'draft')]}"
+                                groups="custom_purchase_flow.group_purchase_coordinator,
+                                        custom_purchase_flow.group_purchase_direction,
+                                        custom_purchase_flow.group_purchase_dept"/>
+                        <button name="button_cancel"
+                                type="object"
+                                string="Cancelar"
+                                class="btn-secondary"
+                                attrs="{'invisible': [('state', '!=', 'draft')]}"
+                                groups="custom_purchase_flow.group_purchase_coordinator,
+                                        custom_purchase_flow.group_purchase_dept"/>
+
+                        <!-- TO APPROVE -->
+                        <button name="button_approve"
+                                type="object"
+                                string="Aprobar Orden"
+                                class="oe_highlight"
+                                attrs="{'invisible': [('state', '!=', 'to approve')]}"
+                                groups="custom_purchase_flow.group_purchase_direction"/>
+                        <button name="action_open_reject_wizard"
+                                type="object"
+                                string="Rechazar"
+                                class="btn-secondary"
+                                attrs="{'invisible': [('state', '!=', 'to approve')]}"
+                                groups="custom_purchase_flow.group_purchase_direction"/>
+                        <button name="action_set_to_draft"
+                                type="object"
+                                string="Cambiar a Borrador"
+                                class="btn-secondary"
+                                attrs="{'invisible': [('state', '!=', 'to approve')]}"
+                                groups="custom_purchase_flow.group_purchase_dept,
+                                        custom_purchase_flow.group_purchase_direction"/>
+
+                        <!-- APROBADA -->
+                        <button name="action_send_to_vendor"
+                                type="object"
+                                string="Enviar a Proveedor"
+                                class="oe_highlight"
+                                attrs="{'invisible': [('state', '!=', 'approved')]}"
+                                groups="custom_purchase_flow.group_purchase_dept,
+                                        custom_purchase_flow.group_purchase_direction"/>
+
+                        <!-- ENVIADA A PROVEEDOR (sent) -->
+                        <button name="action_set_fulfilling"
+                                type="object"
+                                string="Surtiendo"
+                                class="oe_highlight"
+                                attrs="{'invisible': [('state', '!=', 'sent')]}"
+                                groups="custom_purchase_flow.group_purchase_dept,
+                                        custom_purchase_flow.group_purchase_direction"/>
+                        <button name="action_set_pending_payment"
+                                type="object"
+                                string="Pendiente de Pago"
+                                class="btn-secondary"
+                                attrs="{'invisible': [('state', '!=', 'sent')]}"
+                                groups="custom_purchase_flow.group_purchase_dept,
+                                        custom_purchase_flow.group_purchase_direction"/>
+                        <button name="action_set_to_approved"
+                                type="object"
+                                string="Regresar a Aprobada"
+                                class="btn-secondary"
+                                attrs="{'invisible': [('state', '!=', 'sent')]}"
+                                groups="custom_purchase_flow.group_purchase_dept,
+                                        custom_purchase_flow.group_purchase_direction"/>
+                        <button name="button_cancel"
+                                type="object"
+                                string="Cancelar"
+                                class="btn-secondary"
+                                attrs="{'invisible': [('state', '!=', 'sent')]}"
+                                groups="custom_purchase_flow.group_purchase_dept,
+                                        custom_purchase_flow.group_purchase_direction"/>
+
+                        <!-- PENDIENTE DE PAGO -->
+                        <button name="action_set_fulfilling"
+                                type="object"
+                                string="Surtiendo"
+                                class="oe_highlight"
+                                attrs="{'invisible': [('state', '!=', 'pending_payment')]}"
+                                groups="custom_purchase_flow.group_purchase_dept,
+                                        custom_purchase_flow.group_purchase_direction"/>
+                        <button name="action_set_to_sent"
+                                type="object"
+                                string="Regresar a Enviada a Proveedor"
+                                class="btn-secondary"
+                                attrs="{'invisible': [('state', '!=', 'pending_payment')]}"
+                                groups="custom_purchase_flow.group_purchase_dept,
+                                        custom_purchase_flow.group_purchase_direction"/>
+                        <button name="button_cancel"
+                                type="object"
+                                string="Cancelar"
+                                class="btn-secondary"
+                                attrs="{'invisible': [('state', '!=', 'pending_payment')]}"
+                                groups="custom_purchase_flow.group_purchase_dept,
+                                        custom_purchase_flow.group_purchase_direction"/>
+
+                        <!-- PO Surtiendo (purchase) -->
+                        <button name="action_set_in_transit"
+                                type="object"
+                                string="En Tránsito"
+                                class="oe_highlight"
+                                attrs="{'invisible': [('state', '!=', 'purchase')]}"
+                                groups="custom_purchase_flow.group_purchase_dept,
+                                        custom_purchase_flow.group_purchase_direction"/>
+
+                        <!-- PO En Tránsito (in_transit): Llegó then Regresar a PO Surtiendo -->
+                        <button name="action_set_arrived"
+                                type="object"
+                                string="Llegó"
+                                class="oe_highlight"
+                                attrs="{'invisible': [('state', '!=', 'in_transit')]}"
+                                groups="custom_purchase_flow.group_purchase_cashier,
+                                        custom_purchase_flow.group_purchase_dept,
+                                        custom_purchase_flow.group_purchase_direction"/>
+                        <button name="action_revert_to_purchase"
+                                type="object"
+                                string="Regresar a PO Surtiendo"
+                                class="btn-secondary"
+                                attrs="{'invisible': [('state', '!=', 'in_transit')]}"
+                                groups="custom_purchase_flow.group_purchase_cashier,
+                                        custom_purchase_flow.group_purchase_dept,
+                                        custom_purchase_flow.group_purchase_direction"/>
+
+                        <!-- PO Llegó (arrived): Hecho = custom state, not native Done/Bloqueado -->
+                        <button name="action_set_hecho"
+                                type="object"
+                                string="Hecho"
+                                class="oe_highlight"
+                                attrs="{'invisible': [('state', '!=', 'arrived')]}"
+                                groups="custom_purchase_flow.group_purchase_coordinator,
+                                        custom_purchase_flow.group_purchase_dept,
+                                        custom_purchase_flow.group_purchase_direction"/>
+                        <button name="action_revert_to_in_transit"
+                                type="object"
+                                string="Regresar a En Tránsito"
+                                class="btn-secondary"
+                                attrs="{'invisible': [('state', '!=', 'arrived')]}"
+                                groups="custom_purchase_flow.group_purchase_cashier,
+                                        custom_purchase_flow.group_purchase_direction"/>
+
+                        <!-- Statusbar: keep extended custom flow states -->
+                        <field name="state" widget="statusbar"
+                               statusbar_visible="draft,to approve,approved,sent,pending_payment,purchase,in_transit,arrived,hecho"
+                               readonly="1"/>
+                    </header>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- ================================================================
+             EXTRA SAFETY: hide native draft header buttons for all groups,
+             including Administrator (Send by Email, Print RFQ, Confirm Order).
+             This runs after other inherits via high priority.
+             ================================================================ -->
+        <record id="view_purchase_order_hide_native_draft_buttons" model="ir.ui.view">
+            <field name="name">purchase.order.hide.native.draft.buttons</field>
+            <field name="model">purchase.order</field>
+            <field name="inherit_id" ref="purchase.purchase_order_form"/>
+            <field name="priority" eval="200"/>
+            <field name="arch" type="xml">
+                <!-- Hide all action_rfq_send buttons for everyone -->
+                <xpath expr="//header/button[@name='action_rfq_send']" position="attributes">
+                    <attribute name="groups">base.group_no_one</attribute>
+                </xpath>
+                <!-- Hide all Print RFQ buttons for everyone -->
+                <xpath expr="//header/button[@name='print_quotation']" position="attributes">
+                    <attribute name="groups">base.group_no_one</attribute>
+                </xpath>
+                <!-- Hide the native Confirm Order in draft for everyone -->
+                <xpath expr="//header/button[@name='button_confirm'][@id='draft_confirm']" position="attributes">
+                    <attribute name="groups">base.group_no_one</attribute>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- ================================================================
+             REPORT ACTIONS — Hide RFQ print option from 'Imprimir' dropdown
+             for purchase.orders while keeping the standard Purchase Order
+             report available.
+             ================================================================ -->
+        <record id="purchase.report_purchase_quotation" model="ir.actions.report">
+            <!-- Unbind from purchase.order so it no longer appears under Imprimir -->
+            <field name="binding_model_id" eval="False"/>
+        </record>
+
+    </data>
+</odoo>

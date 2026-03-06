@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <record id="view_purchase_order_tracking_wizard_form" model="ir.ui.view">
+            <field name="name">purchase.order.tracking.wizard.form</field>
+            <field name="model">purchase.order.tracking.wizard</field>
+            <field name="arch" type="xml">
+                <form string="Editar Rastreo de Compra">
+                    <sheet>
+                        <group>
+                            <field name="purchase_order_id" readonly="1"/>
+                        </group>
+                        <group string="Rastreo de Envío">
+                            <field name="tracking_number"/>
+                            <field name="no_tracking_reason"/>
+                        </group>
+                    </sheet>
+                    <footer>
+                        <button name="action_apply"
+                                type="object"
+                                string="Guardar rastreo"
+                                class="oe_highlight"/>
+                        <button special="cancel"
+                                string="Cancelar"
+                                class="btn-secondary"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+    </data>
+</odoo>

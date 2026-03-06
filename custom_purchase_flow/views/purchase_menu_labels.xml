@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- Rename RFQ action and menu to 'Ordenes de Compra' -->
+        <record id="purchase.purchase_rfq" model="ir.actions.act_window">
+            <field name="name">Ordenes de Compra</field>
+        </record>
+
+        <record id="purchase.menu_purchase_rfq" model="ir.ui.menu">
+            <field name="name">Ordenes de Compra</field>
+        </record>
+
+        <!-- Hide "Pedidos de compra" (Purchase Orders) menu from all users -->
+        <record id="purchase.menu_purchase_form_action" model="ir.ui.menu">
+            <field name="active" eval="False"/>
+        </record>
+
+        <!-- Hide Purchase Request shortcuts only under Compra/Pedidos.
+             We deactivate the two menus that are children of purchase.menu_procurement_management,
+             but we do NOT touch the Purchase Requests app menus (parent_menu_purchase_request, etc.). -->
+        <record id="purchase_request.menu_purchase_request_pro_mgt" model="ir.ui.menu">
+            <field name="active" eval="False"/>
+        </record>
+        <record id="purchase_request.menu_purchase_request_line" model="ir.ui.menu">
+            <field name="active" eval="False"/>
+        </record>
+
+    </data>
+</odoo>
+

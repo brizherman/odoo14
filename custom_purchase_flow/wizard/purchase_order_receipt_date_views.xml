@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <record id="view_purchase_order_receipt_date_wizard_form" model="ir.ui.view">
+            <field name="name">purchase.order.receipt.date.wizard.form</field>
+            <field name="model">purchase.order.receipt.date.wizard</field>
+            <field name="arch" type="xml">
+                <form string="Editar fecha de recepción">
+                    <sheet>
+                        <group>
+                            <field name="purchase_order_id" readonly="1"/>
+                            <field name="date_planned"/>
+                        </group>
+                    </sheet>
+                    <footer>
+                        <button name="action_apply"
+                                type="object"
+                                string="Guardar fecha"
+                                class="oe_highlight"/>
+                        <button special="cancel"
+                                string="Cancelar"
+                                class="btn-secondary"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+    </data>
+</odoo>
+

@@ -1,0 +1,73 @@
+/*
+ * Per-bucket badge color overrides for purchase.order state badges.
+ *
+ * Bucket → State(s) → Color
+ *   info      → draft (Borrador)              pink    #d63384
+ *   primary   → to approve (Por Aprobar)      indigo  #6610f2
+ *   success   → approved, arrived, done       green   #198754
+ *   warning   → sent, purchase                amber   #f59e0b
+ *   danger    → in_transit                    purple  #9333ea
+ *   muted     → pending_payment               orange  #fd7e14
+ *               cancel                        gray    #6c757d  (kept via separate rule)
+ */
+
+.o_field_badge.bg-info,
+.o_field_badge.bg-info-light {
+  background-color: #d63384 !important;
+  color: #ffffff !important;
+}
+
+.o_field_badge.bg-primary,
+.o_field_badge.bg-primary-light {
+  background-color: #6610f2 !important;
+  color: #ffffff !important;
+}
+
+.o_field_badge.bg-success,
+.o_field_badge.bg-success-light {
+  background-color: #198754 !important;
+  color: #ffffff !important;
+}
+
+.o_field_badge.bg-warning,
+.o_field_badge.bg-warning-light {
+  background-color: #f59e0b !important;
+  color: #000000 !important;
+}
+
+.o_field_badge.bg-danger,
+.o_field_badge.bg-danger-light {
+  background-color: #9333ea !important;
+  color: #ffffff !important;
+}
+
+/* muted covers pending_payment AND cancel — give pending_payment orange, cancel gray */
+.o_field_badge.bg-muted,
+.o_field_badge.bg-muted-light {
+  background-color: #fd7e14 !important;
+  color: #ffffff !important;
+}
+
+/* cancel override: target the cell specifically so it stays gray */
+.o_data_row .o_field_badge.bg-muted[data-value="cancel"],
+.o_data_row .o_field_badge.bg-muted-light[data-value="cancel"] {
+  background-color: #6c757d !important;
+  color: #ffffff !important;
+}
+
+/* Dashboard card left-border color stripe matching badge colors */
+.o_rfq_dashboard_square[data-state="draft"]          { border-left: 4px solid #d63384 !important; }
+.o_rfq_dashboard_square[data-state="to approve"]     { border-left: 4px solid #6610f2 !important; }
+.o_rfq_dashboard_square[data-state="approved"]       { border-left: 4px solid #198754 !important; }
+.o_rfq_dashboard_square[data-state="sent"]           { border-left: 4px solid #f59e0b !important; }
+.o_rfq_dashboard_square[data-state="pending_payment"]{ border-left: 4px solid #fd7e14 !important; }
+.o_rfq_dashboard_square[data-state="purchase"]       { border-left: 4px solid #f59e0b !important; }
+.o_rfq_dashboard_square[data-state="in_transit"]     { border-left: 4px solid #9333ea !important; }
+.o_rfq_dashboard_square[data-state="arrived"]        { border-left: 4px solid #198754 !important; }
+.o_rfq_dashboard_square[data-state="done"]           { border-left: 4px solid #198754 !important; }
+.o_rfq_dashboard_square[data-state="cancel"]         { border-left: 4px solid #6c757d !important; }
+
+.o_rfq_dashboard_square.o_rfq_dashboard_active {
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.12);
+  background-color: #e0e0e0;
+}
