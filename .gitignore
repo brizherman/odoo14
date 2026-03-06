@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+
+# Odoo source (not part of the custom module)
+odoo-src/
+
+# OS
+.DS_Store
+
+# Misc
+*.tar.gz
+*.log
+.python-version
+reqs/
+tasks/
+ai-dev-tasks-main-ryan/
+fabien14.md
