@@ -162,13 +162,13 @@ class PurchaseOrder(models.Model):
     @api.depends('picking_ids', 'picking_ids.state')
     def _compute_receipt_status(self):
         for order in self:
-            pickings = order.picking_ids.filtered(
+            active = order.picking_ids.filtered(
                 lambda p: p.state not in ('done', 'cancel')
             )
-            if pickings:
-                order.receipt_status = pickings[0].state
+            if active:
+                order.receipt_status = active[0].state
             elif order.picking_ids:
-                done = order.picking_ids.filtered(lambda p: p.state == 'done')
+                done = [p for p in order.picking_ids if p.state == 'done']
                 order.receipt_status = done[-1].state if done else 'cancel'
             else:
                 order.receipt_status = False
@@ -177,11 +177,8 @@ class PurchaseOrder(models.Model):
     def get_rfq_dashboard_counts(self):
         """Return per-state counts for the custom RFQ/PO flow.
 
-        This is used by the RFQ list dashboard to show how many purchase
-        orders are currently in each custom state, covering the full
-        end-to-end flow (draft → arrived).
+        Uses a single GROUP BY query instead of one search_count per state.
         """
-        po = self.env['purchase.order']
         states = [
             'draft',
             'to approve',
@@ -193,9 +190,14 @@ class PurchaseOrder(models.Model):
             'arrived',
             'hecho',
         ]
-        counts = dict((state, 0) for state in states)
-        for state in states:
-            counts[state] = po.search_count([('state', '=', state)])
+        counts = dict.fromkeys(states, 0)
+        groups = self.env['purchase.order'].read_group(
+            domain=[('state', 'in', states)],
+            fields=['state'],
+            groupby=['state'],
+        )
+        for g in groups:
+            counts[g['state']] = g['state_count']
         return counts
 
     @api.model
@@ -229,9 +231,6 @@ class PurchaseOrder(models.Model):
                 order = self.browse(active_id)
         if not order or len(order) != 1:
             return res
-        # Clear transient flag if present; edition is allowed only in draft anyway.
-        Flag = self.env['purchase.order.hide.edit.flag']
-        Flag.search([('order_id', '=', order.id)]).unlink()
         can_edit = order.state == 'draft'
         if not can_edit:
             doc = etree.fromstring(res['arch'])
