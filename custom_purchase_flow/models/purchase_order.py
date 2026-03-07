@@ -107,6 +107,11 @@ class PurchaseOrder(models.Model):
         compute='_compute_receipt_status',
         store=False,
     )
+    can_edit_po = fields.Boolean(
+        string="Can Edit PO",
+        compute='_compute_can_edit_po',
+        store=False,
+    )
 
     # --- Computed fields ---
     @api.depends('order_line.date_planned')
@@ -173,6 +178,15 @@ class PurchaseOrder(models.Model):
             else:
                 order.receipt_status = False
 
+    @api.depends('state')
+    def _compute_can_edit_po(self):
+        is_dept = self.env.user.has_group('custom_purchase_flow.group_purchase_dept')
+        for order in self:
+            order.can_edit_po = (
+                order.state == 'draft'
+                or (order.state == 'to approve' and is_dept)
+            )
+
     @api.model
     def get_rfq_dashboard_counts(self):
         """Return per-state counts for the custom RFQ/PO flow.
@@ -231,7 +245,7 @@ class PurchaseOrder(models.Model):
                 order = self.browse(active_id)
         if not order or len(order) != 1:
             return res
-        can_edit = order.state == 'draft'
+        can_edit = order.can_edit_po
         if not can_edit:
             doc = etree.fromstring(res['arch'])
             for form in doc.xpath('//form'):

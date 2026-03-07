@@ -342,6 +342,11 @@
                             groups="custom_purchase_flow.group_purchase_cashier"/>
                 </xpath>
 
+                <!-- Invisible flag read by form_controller.js to show/hide Edit button -->
+                <xpath expr="//sheet" position="before">
+                    <field name="can_edit_po" invisible="1"/>
+                </xpath>
+
                 <!-- 6.13 Rejection reason banner (before sheet) -->
                 <xpath expr="//sheet" position="before">
                     <div class="alert alert-warning"
