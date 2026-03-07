@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!--
+        Secondary navbar rendered below .o_main_navbar.
+        'roots' is the array of top-level menu objects (each with .children[]).
+        Each child has: id, name, action (e.g. "ir.actions.act_window,123"), xmlid.
+    -->
+    <t t-name="header_modules.SecondaryNavbar">
+        <nav class="hn_secondary_navbar">
+            <ul class="hn_nav_list">
+                <t t-foreach="roots" t-as="root">
+                    <t t-if="root.children and root.children.length">
+                        <!-- Top-level item WITH submenus → dropdown -->
+                        <li class="hn_nav_item hn_has_dropdown"
+                            t-att-data-root-id="root.id"
+                            t-att-data-root-xmlid="root.xmlid">
+                            <a href="#" class="hn_nav_link">
+                                <t t-esc="root.name"/>
+                                <span class="hn_caret">&#9660;</span>
+                            </a>
+                            <ul class="hn_dropdown">
+                                <t t-foreach="root.children" t-as="section">
+                                    <t t-if="section.children and section.children.length">
+                                        <!-- Section header (not clickable leaf) -->
+                                        <li class="hn_dropdown_section_header">
+                                            <span><t t-esc="section.name"/></span>
+                                        </li>
+                                        <t t-foreach="section.children" t-as="leaf">
+                                            <li>
+                                                <a class="hn_dropdown_item"
+                                                   href="#"
+                                                   t-att-data-menu-id="leaf.id"
+                                                   t-att-data-action-id="leaf.action ? leaf.action.split(',')[1] : ''"
+                                                   t-att-data-parent-id="root.id">
+                                                    <t t-esc="leaf.name"/>
+                                                </a>
+                                            </li>
+                                        </t>
+                                    </t>
+                                    <t t-else="">
+                                        <!-- Direct leaf under root -->
+                                        <li>
+                                            <a class="hn_dropdown_item"
+                                               href="#"
+                                               t-att-data-menu-id="section.id"
+                                               t-att-data-action-id="section.action ? section.action.split(',')[1] : ''"
+                                               t-att-data-parent-id="root.id">
+                                                <t t-esc="section.name"/>
+                                            </a>
+                                        </li>
+                                    </t>
+                                </t>
+                            </ul>
+                        </li>
+                    </t>
+                    <t t-else="">
+                        <!-- Top-level item with NO submenus → direct navigate -->
+                        <li class="hn_nav_item"
+                            t-att-data-root-id="root.id"
+                            t-att-data-root-xmlid="root.xmlid">
+                            <a href="#" class="hn_nav_link hn_nav_item_direct"
+                               t-att-data-menu-id="root.id"
+                               t-att-data-action-id="root.action ? root.action.split(',')[1] : ''">
+                                <t t-esc="root.name"/>
+                            </a>
+                        </li>
+                    </t>
+                </t>
+            </ul>
+        </nav>
+    </t>
+
+</templates>

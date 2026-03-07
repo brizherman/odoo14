@@ -1,0 +1,130 @@
+// Secondary navbar — sits directly below .o_main_navbar
+// Colors align with muk_web_theme: brand #243742, primary #5D8DA8
+
+$hn-bg:            #2e4554;   // slightly lighter than muk brand #243742
+$hn-text:          #d1dfe6;   // muk $mk-required-color
+$hn-text-hover:    #ffffff;
+$hn-active-border: #5D8DA8;   // muk $o-brand-primary
+$hn-dropdown-bg:   #1e3040;
+$hn-dropdown-hover:#5D8DA8;
+$hn-height:        36px;
+$hn-z-index:       999;
+
+.hn_secondary_navbar {
+    position: fixed;
+    top: 46px;   // height of .o_main_navbar
+    left: 0;
+    right: 0;
+    height: $hn-height;
+    background: $hn-bg;
+    z-index: $hn-z-index;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+
+    .hn_nav_list {
+        display: flex;
+        align-items: center;
+        list-style: none;
+        margin: 0;
+        padding: 0 8px;
+        height: 100%;
+    }
+
+    // Top-level item
+    .hn_nav_item {
+        position: relative;
+        height: 100%;
+        display: flex;
+        align-items: center;
+
+        > .hn_nav_link {
+            display: flex;
+            align-items: center;
+            height: 100%;
+            padding: 0 14px;
+            color: $hn-text;
+            font-size: 13px;
+            font-weight: 500;
+            text-decoration: none;
+            white-space: nowrap;
+            border-bottom: 2px solid transparent;
+            transition: color 0.15s, border-color 0.15s;
+
+            .hn_caret {
+                font-size: 8px;
+                margin-left: 5px;
+                opacity: 0.7;
+            }
+
+            &:hover {
+                color: $hn-text-hover;
+                border-bottom-color: $hn-active-border;
+            }
+        }
+
+        // Active (current module) highlight
+        &.hn_active > .hn_nav_link {
+            color: $hn-text-hover;
+            border-bottom-color: $hn-active-border;
+        }
+
+        // Open dropdown state
+        &.hn_open > .hn_nav_link {
+            color: $hn-text-hover;
+            border-bottom-color: $hn-active-border;
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        &.hn_open > .hn_dropdown {
+            display: block;
+        }
+    }
+
+    // Dropdown panel
+    .hn_dropdown {
+        display: none;
+        position: absolute;
+        top: $hn-height;
+        left: 0;
+        min-width: 200px;
+        max-height: 70vh;
+        overflow-y: auto;
+        background: $hn-dropdown-bg;
+        list-style: none;
+        margin: 0;
+        padding: 4px 0;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+        z-index: $hn-z-index + 1;
+
+        // Section header (non-clickable label)
+        .hn_dropdown_section_header {
+            padding: 6px 14px 2px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #7aadc8;
+            pointer-events: none;
+        }
+
+        // Leaf item
+        .hn_dropdown_item {
+            display: block;
+            padding: 7px 18px;
+            font-size: 13px;
+            color: $hn-text;
+            text-decoration: none;
+            white-space: nowrap;
+            transition: background 0.12s, color 0.12s;
+
+            &:hover {
+                background: $hn-dropdown-hover;
+                color: $hn-text-hover;
+            }
+        }
+    }
+}
+
+// Push the main content area down so it doesn't hide behind the secondary bar
+.o_web_client .o_main {
+    padding-top: $hn-height;
+}
