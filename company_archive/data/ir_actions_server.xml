@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data>
+        <record id="action_company_archive" model="ir.actions.server">
+            <field name="name">Archive</field>
+            <field name="type">ir.actions.server</field>
+            <field name="model_id" ref="base.model_res_company"/>
+            <field name="binding_model_id" ref="base.model_res_company"/>
+            <field name="binding_view_types">form</field>
+            <field name="state">code</field>
+            <field name="code">records.action_archive()</field>
+        </record>
+        <record id="action_company_unarchive" model="ir.actions.server">
+            <field name="name">Unarchive</field>
+            <field name="type">ir.actions.server</field>
+            <field name="model_id" ref="base.model_res_company"/>
+            <field name="binding_model_id" ref="base.model_res_company"/>
+            <field name="binding_view_types">form</field>
+            <field name="state">code</field>
+            <field name="code">records.action_unarchive()</field>
+        </record>
+    </data>
+</odoo>
