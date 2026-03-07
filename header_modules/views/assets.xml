@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <template id="assets_backend" inherit_id="web.assets_backend" name="Header Modules: 140px icon">
+    <template id="assets_backend" inherit_id="web.assets_backend" name="Header Modules: Secondary Navbar">
         <xpath expr="." position="inside">
-            <link rel="stylesheet" type="text/scss" href="/header_modules/static/src/scss/modules_app_icon.scss"/>
+            <link rel="stylesheet" type="text/scss" href="/header_modules/static/src/scss/secondary_navbar.scss"/>
+            <script type="text/javascript" src="/header_modules/static/src/js/secondary_navbar.js"/>
         </xpath>
     </template>
 </odoo>

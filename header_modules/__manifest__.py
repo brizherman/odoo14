@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Header Modules Menu',
-    'version': '14.0.1.0.8',
-    'summary': 'Top-level "Modules" menu with POS, Purchase, Inventory, Invoicing, Sales (full submenus on hover)',
+    'version': '14.0.2.0.0',
+    'summary': 'Dynamic secondary navbar below the main top bar with dropdowns for POS, Compras, Inventario, Facturación and Ventas',
     'author': 'Custom',
     'category': 'Productivity',
     'depends': [
@@ -17,8 +17,9 @@
     'data': [
         'views/assets.xml',
         'data/menu.xml',
-        'data/menu_icon_update.xml',
-        'data/menu_restore.xml',
+    ],
+    'qweb': [
+        'static/src/xml/secondary_navbar.xml',
     ],
     'post_init_hook': 'post_init_hook',
     'installable': True,

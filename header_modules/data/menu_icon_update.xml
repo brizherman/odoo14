@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Force recompute of web_icon_data so the Modules menu icon displays (fixes base64,false). -->
-<odoo>
-    <data noupdate="0">
-        <record id="menu_header_modules_root" model="ir.ui.menu">
-            <field name="web_icon">header_modules,static/description/icon.png</field>
-        </record>
-    </data>
-</odoo>

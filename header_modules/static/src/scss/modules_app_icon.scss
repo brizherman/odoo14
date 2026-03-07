@@ -1,9 +1,0 @@
-/* Modules icon: force square aspect ratio so it doesn't look squashed; match other icons' max size. */
-.o_menu_apps .dropdown-menu .o_app[data-menu-xmlid="header_modules.menu_header_modules_root"] .o-app-icon {
-    width: auto !important;
-    height: auto !important;
-    max-width: 7rem;
-    max-height: 7rem;
-    aspect-ratio: 1;
-    object-fit: contain;
-}
