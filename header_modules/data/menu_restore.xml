@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Re-create the "Modules" square and restore the 5 apps to the home grid, plus add them as children of Modules. -->
+<odoo>
+    <data noupdate="0">
+        <menuitem id="menu_header_modules_root"
+                  name="Modules"
+                  sequence="0"
+                  web_icon="header_modules,static/description/icon.png"/>
+
+        <!-- Restore original root menus to top-level (home grid) -->
+        <record id="point_of_sale.menu_point_root" model="ir.ui.menu">
+            <field name="parent_id" eval="False"/>
+            <field name="sequence" eval="20"/>
+            <field name="name">Punto de Venta</field>
+        </record>
+        <record id="purchase.menu_purchase_root" model="ir.ui.menu">
+            <field name="parent_id" eval="False"/>
+            <field name="sequence" eval="25"/>
+            <field name="name">Compras</field>
+        </record>
+        <record id="stock.menu_stock_root" model="ir.ui.menu">
+            <field name="parent_id" eval="False"/>
+            <field name="sequence" eval="30"/>
+            <field name="name">Inventario</field>
+        </record>
+        <record id="account.menu_finance" model="ir.ui.menu">
+            <field name="parent_id" eval="False"/>
+            <field name="sequence" eval="40"/>
+            <field name="name">Facturación</field>
+        </record>
+        <record id="sale.sale_menu_root" model="ir.ui.menu">
+            <field name="parent_id" eval="False"/>
+            <field name="sequence" eval="7"/>
+            <field name="name">Ventas</field>
+        </record>
+
+        <!-- Child entries under "Modules" header menu -->
+        <menuitem id="menu_modules_pos"
+                  name="Punto de Venta"
+                  parent="menu_header_modules_root"
+                  sequence="10"
+                  action="point_of_sale.action_pos_config"/>
+        <menuitem id="menu_modules_purchase"
+                  name="Compras"
+                  parent="menu_header_modules_root"
+                  sequence="20"
+                  action="purchase.purchase_rfq"/>
+        <menuitem id="menu_modules_stock"
+                  name="Inventario"
+                  parent="menu_header_modules_root"
+                  sequence="30"
+                  action="stock.action_stock_view"/>
+        <menuitem id="menu_modules_account"
+                  name="Facturación"
+                  parent="menu_header_modules_root"
+                  sequence="40"
+                  action="account.action_move_out_invoice_type"/>
+        <menuitem id="menu_modules_sales"
+                  name="Ventas"
+                  parent="menu_header_modules_root"
+                  sequence="50"
+                  action="sale.action_quotations_with_onboarding"/>
+    </data>
+</odoo>
