@@ -39,7 +39,7 @@
                   name="Punto de Venta"
                   parent="menu_header_modules_root"
                   sequence="10"
-                  action="point_of_sale.action_pos_config"/>
+                  action="point_of_sale.action_pos_config_kanban"/>
         <menuitem id="menu_modules_purchase"
                   name="Compras"
                   parent="menu_header_modules_root"
@@ -49,7 +49,7 @@
                   name="Inventario"
                   parent="menu_header_modules_root"
                   sequence="30"
-                  action="stock.action_stock_view"/>
+                  action="stock.stock_picking_type_action"/>
         <menuitem id="menu_modules_account"
                   name="Facturación"
                   parent="menu_header_modules_root"
