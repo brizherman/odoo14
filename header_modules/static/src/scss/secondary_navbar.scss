@@ -124,7 +124,7 @@ $hn-z-index:       999;
     }
 }
 
-// Push the main content area down so it doesn't hide behind the secondary bar
-.o_web_client .o_main {
-    padding-top: $hn-height;
+// Push the action manager down so it clears the secondary fixed bar
+.o_web_client > .o_action_manager {
+    margin-top: $hn-height;
 }

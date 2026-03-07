@@ -16,8 +16,11 @@ odoo-src/
 # Misc
 *.tar.gz
 *.log
+*.dump
+*.sql
 .python-version
 reqs/
 tasks/
 ai-dev-tasks-main-ryan/
 fabien14.md
+.o_action_manager
