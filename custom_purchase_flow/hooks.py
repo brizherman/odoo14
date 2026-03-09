@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Post-install hook: overrides the es_MX/es translations for:
-- purchase.order state selection labels (custom UX names)
-- RFQ action and menu names so they show "Ordenes de Compra" for Spanish users
-  instead of "Solicitudes de presupuesto".
+Translation hooks: overrides es_MX translations for purchase state labels
+and the RFQ action/menu title so they match our custom flow naming.
+
+apply_translations() is called:
+  - on module INSTALL  via post_init_hook
+  - on module UPGRADE  via a <function> record in data/translations.xml (noupdate="0")
 """
 from odoo import SUPERUSER_ID, api
 
@@ -12,27 +14,29 @@ from odoo import SUPERUSER_ID, api
 _STATE_LABEL_OVERRIDES = {
     'RFQ': 'Borrador',
     'RFQ Sent': 'Enviada a Proveedor',
-    'To Approve': 'Por Aprobar',
+    'To Approve': 'Por Autorizar',
     'Purchase Order': 'PO Surtiendo',
     'Locked': 'Bloqueado',
     'Cancelled': 'Cancelado',
 }
 
-_LANGS = ['es_MX', 'es']
+_LANGS = ['es_MX']
 
 _RFQ_TITLE = 'Ordenes de Compra'
 
 
-def post_init_hook(cr, registry):
-    """Overwrite ir.translation for state labels and RFQ action/menu names."""
-    env = api.Environment(cr, SUPERUSER_ID, {})
+def apply_translations(env):
+    """Write custom es_MX translations for state labels and RFQ title.
+    Safe to call on both install and upgrade.
+    """
     _apply_state_translations(env)
     _apply_rfq_action_menu_translations(env)
 
 
-def uninstall_hook(cr, registry):
-    """Restore original es_MX translations when module is uninstalled."""
-    pass  # Translations will be restored on next language reload if needed
+def post_init_hook(cr, registry):
+    """Called on module install."""
+    env = api.Environment(cr, SUPERUSER_ID, {})
+    apply_translations(env)
 
 
 def _apply_state_translations(env):
@@ -49,8 +53,7 @@ def _apply_state_translations(env):
 
 
 def _apply_rfq_action_menu_translations(env):
-    """Set Spanish translations for RFQ action and menu to 'Ordenes de Compra'
-    so Spanish-language users (e.g. coordinador) see the same title as others."""
+    """Set es_MX translation for RFQ action and menu to 'Ordenes de Compra'."""
     Translation = env['ir.translation']
     try:
         action = env.ref('purchase.purchase_rfq')
@@ -66,7 +69,7 @@ def _apply_rfq_action_menu_translations(env):
                 ('lang', '=', lang),
                 ('name', '=', name),
                 ('res_id', '=', res_id),
-            ], limit=1)
+            ])
             if trans:
                 trans.write({'value': _RFQ_TITLE})
             else:

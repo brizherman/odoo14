@@ -6,24 +6,20 @@
             <field name="name">purchase.order.reject.wizard.form</field>
             <field name="model">purchase.order.reject.wizard</field>
             <field name="arch" type="xml">
-                <form string="Reject Purchase Order">
+                <form string="Rechazar Orden de Compra">
                     <sheet>
                         <group>
                             <field name="purchase_order_id" readonly="1"/>
-                            <field name="rejection_reason" placeholder="Enter rejection reason..."/>
+                            <field name="rejection_reason" placeholder="Ingresa el motivo de rechazo..."/>
                         </group>
                     </sheet>
                     <footer>
-                        <button name="action_reject_to_draft"
+                        <button name="action_confirm_reject"
                                 type="object"
-                                string="Reject → Return to Draft"
+                                string="Rechazar"
                                 class="oe_highlight"/>
-                        <button name="action_reject_to_cancel"
-                                type="object"
-                                string="Reject → Cancel"
-                                class="btn-secondary"/>
                         <button special="cancel"
-                                string="Discard"
+                                string="Descartar"
                                 class="btn-secondary"/>
                     </footer>
                 </form>

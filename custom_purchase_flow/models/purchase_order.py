@@ -30,9 +30,10 @@ class PurchaseOrder(models.Model):
     #   ('hecho', 'Hecho')               — new custom final state (not native done/Bloqueado)
     state = fields.Selection(
         selection_add=[
+            ('rechazado', 'Rechazado'),
             ('draft', 'Borrador'),
-            ('to approve', 'Por Aprobar'),
-            ('approved', 'Aprobada'),
+            ('to approve', 'Por Autorizar'),
+            ('approved', 'Autorizada'),
             ('sent', 'Enviada a Proveedor'),
             ('pending_payment', 'Pendiente de Pago'),
             ('purchase', 'PO Surtiendo'),
@@ -42,6 +43,7 @@ class PurchaseOrder(models.Model):
             ('done', 'Done'),
         ],
         ondelete={
+            'rechazado': 'set default',
             'approved': 'set default',
             'pending_payment': 'set default',
             'in_transit': 'set default',
@@ -54,6 +56,10 @@ class PurchaseOrder(models.Model):
     rejection_reason = fields.Text(
         string="Motivo de rechazo",
         readonly=True,
+        copy=False,
+    )
+    reporte_ventas_compras = fields.Text(
+        string="Reporte Ventas VS Compras",
         copy=False,
     )
     tracking_number = fields.Char(
@@ -194,6 +200,7 @@ class PurchaseOrder(models.Model):
         Uses a single GROUP BY query instead of one search_count per state.
         """
         states = [
+            'rechazado',
             'draft',
             'to approve',
             'approved',
@@ -315,9 +322,29 @@ class PurchaseOrder(models.Model):
         for order in self:
             if order.state not in allowed:
                 raise UserError(
-                    _("Solo puedes cambiar a Borrador desde Por Aprobar.")
+                    _("Solo puedes cambiar a Borrador desde Por Autorizar.")
                 )
             order.write({'state': 'draft', 'rejection_reason': False})
+        return True
+
+    def action_pasar_a_borrador(self):
+        """Coordinator, Purchase Dept or Direction reverts a Rechazado PO back to Draft."""
+        for order in self:
+            if order.state != 'rechazado':
+                raise UserError(
+                    _("Solo puedes pasar a Borrador desde el estado Rechazado.")
+                )
+            order.write({'state': 'draft', 'rejection_reason': False})
+        return True
+
+    def action_revert_to_approve(self):
+        """Purchase Dept or Direction reverts an Autorizada PO back to Por Autorizar."""
+        for order in self:
+            if order.state != 'approved':
+                raise UserError(
+                    _("Solo puedes regresar a Por Autorizar desde el estado Autorizada.")
+                )
+            order.write({'state': 'to approve'})
         return True
 
     def action_send_to_vendor(self):
@@ -329,11 +356,11 @@ class PurchaseOrder(models.Model):
         })
 
     def action_set_to_approved(self):
-        """Purchase Dept reverts PO from Enviada a Proveedor back to Aprobada."""
+        """Purchase Dept reverts PO from Enviada a Proveedor back to Autorizada."""
         for order in self:
             if order.state != 'sent':
                 raise UserError(
-                    _("Solo puedes cambiar a Aprobada desde el estado Enviada a Proveedor.")
+                    _("Solo puedes cambiar a Autorizada desde el estado Enviada a Proveedor.")
                 )
             order.write({'state': 'approved'})
         return True
@@ -491,3 +518,12 @@ class PurchaseOrder(models.Model):
     def unlink(self):
         """Completely block deletion of purchase orders in all states."""
         raise UserError(_("Deleting purchase orders is not allowed. Cancel them instead."))
+
+    @api.model
+    def _apply_custom_translations(self):
+        """Apply es_MX label overrides for custom flow states.
+        Called on every module upgrade via data/translations.xml so that
+        labels stay correct without requiring --load-language on the server.
+        """
+        from odoo.addons.custom_purchase_flow.hooks import apply_translations
+        apply_translations(self.env)

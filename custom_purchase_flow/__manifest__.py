@@ -15,6 +15,7 @@
         'wizard/purchase_order_tracking_views.xml',
         'views/purchase_order_views.xml',
         'views/purchase_menu_labels.xml',
+        'data/translations.xml',
     ],
     'qweb': [
         'static/src/xml/purchase_rfq_dashboard.xml',

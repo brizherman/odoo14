@@ -4,6 +4,28 @@
     <t t-name="purchase.PurchaseDashboard">
         <div class="o_purchase_dashboard container">
             <div class="o_rfq_status_row d-flex flex-wrap justify-content-around align-items-stretch">
+                <!-- 0. Rechazado — red #dc3545 (danger bucket) -->
+                <div class="o_rfq_card_wrapper flex-grow-1 mx-1 mb-2 text-center">
+                    <div class="card o_rfq_dashboard_square h-100"
+                         data-state="rechazado">
+                        <div class="card-body py-2 px-1">
+                            <div class="o_rfq_state_header mb-1">
+                                <div class="text-muted small">0. Rechazado</div>
+                                <div class="badge o_rfq_state_count mt-1"
+                                     style="background-color:#dc3545;color:#ffffff;">
+                                    <t t-esc="values.rfq_state_counts ? (values.rfq_state_counts['rechazado'] || 0) : 0"/>
+                                </div>
+                            </div>
+                            <div class="o_rfq_state_description small text-muted">
+                                <div>Direction</div>
+                                <div>Rechazó la PO</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="o_rfq_flow_arrow mx-1 text-muted d-none d-md-flex align-items-center">→</div>
+
                 <!-- 1. Borrador — pink #d63384 (info bucket) -->
                 <div class="o_rfq_card_wrapper flex-grow-1 mx-1 mb-2 text-center">
                     <div class="card o_rfq_dashboard_square h-100"
@@ -32,7 +54,7 @@
                          data-state="to approve">
                         <div class="card-body py-2 px-1">
                             <div class="o_rfq_state_header mb-1">
-                                <div class="text-muted small">2. Por Aprobar</div>
+                                <div class="text-muted small">2. Por Autorizar</div>
                                 <div class="badge o_rfq_state_count mt-1"
                                      style="background-color:#6610f2;color:#ffffff;">
                                     <t t-esc="values.rfq_state_counts ? (values.rfq_state_counts['to approve'] || 0) : 0"/>
@@ -54,7 +76,7 @@
                          data-state="approved">
                         <div class="card-body py-2 px-1">
                             <div class="o_rfq_state_header mb-1">
-                                <div class="text-muted small">3. Aprobada</div>
+                                <div class="text-muted small">3. Autorizada</div>
                                 <div class="badge o_rfq_state_count mt-1"
                                      style="background-color:#198754;color:#ffffff;">
                                     <t t-esc="values.rfq_state_counts ? (values.rfq_state_counts['approved'] || 0) : 0"/>
@@ -84,7 +106,7 @@
                             </div>
                             <div class="o_rfq_state_description small text-muted">
                                 <div>Depto de Compras</div>
-                                <div>PO enviada a proveedor esperandolo</div>
+                                <div>Ya le enviamos</div>
                             </div>
                         </div>
                     </div>
@@ -106,7 +128,7 @@
                             </div>
                             <div class="o_rfq_state_description small text-muted">
                                 <div>Depto de Compras</div>
-                                <div>Pendiente de pago contado o credito</div>
+                                <div>es contado o credito</div>
                             </div>
                         </div>
                     </div>
@@ -128,7 +150,7 @@
                             </div>
                             <div class="o_rfq_state_description small text-muted">
                                 <div>Depto de Compras</div>
-                                <div>Esta surtiendo, esperamos # Guia</div>
+                                <div>Esperamos # Guia</div>
                             </div>
                         </div>
                     </div>
@@ -172,7 +194,7 @@
                             </div>
                             <div class="o_rfq_state_description small text-muted">
                                 <div>Cajera o Coordinador</div>
-                                <div>Ya llego, aun no se recibe en sistema</div>
+                                <div>Llego, por recibir</div>
                             </div>
                         </div>
                     </div>

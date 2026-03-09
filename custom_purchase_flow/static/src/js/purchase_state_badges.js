@@ -1,36 +1,53 @@
 odoo.define('custom_purchase_flow.purchase_state_badges', function (require) {
     "use strict";
 
-    var fieldRegistry = require('web.field_registry_owl');
-    var basicFields = require('web.basic_fields_owl');
+    var ListRenderer = require('web.ListRenderer');
 
     /**
-     * Extend the OWL FieldBadge widget so that any badge for a 'state' field
-     * gets a value-specific CSS class like 'po-state-draft'.
+     * Tooltip on Estado badge via ListRenderer event delegation.
+     * Reads reporte_ventas_compras from the row record data and shows
+     * a Bootstrap tooltip on hover over the state badge in the list view.
      */
-    var PatchedFieldBadge = basicFields.FieldBadge.extend({
-        patched: function () {
-            this._super.apply(this, arguments);
-            try {
-                if (this.props &&
-                    this.props.name === 'state' &&
-                    this.props.value !== undefined &&
-                    this.el) {
-                    var state = this.props.value;
-                    // Remove any previous per-state class
-                    this.el.className = (this.el.className || '')
-                        .split(' ')
-                        .filter(function (c) { return c.indexOf('po-state-') !== 0; })
-                        .join(' ')
-                        .trim();
-                    this.el.className += ' po-state-' + state;
-                }
-            } catch (e) {
-                console.error('custom_purchase_flow.purchase_state_badges FieldBadge error', e);
-            }
+    ListRenderer.include({
+        _renderView: function () {
+            var self = this;
+            return this._super.apply(this, arguments).then(function () {
+                self._attachReporteTooltips();
+            });
+        },
+
+        _attachReporteTooltips: function () {
+            var self = this;
+            if (!this.$el) { return; }
+
+            this.$el.off('mouseenter.reporte mouseleave.reporte', 'td.o_field_cell .o_field_widget[name="state"]');
+
+            this.$el.on('mouseenter.reporte', 'td.o_field_cell .o_field_widget[name="state"]', function () {
+                var $badge = $(this);
+                var $row = $badge.closest('tr.o_data_row');
+                var recordId = $row.data('id');
+                if (!recordId || !self.state || !self.state.data) { return; }
+
+                var record = _.find(self.state.data, function (r) { return r.id === recordId; });
+                if (!record || !record.data) { return; }
+
+                var reporte = record.data.reporte_ventas_compras || 'Por favor llena el Reporte Ventas VS Compras';
+
+                try { $badge.tooltip('dispose'); } catch (e) {}
+                $badge
+                    .attr('title', reporte)
+                    .tooltip({
+                        placement: 'left',
+                        trigger: 'manual',
+                        html: false,
+                        container: 'body',
+                    })
+                    .tooltip('show');
+            });
+
+            this.$el.on('mouseleave.reporte', 'td.o_field_cell .o_field_widget[name="state"]', function () {
+                try { $(this).tooltip('hide'); } catch (e) {}
+            });
         },
     });
-
-    fieldRegistry.add('badge', PatchedFieldBadge);
 });
-

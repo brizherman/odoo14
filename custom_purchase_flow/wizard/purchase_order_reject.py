@@ -23,31 +23,16 @@ class PurchaseOrderRejectWizard(models.TransientModel):
             if not wizard.rejection_reason or not wizard.rejection_reason.strip():
                 raise ValidationError(_("Rejection reason is required."))
 
-    def action_reject_to_draft(self):
-        """Reject the PO — return it to Draft state."""
+    def action_confirm_reject(self):
+        """Reject the PO — set state to Rechazado and record the reason."""
         self.ensure_one()
         po = self.purchase_order_id
         po.write({
-            'state': 'draft',
+            'state': 'rechazado',
             'rejection_reason': self.rejection_reason,
         })
         po.sudo().message_post(
-            body=_("Rejected — Returned to Draft<br/>Reason: %s") % self.rejection_reason,
-            message_type='comment',
-            subtype_xmlid='mail.mt_note',
-        )
-        return {'type': 'ir.actions.act_window_close'}
-
-    def action_reject_to_cancel(self):
-        """Reject the PO — cancel it entirely."""
-        self.ensure_one()
-        po = self.purchase_order_id
-        po.write({
-            'state': 'cancel',
-            'rejection_reason': self.rejection_reason,
-        })
-        po.sudo().message_post(
-            body=_("Rejected — Cancelled<br/>Reason: %s") % self.rejection_reason,
+            body=_("Rechazada<br/>Motivo: %s") % self.rejection_reason,
             message_type='comment',
             subtype_xmlid='mail.mt_note',
         )

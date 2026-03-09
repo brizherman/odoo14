@@ -14,7 +14,7 @@
                 <!-- 6.2 Replace native statusbar — correct order matching the custom flow -->
                 <xpath expr="//field[@name='state'][@widget='statusbar']" position="replace">
                     <field name="state" widget="statusbar"
-                           statusbar_visible="draft,to approve,approved,sent,pending_payment,purchase,in_transit,arrived,hecho"
+                           statusbar_visible="rechazado,draft,to approve,approved,sent,pending_payment,purchase,in_transit,arrived,hecho"
                            readonly="1"/>
                 </xpath>
 
@@ -147,7 +147,7 @@
                 <xpath expr="//button[@name='action_send_to_vendor']" position="after">
                     <button name="action_set_to_approved"
                             type="object"
-                            string="Regresar a Aprobada"
+                            string="Regresar a Autorizada"
                             class="btn-secondary"
                             attrs="{'invisible': [('state', '!=', 'sent')]}"
                             groups="custom_purchase_flow.group_purchase_dept"/>
@@ -157,7 +157,7 @@
                 <xpath expr="//button[@name='action_send_to_vendor']" position="after">
                     <button name="action_set_to_approved"
                             type="object"
-                            string="Regresar a Aprobada"
+                            string="Regresar a Autorizada"
                             class="btn-secondary"
                             attrs="{'invisible': [('state', '!=', 'sent')]}"
                             groups="custom_purchase_flow.group_purchase_direction"/>
@@ -257,7 +257,7 @@
                             groups="custom_purchase_flow.group_purchase_dept,custom_purchase_flow.group_purchase_direction"/>
                     <button name="action_set_to_approved"
                             type="object"
-                            string="Regresar a Aprobada"
+                            string="Regresar a Autorizada"
                             class="btn-secondary"
                             attrs="{'invisible': [('state', '!=', 'sent')]}"
                             groups="custom_purchase_flow.group_purchase_dept,custom_purchase_flow.group_purchase_direction"/>
@@ -267,6 +267,15 @@
                             class="btn-secondary"
                             attrs="{'invisible': [('state', '!=', 'sent')]}"
                             groups="custom_purchase_flow.group_purchase_dept,custom_purchase_flow.group_purchase_direction"/>
+                </xpath>
+
+                <!-- Reporte Ventas VS Compras — below Fecha de Recepción, Purchase Dept only, editable in draft/to approve -->
+                <xpath expr="//div[@name='date_planned_div']" position="after">
+                    <field name="reporte_ventas_compras"
+                           string="Reporte Ventas VS Compras"
+                           attrs="{'readonly': [('state', 'not in', ['draft', 'to approve'])]}"
+                           groups="custom_purchase_flow.group_purchase_dept,custom_purchase_flow.group_purchase_direction"
+                           placeholder="Reporte Ventas VS Compras..."/>
                 </xpath>
 
                 <!-- Add button to edit Fecha Recepción via wizard (sent, pending_payment) -->
@@ -448,7 +457,7 @@
                                decoration-primary="state == 'to approve'"
                                decoration-success="state in ('approved','arrived','hecho','done')"
                                decoration-warning="state in ('sent','purchase')"
-                               decoration-danger="state == 'in_transit'"
+                               decoration-danger="state in ('in_transit','rechazado')"
                                decoration-muted="state in ('pending_payment','cancel')"/>
                         <field name="receipt_status" string="Estado recepción" optional="show"/>
                         <field name="payment_term_id" string="Términos pago" optional="show"/>
@@ -468,6 +477,7 @@
                                widget="monetary"
                                optional="hide"/>
                         <field name="currency_id" invisible="1"/>
+                        <field name="reporte_ventas_compras" invisible="1"/>
                         <field name="invoice_status" optional="hide"/>
                     </tree>
                 </xpath>
@@ -496,7 +506,7 @@
                            decoration-primary="state == 'to approve'"
                            decoration-success="state in ('approved','arrived','hecho','done')"
                            decoration-warning="state in ('sent','purchase')"
-                           decoration-danger="state == 'in_transit'"
+                           decoration-danger="state in ('in_transit','rechazado')"
                            decoration-muted="state in ('pending_payment','cancel')"/>
                 </xpath>
             </field>
@@ -512,11 +522,13 @@
             <field name="inherit_id" ref="purchase.view_purchase_order_filter"/>
             <field name="arch" type="xml">
                 <xpath expr="//search" position="inside">
+                    <filter name="rfq_state_rechazado" string="0. Rechazado"
+                            domain="[('state', '=', 'rechazado')]"/>
                     <filter name="rfq_state_draft" string="1. Borrador"
                             domain="[('state', '=', 'draft')]"/>
-                    <filter name="rfq_state_to_approve" string="2. Por Aprobar"
+                    <filter name="rfq_state_to_approve" string="2. Por Autorizar"
                             domain="[('state', '=', 'to approve')]"/>
-                    <filter name="rfq_state_approved" string="3. Aprobada"
+                    <filter name="rfq_state_approved" string="3. Autorizada"
                             domain="[('state', '=', 'approved')]"/>
                     <filter name="rfq_state_sent" string="4. Enviada a Proveedor"
                             domain="[('state', '=', 'sent')]"/>
@@ -607,7 +619,8 @@
                                 class="btn-secondary"
                                 attrs="{'invisible': [('state', '!=', 'draft')]}"
                                 groups="custom_purchase_flow.group_purchase_coordinator,
-                                        custom_purchase_flow.group_purchase_dept"/>
+                                        custom_purchase_flow.group_purchase_dept,
+                                        custom_purchase_flow.group_purchase_direction"/>
 
                         <!-- TO APPROVE -->
                         <button name="button_approve"
@@ -638,6 +651,13 @@
                                 attrs="{'invisible': [('state', '!=', 'approved')]}"
                                 groups="custom_purchase_flow.group_purchase_dept,
                                         custom_purchase_flow.group_purchase_direction"/>
+                        <button name="action_revert_to_approve"
+                                type="object"
+                                string="Regresar a Por Autorizar"
+                                class="btn-secondary"
+                                attrs="{'invisible': [('state', '!=', 'approved')]}"
+                                groups="custom_purchase_flow.group_purchase_dept,
+                                        custom_purchase_flow.group_purchase_direction"/>
 
                         <!-- ENVIADA A PROVEEDOR (sent) -->
                         <button name="action_set_fulfilling"
@@ -656,7 +676,7 @@
                                         custom_purchase_flow.group_purchase_direction"/>
                         <button name="action_set_to_approved"
                                 type="object"
-                                string="Regresar a Aprobada"
+                                string="Regresar a Autorizada"
                                 class="btn-secondary"
                                 attrs="{'invisible': [('state', '!=', 'sent')]}"
                                 groups="custom_purchase_flow.group_purchase_dept,
@@ -736,9 +756,19 @@
                                 groups="custom_purchase_flow.group_purchase_cashier,
                                         custom_purchase_flow.group_purchase_direction"/>
 
+                        <!-- RECHAZADO -->
+                        <button name="action_pasar_a_borrador"
+                                type="object"
+                                string="Pasar a Borrador"
+                                class="oe_highlight"
+                                attrs="{'invisible': [('state', '!=', 'rechazado')]}"
+                                groups="custom_purchase_flow.group_purchase_coordinator,
+                                        custom_purchase_flow.group_purchase_dept,
+                                        custom_purchase_flow.group_purchase_direction"/>
+
                         <!-- Statusbar: keep extended custom flow states -->
                         <field name="state" widget="statusbar"
-                               statusbar_visible="draft,to approve,approved,sent,pending_payment,purchase,in_transit,arrived,hecho"
+                               statusbar_visible="rechazado,draft,to approve,approved,sent,pending_payment,purchase,in_transit,arrived,hecho"
                                readonly="1"/>
                     </header>
                 </xpath>
