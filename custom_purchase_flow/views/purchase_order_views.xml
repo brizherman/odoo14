@@ -411,7 +411,7 @@
                         </header>
 
                         <!-- Column order required by business (and reflected in column chooser) -->
-                        <field name="name" string="Folio" readonly="1" decoration-bf="1"/>
+                        <field name="name" string="Folio" readonly="1" decoration-bf="1" width="105"/>
                         <field name="partner_id" readonly="1"/>
                         <field name="company_id" readonly="1"
                                options="{'no_create': True}"
@@ -425,6 +425,14 @@
                                decoration-warning="order_limit_delta &gt;= 2 and order_limit_delta &lt;= 3"
                                decoration-danger="order_limit_delta &gt;= 4"/>
                         <field name="create_date" string="Fecha borrador" optional="show"/>
+                        <field name="approve_limit_display"
+                               string="Límite Autorizar"
+                               widget="badge"
+                               optional="show"
+                               decoration-success="approve_limit_delta &gt;= 0 and approve_limit_delta &lt;= 1"
+                               decoration-warning="approve_limit_delta &gt;= 2 and approve_limit_delta &lt;= 3"
+                               decoration-danger="approve_limit_delta &gt;= 4"/>
+                        <field name="date_to_approve" string="Fecha P/Autorizar" optional="show"/>
                         <field name="sent_days_display"
                                string="Limite Enviado"
                                widget="badge"
@@ -433,14 +441,14 @@
                                decoration-warning="sent_days_delta &gt;= 2 and sent_days_delta &lt;= 3"
                                decoration-danger="sent_days_delta &gt;= 4"/>
                         <field name="date_sent" string="Fecha Enviado" optional="show"/>
-                        <field name="date_planned"
-                               string="Fecha Recepción"
-                               optional="show"
-                               attrs="{'readonly': [('state', 'not in', ['sent', 'pending_payment'])]}"/>
                         <field name="receipt_deadline"
                                string="Límite Recepción"
                                widget="remaining_days"
                                optional="show"/>
+                        <field name="date_planned"
+                               string="Fecha Recepción"
+                               optional="show"
+                               attrs="{'readonly': [('state', 'not in', ['sent', 'pending_payment'])]}"/>
                         <field name="date_approve"
                                string="Fecha PO Surtiendo"
                                optional="hide"/>
@@ -465,6 +473,7 @@
                         <!-- Hidden / less-used fields kept for completeness -->
                         <field name="order_limit_delta" invisible="1"/>
                         <field name="sent_days_delta" invisible="1"/>
+                        <field name="approve_limit_delta" invisible="1"/>
                         <field name="priority" optional="hide" widget="priority" nolabel="1"/>
                         <field name="message_unread" invisible="1"/>
                         <field name="partner_ref" optional="hide"/>
@@ -798,6 +807,39 @@
                 <xpath expr="//header/button[@name='button_confirm'][@id='draft_confirm']" position="attributes">
                     <attribute name="groups">base.group_no_one</attribute>
                 </xpath>
+            </field>
+        </record>
+
+        <!-- ================================================================
+             ORDER LINE COLUMNS — Inherit purchase order form to modify the
+             order_line tree sub-view columns.
+             ================================================================ -->
+        <record id="view_purchase_order_line_columns_custom" model="ir.ui.view">
+            <field name="name">purchase.order.line.columns.custom</field>
+            <field name="model">purchase.order</field>
+            <field name="inherit_id" ref="purchase.purchase_order_form"/>
+            <field name="arch" type="xml">
+
+                <!-- Hide the description (name) column — not useful for users -->
+                <xpath expr="//field[@name='order_line']//tree//field[@name='name']" position="attributes">
+                    <attribute name="invisible">1</attribute>
+                </xpath>
+
+                <!-- Show product name only (suppress [REF] prefix from name_get) -->
+                <xpath expr="//field[@name='order_line']//tree//field[@name='product_id']" position="attributes">
+                    <attribute name="context">{'partner_id':parent.partner_id, 'quantity':product_qty,'uom':product_uom, 'company_id': parent.company_id, 'display_default_code': False}</attribute>
+                </xpath>
+
+                <!-- Add Internal Reference column before product_id -->
+                <xpath expr="//field[@name='order_line']//tree//field[@name='product_id']" position="before">
+                    <field name="product_default_code" string="Ref." readonly="1"/>
+                </xpath>
+
+                <!-- Replace taxes_id column with taxes_label (shows description/Label on Invoices) -->
+                <xpath expr="//field[@name='order_line']//tree//field[@name='taxes_id']" position="replace">
+                    <field name="taxes_label" string="Taxes" readonly="1"/>
+                </xpath>
+
             </field>
         </record>
 

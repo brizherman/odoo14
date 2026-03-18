@@ -1,14 +1,32 @@
 odoo.define('custom_purchase_flow.purchase_state_badges', function (require) {
-    "use strict";
+   "use strict";
 
-    var ListRenderer = require('web.ListRenderer');
+   var ListRenderer = require('web.ListRenderer');
+   var EditableListRenderer = require('web.EditableListRenderer');
 
-    /**
-     * Tooltip on Estado badge via ListRenderer event delegation.
-     * Reads reporte_ventas_compras from the row record data and shows
-     * a Bootstrap tooltip on hover over the state badge in the list view.
-     */
-    ListRenderer.include({
+   /**
+    * Force a fixed 105px width on the Folio (name) column in the purchase order
+    * list view. _freezeColumnWidths is the function in EditableListRenderer that
+    * sets the final inline style="width: Xpx" on each <th> after squeezing.
+    * We call _super first, then override just the name th.
+    */
+   EditableListRenderer.include({
+        _freezeColumnWidths: function () {
+            this._super.apply(this, arguments);
+            if (!this.$el || !this.$el.hasClass('o_purchase_order')) { return; }
+            var th = this.el.querySelector('thead th[data-name="name"]');
+            if (th) {
+                th.style.width = '105px';
+            }
+        },
+   });
+
+   /**
+    * Tooltip on Estado badge via ListRenderer event delegation.
+    * Reads reporte_ventas_compras from the row record data and shows
+    * a Bootstrap tooltip on hover over the state badge in the list view.
+    */
+   ListRenderer.include({
         _renderView: function () {
             var self = this;
             return this._super.apply(this, arguments).then(function () {

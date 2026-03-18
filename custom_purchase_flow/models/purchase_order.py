@@ -4,6 +4,34 @@ from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 
 
+class PurchaseOrderLine(models.Model):
+    _inherit = 'purchase.order.line'
+
+    product_default_code = fields.Char(
+        string="Internal Reference",
+        compute='_compute_product_default_code',
+        store=False,
+    )
+    taxes_label = fields.Char(
+        string="Taxes",
+        compute='_compute_taxes_label',
+        store=False,
+    )
+
+    @api.depends('product_id', 'product_id.default_code')
+    def _compute_product_default_code(self):
+        for line in self:
+            line.product_default_code = line.product_id.default_code or ''
+
+    @api.depends('taxes_id', 'taxes_id.description', 'taxes_id.name')
+    def _compute_taxes_label(self):
+        for line in self:
+            labels = []
+            for tax in line.taxes_id:
+                labels.append(tax.description or tax.name)
+            line.taxes_label = ', '.join(labels)
+
+
 class PurchaseOrder(models.Model):
     _inherit = 'purchase.order'
 
@@ -100,6 +128,21 @@ class PurchaseOrder(models.Model):
         compute='_compute_sent_days_display',
         store=False,
     )
+    date_to_approve = fields.Datetime(
+        string="Fecha P/Autorizar",
+        readonly=True,
+        copy=False,
+    )
+    approve_limit_display = fields.Char(
+        string="Límite Autorizar",
+        compute='_compute_approve_limit_display',
+        store=False,
+    )
+    approve_limit_delta = fields.Integer(
+        string="Límite Autorizar (días)",
+        compute='_compute_approve_limit_display',
+        store=False,
+    )
     receipt_status = fields.Selection(
         selection=[
             ('draft', 'Borrador'),
@@ -169,6 +212,22 @@ class PurchaseOrder(models.Model):
             days = (today - sent_date).days
             order.sent_days_delta = days
             order.sent_days_display = _("%s days") % days
+
+    @api.depends('state', 'date_to_approve')
+    def _compute_approve_limit_display(self):
+        today = fields.Date.context_today(self)
+        for order in self:
+            order.approve_limit_delta = False
+            if order.state not in ('to approve',) or not order.date_to_approve:
+                order.approve_limit_display = ''
+                continue
+            approve_date = fields.Date.to_date(order.date_to_approve)
+            if not approve_date:
+                order.approve_limit_display = ''
+                continue
+            days = (today - approve_date).days
+            order.approve_limit_delta = days
+            order.approve_limit_display = _("%s days") % days
 
     @api.depends('picking_ids', 'picking_ids.state')
     def _compute_receipt_status(self):
@@ -275,7 +334,10 @@ class PurchaseOrder(models.Model):
             if order.state != 'draft':
                 continue
             order._add_supplier_to_product()
-            order.write({'state': 'to approve'})
+            vals = {'state': 'to approve'}
+            if not order.date_to_approve:
+                vals['date_to_approve'] = fields.Datetime.now()
+            order.write(vals)
             if order.partner_id not in order.message_partner_ids:
                 order.message_subscribe([order.partner_id.id])
             updated |= order
