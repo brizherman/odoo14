@@ -133,6 +133,36 @@ class PurchaseOrder(models.Model):
         readonly=True,
         copy=False,
     )
+    date_purchase = fields.Datetime(
+        string="Fecha PO Surtiendo",
+        readonly=True,
+        copy=False,
+    )
+    date_pending_payment = fields.Datetime(
+        string="Fecha Pendiente de Pago",
+        readonly=True,
+        copy=False,
+    )
+    date_in_transit = fields.Datetime(
+        string="Fecha PO En Tránsito",
+        readonly=True,
+        copy=False,
+    )
+    date_arrived = fields.Datetime(
+        string="Fecha PO Llegó",
+        readonly=True,
+        copy=False,
+    )
+    date_hecho = fields.Datetime(
+        string="Fecha Hecho",
+        readonly=True,
+        copy=False,
+    )
+    date_rechazado = fields.Datetime(
+        string="Fecha Rechazado",
+        readonly=True,
+        copy=False,
+    )
     approve_limit_display = fields.Char(
         string="Límite Autorizar",
         compute='_compute_approve_limit_display',
@@ -447,12 +477,12 @@ class PurchaseOrder(models.Model):
             if order.partner_id not in order.message_partner_ids:
                 order.message_subscribe([order.partner_id.id])
             # Write purchase state first so _create_picking filter passes
-            order.write({'state': 'purchase', 'date_approve': fields.Datetime.now()})
+            order.write({'state': 'purchase', 'date_approve': fields.Datetime.now(), 'date_purchase': fields.Datetime.now()})
             order._create_picking()
 
     def action_set_pending_payment(self):
         """Purchase Dept marks PO as pending payment → state becomes 'pending_payment'."""
-        self.write({'state': 'pending_payment'})
+        self.write({'state': 'pending_payment', 'date_pending_payment': fields.Datetime.now()})
 
     def action_set_to_sent(self):
         """Purchase Dept reverts PO from Pendiente de Pago back to Enviada a Proveedor."""
@@ -484,7 +514,7 @@ class PurchaseOrder(models.Model):
                         "el que no hay guía antes de marcar la orden como En Tránsito."
                     )
                 )
-            order.write({'state': 'in_transit'})
+            order.write({'state': 'in_transit', 'date_in_transit': fields.Datetime.now()})
 
     def action_revert_to_purchase(self):
         """Cashier or Purchase Dept reverts PO from En Tránsito back to PO Surtiendo."""
@@ -506,7 +536,7 @@ class PurchaseOrder(models.Model):
                         "PO En Tránsito."
                     )
                 )
-            order.write({'state': 'arrived'})
+            order.write({'state': 'arrived', 'date_arrived': fields.Datetime.now()})
 
     def action_set_hecho(self):
         """Set PO to custom final state Hecho (from PO Llegó only). Not related to native done/Bloqueado."""
@@ -515,7 +545,7 @@ class PurchaseOrder(models.Model):
                 raise UserError(
                     _("Solo puedes marcar como Hecho desde el estado PO Llegó.")
                 )
-            order.write({'state': 'hecho'})
+            order.write({'state': 'hecho', 'date_hecho': fields.Datetime.now()})
 
     def action_open_tracking_wizard(self):
         """Open wizard to edit tracking info while form stays readonly."""

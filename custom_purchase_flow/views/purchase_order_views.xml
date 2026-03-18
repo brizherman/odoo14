@@ -366,6 +366,26 @@
                     </div>
                 </xpath>
 
+                <!-- Fechas de Flujo de Trabajo tab -->
+                <xpath expr="//notebook" position="inside">
+                    <page string="Fechas de Flujo de Trabajo" name="workflow_dates">
+                        <group>
+                            <group string="Historial de Estados">
+                                <field name="date_rechazado"   string="0. Rechazado"           readonly="1"/>
+                                <field name="create_date"      string="1. Borrador"             readonly="1"/>
+                                <field name="date_to_approve"  string="2. Por Autorizar"        readonly="1"/>
+                                <field name="date_approve"     string="3. Autorizada"           readonly="1"/>
+                                <field name="date_sent"        string="4. Enviada a Proveedor"  readonly="1"/>
+                                <field name="date_pending_payment" string="5. Pendiente de Pago" readonly="1"/>
+                                <field name="date_purchase"    string="6. PO Surtiendo"         readonly="1"/>
+                                <field name="date_in_transit"  string="7. PO En Tránsito"       readonly="1"/>
+                                <field name="date_arrived"     string="8. PO Llegó"             readonly="1"/>
+                                <field name="date_hecho"       string="9. Hecho"                readonly="1"/>
+                            </group>
+                        </group>
+                    </page>
+                </xpath>
+
                 <!-- 6.14 Tracking fields group inside sheet (visible in purchase, in_transit and arrived) -->
                 <xpath expr="//notebook" position="before">
                     <group string="Rastreo de Envío"

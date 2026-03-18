@@ -30,6 +30,7 @@ class PurchaseOrderRejectWizard(models.TransientModel):
         po.write({
             'state': 'rechazado',
             'rejection_reason': self.rejection_reason,
+            'date_rechazado': fields.Datetime.now(),
         })
         po.sudo().message_post(
             body=_("Rechazada<br/>Motivo: %s") % self.rejection_reason,
