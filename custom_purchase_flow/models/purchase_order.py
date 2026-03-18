@@ -4,6 +4,20 @@ from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 
 
+class AccountTax(models.Model):
+    _inherit = 'account.tax'
+
+    def name_get(self):
+        """When context flag show_tax_label is set, display description (Label on Invoices)
+        instead of the internal tax name. Fallback to name if description is empty."""
+        if not self.env.context.get('show_tax_label'):
+            return super().name_get()
+        result = []
+        for tax in self:
+            result.append((tax.id, tax.description or tax.name))
+        return result
+
+
 class PurchaseOrderLine(models.Model):
     _inherit = 'purchase.order.line'
 
@@ -12,24 +26,11 @@ class PurchaseOrderLine(models.Model):
         compute='_compute_product_default_code',
         store=False,
     )
-    taxes_label = fields.Char(
-        string="Taxes",
-        compute='_compute_taxes_label',
-        store=False,
-    )
 
     @api.depends('product_id', 'product_id.default_code')
     def _compute_product_default_code(self):
         for line in self:
             line.product_default_code = line.product_id.default_code or ''
-
-    @api.depends('taxes_id', 'taxes_id.description', 'taxes_id.name')
-    def _compute_taxes_label(self):
-        for line in self:
-            labels = []
-            for tax in line.taxes_id:
-                labels.append(tax.description or tax.name)
-            line.taxes_label = ', '.join(labels)
 
 
 class PurchaseOrder(models.Model):

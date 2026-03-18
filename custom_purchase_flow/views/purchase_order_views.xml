@@ -855,9 +855,10 @@
                     <field name="product_default_code" string="Ref." readonly="1"/>
                 </xpath>
 
-                <!-- Replace taxes_id column with taxes_label (shows description/Label on Invoices) -->
-                <xpath expr="//field[@name='order_line']//tree//field[@name='taxes_id']" position="replace">
-                    <field name="taxes_label" string="Taxes" readonly="1"/>
+                <!-- Display taxes using their Label on Invoices (description) via show_tax_label context -->
+                <xpath expr="//field[@name='order_line']//tree//field[@name='taxes_id']" position="attributes">
+                    <attribute name="context">{'show_tax_label': True}</attribute>
+                    <attribute name="options">{'no_create': True}</attribute>
                 </xpath>
 
             </field>
