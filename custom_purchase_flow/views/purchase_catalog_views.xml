@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- ================================================================
+             PURCHASE TEMPORADA — Catalog model (tree + form + action + menu)
+             ================================================================ -->
+
+        <record id="view_purchase_temporada_tree" model="ir.ui.view">
+            <field name="name">purchase.temporada.tree</field>
+            <field name="model">purchase.temporada</field>
+            <field name="arch" type="xml">
+                <tree string="Temporadas">
+                    <field name="name"/>
+                </tree>
+            </field>
+        </record>
+
+        <record id="view_purchase_temporada_form" model="ir.ui.view">
+            <field name="name">purchase.temporada.form</field>
+            <field name="model">purchase.temporada</field>
+            <field name="arch" type="xml">
+                <form string="Temporada">
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                            <field name="active"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_purchase_temporada" model="ir.actions.act_window">
+            <field name="name">Temporadas</field>
+            <field name="res_model">purchase.temporada</field>
+            <field name="view_mode">tree,form</field>
+        </record>
+
+        <!-- ================================================================
+             PURCHASE TAG — Tags model (tree + form + action + menu)
+             ================================================================ -->
+
+        <record id="view_purchase_tag_tree" model="ir.ui.view">
+            <field name="name">purchase.tag.tree</field>
+            <field name="model">purchase.tag</field>
+            <field name="arch" type="xml">
+                <tree string="Etiquetas">
+                    <field name="name"/>
+                    <field name="color" widget="color_picker"/>
+                </tree>
+            </field>
+        </record>
+
+        <record id="view_purchase_tag_form" model="ir.ui.view">
+            <field name="name">purchase.tag.form</field>
+            <field name="model">purchase.tag</field>
+            <field name="arch" type="xml">
+                <form string="Etiqueta">
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                            <field name="color" widget="color_picker"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_purchase_tag" model="ir.actions.act_window">
+            <field name="name">Etiquetas</field>
+            <field name="res_model">purchase.tag</field>
+            <field name="view_mode">tree,form</field>
+        </record>
+
+        <!-- ================================================================
+             SETTINGS MENUS — Under Purchase > Configuration
+             ================================================================ -->
+
+        <menuitem id="menu_purchase_temporada"
+                  name="Temporadas"
+                  parent="purchase.menu_purchase_config"
+                  action="action_purchase_temporada"
+                  sequence="20"
+                  groups="purchase.group_purchase_user"/>
+
+        <menuitem id="menu_purchase_tag"
+                  name="Etiquetas"
+                  parent="purchase.menu_purchase_config"
+                  action="action_purchase_tag"
+                  sequence="21"
+                  groups="purchase.group_purchase_user"/>
+
+    </data>
+</odoo>

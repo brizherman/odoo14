@@ -4,6 +4,32 @@ from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 
 
+class PurchaseTemporada(models.Model):
+    _name = 'purchase.temporada'
+    _description = 'Purchase Season'
+    _order = 'name'
+
+    name = fields.Char(string='Name', required=True, translate=True)
+    active = fields.Boolean(default=True)
+
+    _sql_constraints = [
+        ('name_uniq', 'unique(name)', _('A season with this name already exists.')),
+    ]
+
+
+class PurchaseTag(models.Model):
+    _name = 'purchase.tag'
+    _description = 'Purchase Tag'
+    _order = 'name'
+
+    name = fields.Char(string='Name', required=True, translate=True)
+    color = fields.Integer(string='Color')
+
+    _sql_constraints = [
+        ('name_uniq', 'unique(name)', _('A tag with this name already exists.')),
+    ]
+
+
 class AccountTax(models.Model):
     _inherit = 'account.tax'
 
@@ -79,6 +105,18 @@ class PurchaseOrder(models.Model):
             'arrived': 'set default',
             'hecho': 'set default',
         },
+    )
+
+    # --- Temporada & Tags ---
+    temporada_id = fields.Many2one(
+        'purchase.temporada',
+        string='Temporada',
+        required=True,
+        ondelete='restrict',
+    )
+    tag_ids = fields.Many2many(
+        'purchase.tag',
+        string='Etiqueta',
     )
 
     # --- Custom fields ---

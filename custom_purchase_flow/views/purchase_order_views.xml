@@ -269,6 +269,18 @@
                             groups="custom_purchase_flow.group_purchase_dept,custom_purchase_flow.group_purchase_direction"/>
                 </xpath>
 
+                <!-- Temporada — required, below partner_id, editable in draft/to approve only -->
+                <xpath expr="//field[@name='partner_id'][@widget='res_partner_many2one']" position="after">
+                    <field name="temporada_id"
+                           string="Temporada"
+                           required="1"
+                           attrs="{'readonly': [('state', 'not in', ['draft', 'to approve'])]}"/>
+                    <field name="tag_ids"
+                           string="Etiqueta"
+                           widget="many2many_tags"
+                           options="{'color_field': 'color', 'no_create_edit': True}"/>
+                </xpath>
+
                 <!-- Reporte Ventas VS Compras — below Fecha de Recepción, Purchase Dept only, editable in draft/to approve -->
                 <xpath expr="//div[@name='date_planned_div']" position="after">
                     <field name="reporte_ventas_compras"
@@ -508,6 +520,7 @@
                         <field name="currency_id" invisible="1"/>
                         <field name="reporte_ventas_compras" invisible="1"/>
                         <field name="invoice_status" optional="hide"/>
+                        <field name="temporada_id" string="Temporada" optional="show"/>
                     </tree>
                 </xpath>
 

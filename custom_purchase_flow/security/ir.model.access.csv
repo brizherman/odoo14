@@ -1,4 +1,6 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_purchase_temporada_user,purchase.temporada user,model_purchase_temporada,purchase.group_purchase_user,1,1,1,1
+access_purchase_tag_user,purchase.tag user,model_purchase_tag,purchase.group_purchase_user,1,1,1,1
 access_hide_edit_flag,po.hide.edit.flag,model_purchase_order_hide_edit_flag,base.group_user,1,1,1,1
 access_reject_wizard_coordinator,purchase.order.reject.wizard coordinator,model_purchase_order_reject_wizard,custom_purchase_flow.group_purchase_coordinator,1,0,0,0
 access_reject_wizard_direction,purchase.order.reject.wizard direction,model_purchase_order_reject_wizard,custom_purchase_flow.group_purchase_direction,1,1,1,1

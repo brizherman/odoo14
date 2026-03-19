@@ -13,6 +13,7 @@
         'wizard/purchase_order_reject_views.xml',
         'wizard/purchase_order_receipt_date_views.xml',
         'wizard/purchase_order_tracking_views.xml',
+        'views/purchase_catalog_views.xml',
         'views/purchase_order_views.xml',
         'views/purchase_menu_labels.xml',
         'data/translations.xml',
