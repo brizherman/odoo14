@@ -562,6 +562,10 @@
             <field name="model">purchase.order</field>
             <field name="inherit_id" ref="purchase.view_purchase_order_filter"/>
             <field name="arch" type="xml">
+                <xpath expr="//field[@name='name']" position="before">
+                    <field name="company_id" string="Compañía"/>
+                </xpath>
+
                 <xpath expr="//search" position="inside">
                     <filter name="rfq_state_rechazado" string="0. Rechazado"
                             domain="[('state', '=', 'rechazado')]"/>
