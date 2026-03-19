@@ -273,8 +273,7 @@
                 <xpath expr="//field[@name='partner_id'][@widget='res_partner_many2one']" position="after">
                     <field name="temporada_id"
                            string="Temporada"
-                           required="1"
-                           attrs="{'readonly': [('state', 'not in', ['draft', 'to approve'])]}"/>
+                           required="1"/>
                     <field name="tag_ids"
                            string="Etiqueta"
                            widget="many2many_tags"
