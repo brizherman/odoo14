@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- Add Compra Minima field to the vendor form, after the VAT field -->
+        <record id="view_partner_form_compra_minima" model="ir.ui.view">
+            <field name="name">res.partner.form.compra.minima</field>
+            <field name="model">res.partner</field>
+            <field name="inherit_id" ref="base.view_partner_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//div[hasclass('o_address_format')]/../field[@name='vat']" position="after">
+                    <field name="supplier_rank" invisible="1"/>
+                    <field name="compra_minima"
+                           string="Compra Minima"
+                           attrs="{'invisible': [('supplier_rank', '=', 0)]}"
+                           widget="monetary"
+                           options="{'currency_field': 'currency_id'}"/>
+                </xpath>
+            </field>
+        </record>
+
+    </data>
+</odoo>

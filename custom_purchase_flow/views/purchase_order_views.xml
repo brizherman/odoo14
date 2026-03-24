@@ -298,6 +298,12 @@
                                 string="Marcar recibida"
                                 class="btn-secondary btn-sm"/>
                     </div>
+                    <field name="compra_minima"
+                           string="Compra Minima"
+                           readonly="1"
+                           attrs="{'invisible': [('compra_minima', '=', 0.0)]}"
+                           widget="monetary"
+                           options="{'currency_field': 'currency_id'}"/>
                 </xpath>
 
                 <!-- Hide native "Pedir confirmación" reminder row -->

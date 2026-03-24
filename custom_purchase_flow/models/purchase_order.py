@@ -134,6 +134,13 @@ class PurchaseOrder(models.Model):
         default=False,
         copy=False,
     )
+    compra_minima = fields.Float(
+        string="Compra Minima",
+        related='partner_id.compra_minima',
+        store=False,
+        readonly=True,
+        digits=(16, 2),
+    )
     tracking_number = fields.Char(
         string="Número de guía",
         copy=False,
@@ -402,9 +409,29 @@ class PurchaseOrder(models.Model):
         """Coordinator submits draft PO for approval → state becomes 'to approve'.
         Returns a reload action so the form updates immediately (Edit button disappears
         without refresh); coordinators will still see Edit in 'to approve'.
+        Blocks submission if amount_total is below the vendor's Compra Minima.
         """
         updated = self.browse()
         for order in self:
+            if not order.compra_minima:
+                raise UserError(
+                    _(
+                        "El proveedor '%s' no tiene una Compra Mínima configurada. "
+                        "Por favor configúrala en el perfil del proveedor antes de "
+                        "solicitar aprobación.",
+                        order.partner_id.name,
+                    )
+                )
+            if order.amount_total < order.compra_minima:
+                raise UserError(
+                    _(
+                        "El total de la orden (%(total)s) es menor que la Compra Mínima "
+                        "del proveedor (%(minima)s). Por favor agrega más productos antes "
+                        "de solicitar aprobación.",
+                        total=order.currency_id.symbol + ' {:,.2f}'.format(order.amount_total),
+                        minima=order.currency_id.symbol + ' {:,.2f}'.format(order.compra_minima),
+                    )
+                )
             if order.state != 'draft':
                 continue
             order._add_supplier_to_product()

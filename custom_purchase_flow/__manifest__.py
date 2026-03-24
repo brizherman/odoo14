@@ -16,6 +16,7 @@
         'views/purchase_catalog_views.xml',
         'views/purchase_order_views.xml',
         'views/purchase_menu_labels.xml',
+        'views/res_partner_views.xml',
         'data/translations.xml',
     ],
     'qweb': [
