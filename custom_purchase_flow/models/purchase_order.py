@@ -129,6 +129,11 @@ class PurchaseOrder(models.Model):
         string="Reporte Ventas VS Compras",
         copy=False,
     )
+    factura_pdf_recibida = fields.Boolean(
+        string="Factura PDF recibida",
+        default=False,
+        copy=False,
+    )
     tracking_number = fields.Char(
         string="Número de guía",
         copy=False,
@@ -641,6 +646,15 @@ class PurchaseOrder(models.Model):
     def action_revert_to_in_transit(self):
         """Cashier reverts an arrived PO back to in_transit to correct a mistake."""
         self.write({'state': 'in_transit'})
+
+    def action_toggle_factura_pdf(self):
+        """Toggle Factura PDF recibida — only allowed in PO Surtiendo state."""
+        self.ensure_one()
+        if self.state != 'purchase':
+            raise UserError(
+                _("Factura PDF recibida solo se puede modificar cuando la orden está en estado PO Surtiendo.")
+            )
+        self.write({'factura_pdf_recibida': not self.factura_pdf_recibida})
 
     # =========================================================================
     # Deletion policy

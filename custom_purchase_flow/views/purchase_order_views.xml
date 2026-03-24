@@ -287,6 +287,22 @@
                            attrs="{'readonly': [('state', 'not in', ['draft', 'to approve'])]}"
                            groups="custom_purchase_flow.group_purchase_dept,custom_purchase_flow.group_purchase_direction"
                            placeholder="Reporte Ventas VS Compras..."/>
+                    <label for="factura_pdf_recibida" string="Factura PDF recibida"
+                           groups="custom_purchase_flow.group_purchase_dept,custom_purchase_flow.group_purchase_direction"/>
+                    <div groups="custom_purchase_flow.group_purchase_dept,custom_purchase_flow.group_purchase_direction"
+                         style="display:flex; align-items:center; gap:8px;">
+                        <field name="factura_pdf_recibida" nolabel="1" readonly="1"/>
+                        <button name="action_toggle_factura_pdf"
+                                type="object"
+                                attrs="{'invisible': [('state', '!=', 'purchase')]}"
+                                string="Marcar recibida"
+                                class="btn-secondary btn-sm"/>
+                    </div>
+                </xpath>
+
+                <!-- Hide native "Pedir confirmación" reminder row -->
+                <xpath expr="//div[@name='reminder']" position="attributes">
+                    <attribute name="invisible">1</attribute>
                 </xpath>
 
                 <!-- Add button to edit Fecha Recepción via wizard (sent, pending_payment) -->
@@ -442,8 +458,8 @@
                         </header>
 
                         <!-- Column order required by business (and reflected in column chooser) -->
-                        <field name="name" string="Folio" readonly="1" decoration-bf="1" width="105"/>
-                        <field name="partner_id" readonly="1"/>
+                        <field name="name" string="Folio" readonly="1" decoration-bf="1" width="110"/>
+                        <field name="partner_id" readonly="1" width="200"/>
                         <field name="company_id" readonly="1"
                                options="{'no_create': True}"
                                groups="base.group_multi_company"
@@ -520,6 +536,10 @@
                         <field name="reporte_ventas_compras" invisible="1"/>
                         <field name="invoice_status" optional="hide"/>
                         <field name="temporada_id" string="Temporada" optional="show"/>
+                        <field name="factura_pdf_recibida"
+                               string="F. PDF"
+                               optional="show"
+                               groups="custom_purchase_flow.group_purchase_dept,custom_purchase_flow.group_purchase_direction"/>
                     </tree>
                 </xpath>
 
