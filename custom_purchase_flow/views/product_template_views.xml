@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="product_template_tree_view_costs" model="ir.ui.view">
+        <field name="name">product.template.tree.costs</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_tree_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='standard_price']" position="after">
+                <field name="x_cost_ins" readonly="1" optional="show"/>
+                <field name="x_cost_rio" readonly="1" optional="show"/>
+                <field name="x_cost_ens" readonly="1" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

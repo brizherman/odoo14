@@ -432,6 +432,19 @@ class PurchaseOrder(models.Model):
                         minima=order.currency_id.symbol + ' {:,.2f}'.format(order.compra_minima),
                     )
                 )
+            zero_price_lines = order.order_line.filtered(lambda l: l.price_unit == 0)
+            if zero_price_lines:
+                product_names = ', '.join(
+                    zero_price_lines.mapped('product_id.display_name')
+                )
+                raise UserError(
+                    _(
+                        "Los siguientes productos tienen precio de cero y no pueden "
+                        "enviarse a autorización:\n%s\n\n"
+                        "Por favor actualiza los precios antes de solicitar aprobación.",
+                        product_names,
+                    )
+                )
             if order.state != 'draft':
                 continue
             order._add_supplier_to_product()

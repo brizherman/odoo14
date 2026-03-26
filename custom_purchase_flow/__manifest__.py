@@ -5,7 +5,7 @@
     'summary': 'Custom multi-state purchase approval and fulfillment flow',
     'author': 'Custom',
     'category': 'Purchase',
-    'depends': ['web', 'purchase', 'stock', 'mail', 'purchase_stock'],
+    'depends': ['web', 'purchase', 'stock', 'mail', 'purchase_stock', 'product'],
     'data': [
         'views/assets.xml',
         'security/security.xml',
@@ -17,6 +17,7 @@
         'views/purchase_order_views.xml',
         'views/purchase_menu_labels.xml',
         'views/res_partner_views.xml',
+        'views/product_template_views.xml',
         'data/translations.xml',
     ],
     'qweb': [
