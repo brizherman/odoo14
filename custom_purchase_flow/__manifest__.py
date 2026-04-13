@@ -15,6 +15,7 @@
         'wizard/purchase_order_tracking_views.xml',
         'views/purchase_catalog_views.xml',
         'views/purchase_order_views.xml',
+        'views/purchase_report_templates.xml',
         'views/purchase_menu_labels.xml',
         'views/res_partner_views.xml',
         'views/product_template_views.xml',

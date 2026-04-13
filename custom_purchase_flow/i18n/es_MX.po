@@ -49,3 +49,8 @@ msgstr "Cancelado"
 #: model:ir.ui.menu,name:purchase.menu_purchase_rfq
 msgid "Requests for Quotation"
 msgstr "Ordenes de Compra"
+
+#. module: custom_purchase_flow
+#: model:ir.ui.view,arch_db:custom_purchase_flow.report_purchaseorder_document_item_column
+msgid "Item"
+msgstr "Item"
