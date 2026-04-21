@@ -361,7 +361,7 @@
                             states="in_transit"
                             string="Llegó"
                             class="oe_highlight"
-                            groups="custom_purchase_flow.group_purchase_cashier"/>
+                            groups="custom_purchase_flow.group_purchase_cashier,custom_purchase_flow.group_purchase_coordinator,custom_purchase_flow.group_purchase_dept"/>
                 </xpath>
 
                 <!-- Regresar a PO Surtiendo (in_transit): Cashier y Purchase Dept -->
@@ -799,6 +799,7 @@
                                 class="oe_highlight"
                                 attrs="{'invisible': [('state', '!=', 'in_transit')]}"
                                 groups="custom_purchase_flow.group_purchase_cashier,
+                                        custom_purchase_flow.group_purchase_coordinator,
                                         custom_purchase_flow.group_purchase_dept,
                                         custom_purchase_flow.group_purchase_direction"/>
                         <button name="action_revert_to_purchase"

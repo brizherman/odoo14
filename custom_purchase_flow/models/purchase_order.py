@@ -611,7 +611,7 @@ class PurchaseOrder(models.Model):
         return True
 
     def action_set_arrived(self):
-        """Cashier confirms physical arrival → state becomes 'arrived'."""
+        """Confirm physical arrival (Cashier, Coordinator, or Purchase Dept) → state 'arrived'."""
         for order in self:
             if order.state != 'in_transit':
                 raise UserError(
