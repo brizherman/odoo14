@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <record id="group_pos_cash_reallocation_manager" model="res.groups">
+            <field name="name">Cash Reallocation Manager</field>
+            <field name="comment">Can run POS cash reallocation wizard and view or undo reallocation history.</field>
+            <field name="category_id" ref="base.module_category_sales_point_of_sale"/>
+            <field name="implied_ids" eval="[(4, ref('point_of_sale.group_pos_manager'))]"/>
+        </record>
+
+    </data>
+</odoo>

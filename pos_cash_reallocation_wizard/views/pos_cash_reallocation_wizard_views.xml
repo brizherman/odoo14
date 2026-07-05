@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_pos_cash_reallocation_wizard_form" model="ir.ui.view">
+        <field name="name">pos.cash.reallocation.wizard.form</field>
+        <field name="model">pos.cash.reallocation.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Cash Reallocation">
+                <header>
+                    <button name="action_preview"
+                            string="Preview"
+                            type="object"
+                            class="oe_highlight"
+                            states="draft"/>
+                    <button name="action_confirm"
+                            string="Confirm"
+                            type="object"
+                            class="oe_highlight"
+                            states="preview"
+                            confirm="Apply cash reallocation to the previewed orders?"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,preview,done"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="company_id"
+                                   groups="base.group_multi_company"
+                                   attrs="{'readonly': [('state', '!=', 'draft')]}"/>
+                            <field name="date_from"
+                                   attrs="{'readonly': [('state', '!=', 'draft')]}"/>
+                            <field name="date_to"
+                                   attrs="{'readonly': [('state', '!=', 'draft')]}"/>
+                        </group>
+                        <group>
+                            <field name="is_cash_count"/>
+                            <field name="matched_order_count"/>
+                            <field name="total_net_cash"/>
+                            <field name="amount_to_reallocate"
+                                   attrs="{'readonly': [('state', '!=', 'draft')]}"/>
+                        </group>
+                    </group>
+                    <notebook attrs="{'invisible': [('state', '=', 'draft')]}">
+                        <page string="Preview" name="preview">
+                            <field name="preview_line_ids" nolabel="1">
+                                <tree string="Preview" create="0" delete="0" edit="0">
+                                    <field name="order_id"/>
+                                    <field name="original_cash"/>
+                                    <field name="new_cash"/>
+                                    <field name="wallet_amount" string="E-Wallet Amount"/>
+                                </tree>
+                            </field>
+                        </page>
+                        <page string="Skipped Orders" name="skipped">
+                            <field name="skipped_line_ids" nolabel="1">
+                                <tree string="Skipped Orders" create="0" delete="0" edit="0">
+                                    <field name="order_id"/>
+                                    <field name="skip_reason"/>
+                                </tree>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_pos_cash_reallocation_wizard" model="ir.actions.act_window">
+        <field name="name">Cash Reallocation</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">pos.cash.reallocation.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">current</field>
+        <field name="view_id" ref="view_pos_cash_reallocation_wizard_form"/>
+    </record>
+
+</odoo>
