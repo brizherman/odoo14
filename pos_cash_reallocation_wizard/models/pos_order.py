@@ -3,7 +3,8 @@ from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 from odoo.osv import expression
 
-WALLET_PAYMENT_METHOD_NAME = 'Monedero Electrónico'
+WALLET_PAYMENT_METHOD_NAME = 'Lealtad'
+WALLET_LEGACY_PAYMENT_METHOD_NAMES = ('Monedero Electrónico',)
 CASH_PAYMENT_METHOD_NAME = 'Efectivo'
 WALLET_JOURNAL_CODE = 'MEWLT'
 
@@ -12,20 +13,71 @@ class PosOrder(models.Model):
     _inherit = 'pos.order'
 
     has_wallet_payment = fields.Boolean(
-        string='Has Monedero Payment',
+        string='Has Lealtad Payment',
         compute='_compute_has_wallet_payment',
         store=True,
         index=True,
     )
 
     @api.model
+    def _wallet_infrastructure_names(self):
+        return [WALLET_PAYMENT_METHOD_NAME] + list(WALLET_LEGACY_PAYMENT_METHOD_NAMES)
+
+    @api.model
+    def _rename_wallet_infrastructure_for_company(self, company):
+        """Rename legacy Monedero Electrónico records to Lealtad."""
+        company = company if hasattr(company, 'id') else self.env['res.company'].browse(company)
+        company = company.sudo()
+        PosPaymentMethod = self.env['pos.payment.method'].sudo()
+        AccountAccount = self.env['account.account'].sudo()
+        AccountJournal = self.env['account.journal'].sudo()
+        for method in PosPaymentMethod.search([
+            ('company_id', '=', company.id),
+            ('name', 'in', WALLET_LEGACY_PAYMENT_METHOD_NAMES),
+        ]):
+            method.name = WALLET_PAYMENT_METHOD_NAME
+        for account in AccountAccount.search([
+            ('company_id', '=', company.id),
+            ('name', 'in', WALLET_LEGACY_PAYMENT_METHOD_NAMES),
+        ]):
+            account.name = WALLET_PAYMENT_METHOD_NAME
+        for journal in AccountJournal.search([
+            ('company_id', '=', company.id),
+            ('name', 'in', WALLET_LEGACY_PAYMENT_METHOD_NAMES),
+        ]):
+            journal.name = WALLET_PAYMENT_METHOD_NAME
+
+    @api.model
+    def _migrate_all_wallet_infrastructure(self):
+        for company in self.env['res.company'].search([]):
+            self._rename_wallet_infrastructure_for_company(company)
+            self._get_wallet_payment_method(company)
+
+    def _register_hook(self):
+        super(PosOrder, self)._register_hook()
+        self._migrate_all_wallet_infrastructure()
+
+    @api.model
     def _get_wallet_payment_method(self, company):
-        """Return the per-company Monedero Electrónico payment method, if it exists."""
+        """Return the per-company Lealtad payment method, if it exists."""
         company_id = company.id if hasattr(company, 'id') else company
-        return self.env['pos.payment.method'].search([
+        self._rename_wallet_infrastructure_for_company(company_id)
+        PosPaymentMethod = self.env['pos.payment.method']
+        method = PosPaymentMethod.search([
             ('company_id', '=', company_id),
             ('name', '=', WALLET_PAYMENT_METHOD_NAME),
         ], limit=1)
+        if method:
+            return method
+        for legacy_name in WALLET_LEGACY_PAYMENT_METHOD_NAMES:
+            legacy = PosPaymentMethod.search([
+                ('company_id', '=', company_id),
+                ('name', '=', legacy_name),
+            ], limit=1)
+            if legacy:
+                legacy.name = WALLET_PAYMENT_METHOD_NAME
+                return legacy
+        return PosPaymentMethod
 
     @api.model
     def _get_wallet_account_code_prefix(self, company, AccountAccount):
@@ -64,9 +116,11 @@ class PosOrder(models.Model):
 
         wallet_account = AccountAccount.search([
             ('company_id', '=', company.id),
-            ('name', '=', WALLET_PAYMENT_METHOD_NAME),
+            ('name', 'in', self._wallet_infrastructure_names()),
             ('user_type_id', '=', receivable_type.id),
         ], limit=1)
+        if wallet_account and wallet_account.name != WALLET_PAYMENT_METHOD_NAME:
+            wallet_account.name = WALLET_PAYMENT_METHOD_NAME
         if not wallet_account:
             wallet_account = AccountAccount.create({
                 'name': WALLET_PAYMENT_METHOD_NAME,
@@ -80,8 +134,10 @@ class PosOrder(models.Model):
             ('company_id', '=', company.id),
             '|',
             ('code', '=', WALLET_JOURNAL_CODE),
-            ('name', '=', WALLET_PAYMENT_METHOD_NAME),
+            ('name', 'in', self._wallet_infrastructure_names()),
         ], limit=1)
+        if wallet_journal and wallet_journal.name != WALLET_PAYMENT_METHOD_NAME:
+            wallet_journal.name = WALLET_PAYMENT_METHOD_NAME
         if not wallet_journal:
             wallet_journal = AccountJournal.create({
                 'name': WALLET_PAYMENT_METHOD_NAME,

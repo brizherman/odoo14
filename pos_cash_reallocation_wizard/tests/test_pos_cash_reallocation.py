@@ -428,3 +428,66 @@ class TestPosCashReallocation(TransactionCase):
     def test_10_wallet_payment_method_name(self):
         self.assertEqual(self.wallet_method.name, WALLET_PAYMENT_METHOD_NAME)
         self.assertFalse(self.wallet_method.is_cash_count)
+
+    def test_13_legacy_wallet_name_migrated_to_lealtad(self):
+        legacy = self.env['pos.payment.method'].sudo().create({
+            'name': 'Monedero Electrónico',
+            'is_cash_count': False,
+            'receivable_account_id': self.wallet_method.receivable_account_id.id,
+            'company_id': self.env.company.id,
+        })
+        self.wallet_method.unlink()
+        resolved = self.PosOrder._get_wallet_payment_method(self.env.company)
+        self.assertEqual(resolved, legacy)
+        self.assertEqual(resolved.name, WALLET_PAYMENT_METHOD_NAME)
+
+    def test_11_wizard_history_tab_shows_logs(self):
+        date_from, date_to, order_date = self._unique_date_range()
+        session = self._open_session(self.pos_config_a)
+        self._create_paid_order(session, 100.0, date_order=order_date)
+
+        wizard, _result = self._run_reallocation(20.0, date_from, date_to)
+        log = self.Log.search([
+            ('date_from', '=', date_from),
+            ('date_to', '=', date_to),
+        ], order='id desc', limit=1)
+
+        self.assertIn(log, wizard.history_log_ids)
+
+    def test_12_default_dates_and_preview_without_amount(self):
+        self.env.user.write({'tz': 'America/Tijuana'})
+        date_from, date_to, order_date = self._unique_date_range()
+        session = self._open_session(self.pos_config_a)
+        self._create_paid_order(session, 100.0, date_order=order_date)
+
+        wizard = self.Wizard.create({'company_id': self.env.company.id})
+        date_from_local = fields.Datetime.context_timestamp(
+            self.env.user,
+            wizard.date_from,
+        )
+        date_to_local = fields.Datetime.context_timestamp(
+            self.env.user,
+            wizard.date_to,
+        )
+
+        self.assertEqual(date_from_local.hour, 7)
+        self.assertEqual(date_from_local.minute, 0)
+        self.assertLessEqual(wizard.date_from, wizard.date_to)
+        self.assertGreaterEqual(date_to_local, date_from_local)
+
+        wizard.write({
+            'date_from': date_from,
+            'date_to': date_to,
+        })
+        wizard.action_preview()
+
+        self.assertEqual(wizard.state, 'draft')
+        self.assertTrue(wizard.has_run_search)
+        self.assertEqual(wizard.matched_order_count, 1)
+        self.assertAlmostEqual(wizard.total_net_cash, 100.0, places=2)
+        self.assertFalse(wizard.preview_line_ids)
+
+        wizard.write({'amount_to_reallocate': 20.0})
+        wizard.action_preview()
+        self.assertEqual(wizard.state, 'preview')
+        self.assertTrue(wizard.preview_line_ids)

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="pos_session_report_lealtad_amount"
+              inherit_id="bi_pos_closed_session_reports.pos_z_report_pdf">
+        <xpath expr="//tr[td[contains(text(), 'Discount Amount')]]" position="after">
+            <tr>
+                <td class="text-left">
+                    Lealtad Amount
+                </td>
+                <td align="right">
+                    <span t-esc="o.get_lealtad_amount()"
+                          t-options="{'widget': 'monetary', 'display_currency': o.currency_id}"/>
+                </td>
+            </tr>
+        </xpath>
+    </template>
+</odoo>

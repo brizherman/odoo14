@@ -2,7 +2,7 @@
 
 
 def post_init_hook(cr, registry):
-    """Provision Monedero Electrónico account, journal, and payment method per company."""
+    """Provision Lealtad account, journal, and payment method per company."""
     from odoo import api, SUPERUSER_ID
 
     env = api.Environment(cr, SUPERUSER_ID, {})

@@ -8,11 +8,4 @@
               sequence="3"
               groups="pos_cash_reallocation_wizard.group_pos_cash_reallocation_manager"/>
 
-    <menuitem id="menu_pos_cash_reallocation_log"
-              name="Cash Reallocation History"
-              parent="point_of_sale.menu_point_of_sale"
-              action="action_pos_cash_reallocation_log"
-              sequence="4"
-              groups="pos_cash_reallocation_wizard.group_pos_cash_reallocation_manager"/>
-
 </odoo>

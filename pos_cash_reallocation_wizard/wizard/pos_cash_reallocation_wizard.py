@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+from datetime import datetime, timedelta
+
+import pytz
+
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 from odoo.tools import float_compare, float_round
@@ -16,8 +20,16 @@ class PosCashReallocationWizard(models.TransientModel):
         required=True,
         default=lambda self: self.env.company,
     )
-    date_from = fields.Datetime(string='Date From', required=True)
-    date_to = fields.Datetime(string='Date To', required=True)
+    date_from = fields.Datetime(
+        string='Date From',
+        required=True,
+        default=lambda self: self._default_date_from(),
+    )
+    date_to = fields.Datetime(
+        string='Date To',
+        required=True,
+        default=lambda self: self._default_date_to(),
+    )
     is_cash_count = fields.Boolean(
         string='Is Cash Count',
         default=True,
@@ -46,6 +58,11 @@ class PosCashReallocationWizard(models.TransientModel):
         default='draft',
         required=True,
     )
+    has_run_search = fields.Boolean(
+        string='Search Completed',
+        default=False,
+        readonly=True,
+    )
     preview_line_ids = fields.One2many(
         'pos.cash.reallocation.wizard.preview.line',
         'wizard_id',
@@ -58,6 +75,39 @@ class PosCashReallocationWizard(models.TransientModel):
         string='Skipped Orders',
         readonly=True,
     )
+    history_log_ids = fields.Many2many(
+        'pos.cash.reallocation.log',
+        string='Reallocation History',
+        compute='_compute_history_log_ids',
+        readonly=True,
+    )
+
+    HISTORY_LOG_LIMIT = 100
+
+    @api.model
+    def _default_date_from(self):
+        tz_name = self.env.user.tz or self._context.get('tz') or 'UTC'
+        tz = pytz.timezone(tz_name)
+        now_local = datetime.now(tz)
+        start_local = now_local.replace(hour=7, minute=0, second=0, microsecond=0)
+        if now_local < start_local:
+            start_local -= timedelta(days=1)
+        return start_local.astimezone(pytz.UTC).replace(tzinfo=None)
+
+    @api.model
+    def _default_date_to(self):
+        return fields.Datetime.now()
+
+    @api.depends('company_id', 'state')
+    def _compute_history_log_ids(self):
+        Log = self.env['pos.cash.reallocation.log']
+        for wizard in self:
+            if wizard.company_id:
+                wizard.history_log_ids = Log.search([
+                    ('company_id', '=', wizard.company_id.id),
+                ], order='create_date desc, id desc', limit=self.HISTORY_LOG_LIMIT)
+            else:
+                wizard.history_log_ids = Log.browse()
 
     def _check_date_range(self):
         self.ensure_one()
@@ -91,7 +141,7 @@ class PosCashReallocationWizard(models.TransientModel):
         if order.session_id.state == 'closed':
             return _('POS session is closed.')
         if order._has_wallet_payment(self.company_id):
-            return _('Order already has a Monedero payment.')
+            return _('Order already has a Lealtad payment.')
         net_cash = order._get_net_cash_amount()
         if net_cash <= 0:
             return _('Net cash is zero or negative.')
@@ -168,8 +218,18 @@ class PosCashReallocationWizard(models.TransientModel):
         self.ensure_one()
         self.action_compute_totals()
 
+        candidates = self._get_orders_in_date_range()
+        skipped_orders = candidates.filtered(
+            lambda order: not order._is_eligible_for_reallocation()
+        )
+        base_write = {
+            'has_run_search': True,
+            'skipped_line_ids': self._build_skipped_lines(skipped_orders),
+        }
+
         if self.amount_to_reallocate <= 0:
-            raise UserError(_('Please enter an amount to reallocate greater than zero.'))
+            self.write(dict(base_write, preview_line_ids=[(5, 0, 0)]))
+            return True
 
         precision = self.env['decimal.precision'].precision_get('Product Price')
         if float_compare(
@@ -201,16 +261,7 @@ class PosCashReallocationWizard(models.TransientModel):
                 'wallet_amount': wallet_amount,
             }))
 
-        candidates = self._get_orders_in_date_range()
-        skipped_orders = candidates.filtered(
-            lambda order: not order._is_eligible_for_reallocation()
-        )
-
-        self.write({
-            'preview_line_ids': preview_commands,
-            'skipped_line_ids': self._build_skipped_lines(skipped_orders),
-            'state': 'preview',
-        })
+        self.write(dict(base_write, preview_line_ids=preview_commands, state='preview'))
         return True
 
     def _get_primary_cash_payment(self, order):
@@ -233,6 +284,8 @@ class PosCashReallocationWizard(models.TransientModel):
         self.ensure_one()
         if self.state != 'preview':
             raise UserError(_('Please preview the reallocation before confirming.'))
+        if self.amount_to_reallocate <= 0:
+            raise UserError(_('Please enter an amount to reallocate greater than zero.'))
         if not self.preview_line_ids:
             raise UserError(_('There are no preview lines to confirm.'))
 
@@ -244,7 +297,7 @@ class PosCashReallocationWizard(models.TransientModel):
             )
         if not wallet_method:
             raise UserError(_(
-                'Monedero Electrónico payment method is not configured for this company.'
+                'Lealtad payment method is not configured for this company.'
             ))
 
         pending = []

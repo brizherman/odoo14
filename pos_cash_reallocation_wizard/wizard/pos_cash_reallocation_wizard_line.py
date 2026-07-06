@@ -30,7 +30,7 @@ class PosCashReallocationWizardPreviewLine(models.TransientModel):
         readonly=True,
     )
     wallet_amount = fields.Float(
-        string='E-Wallet Amount',
+        string='Lealtad Amount',
         digits='Product Price',
         readonly=True,
     )

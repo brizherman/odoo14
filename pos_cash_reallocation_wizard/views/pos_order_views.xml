@@ -19,12 +19,12 @@
         <field name="arch" type="xml">
             <filter name="posted" position="after">
                 <separator/>
-                <filter string="Has Monedero Payment"
+                <filter string="Has Lealtad Payment"
                         name="has_wallet_payment"
                         domain="[('has_wallet_payment', '=', True)]"/>
             </filter>
             <filter name="order_month" position="after">
-                <filter string="Has Monedero Payment"
+                <filter string="Has Lealtad Payment"
                         name="group_has_wallet_payment"
                         domain="[]"
                         context="{'group_by': 'has_wallet_payment'}"/>
