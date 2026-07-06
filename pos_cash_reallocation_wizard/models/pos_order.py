@@ -15,9 +15,12 @@ class PosOrder(models.Model):
 
     has_wallet_payment = fields.Boolean(
         string='Has Lealtad Payment',
-        compute='_compute_has_wallet_payment',
-        store=True,
+        default=False,
         index=True,
+        help=(
+            'Set when a Lealtad payment line exists on this order. Updated by '
+            'reallocation apply/undo; not mass-recomputed on install.'
+        ),
     )
 
     @api.model
@@ -154,8 +157,8 @@ class PosOrder(models.Model):
             'company_id': company.id,
         })
 
-    @api.depends('payment_ids', 'payment_ids.payment_method_id')
-    def _compute_has_wallet_payment(self):
+    def _sync_has_wallet_payment_flag(self):
+        """Keep the stored flag aligned with payment lines (apply/undo/hook only)."""
         for order in self:
             order.has_wallet_payment = order._has_wallet_payment(order.company_id)
 
@@ -349,6 +352,7 @@ class PosOrder(models.Model):
             wallet=wallet_amount,
         )
         self.note = '%s\n%s' % (self.note or '', comment)
+        self.has_wallet_payment = True
         return wallet_payment
 
     @api.model

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'POS Cash Reallocation Wizard',
-    'version': '14.0.2.1.0',
+    'version': '14.0.2.2.0',
     'summary': 'Proportional cash reallocation from POS orders into Lealtad',
     'description': """
         Two-step wizard to reallocate cash from paid or posted (done) cash-only,

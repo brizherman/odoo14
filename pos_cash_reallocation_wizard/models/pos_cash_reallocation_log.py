@@ -150,10 +150,13 @@ class PosCashReallocationLog(models.Model):
         )
 
     def _restore_payment_lines(self, lines_to_undo):
+        orders = self.env['pos.order']
         for line in lines_to_undo:
             if line.cash_payment_id:
                 line.cash_payment_id.write({'amount': line.original_cash_amount})
             line.wallet_payment_id.unlink()
+            orders |= line.order_id
+        orders._sync_has_wallet_payment_flag()
 
     def action_undo(self):
         self.ensure_one()
