@@ -2,6 +2,7 @@
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 from odoo.osv import expression
+from odoo.tools.misc import format_date
 
 WALLET_PAYMENT_METHOD_NAME = 'Lealtad'
 WALLET_LEGACY_PAYMENT_METHOD_NAMES = ('Monedero Electrónico',)
@@ -175,13 +176,10 @@ class PosOrder(models.Model):
             lambda payment: payment.payment_method_id == wallet_method
         ))
 
-    def _is_eligible_for_reallocation(self):
+    def _passes_cash_reallocation_payment_rules(self):
+        """Shared customer and payment-method rules for open and closed paths."""
         self.ensure_one()
-        if self.state != 'paid':
-            return False
         if self.partner_id:
-            return False
-        if self.session_id.state == 'closed':
             return False
         if self._has_wallet_payment(self.company_id):
             return False
@@ -198,6 +196,90 @@ class PosOrder(models.Model):
             return False
         return True
 
+    def _is_eligible_for_reallocation(self):
+        """Open-session path only: paid orders on a non-closed POS session."""
+        self.ensure_one()
+        if self.state != 'paid':
+            return False
+        if self.session_id.state == 'closed':
+            return False
+        return self._passes_cash_reallocation_payment_rules()
+
+    def _is_eligible_for_closed_session_reallocation(self):
+        """Closed-session path: done orders on a closed session with posted move."""
+        self.ensure_one()
+        if self.state != 'done':
+            return False
+        if self.state == 'invoiced' or self.account_move:
+            return False
+        if self.session_id.state != 'closed':
+            return False
+        session_move = self.session_id.move_id
+        if not session_move or session_move.state != 'posted':
+            return False
+        return self._passes_cash_reallocation_payment_rules()
+
+    def _get_closed_session_reallocation_date(self):
+        """Accounting date used for fiscal period lock checks on closed sessions."""
+        self.ensure_one()
+        session = self.session_id
+        if session.move_id and session.move_id.date:
+            return session.move_id.date
+        if session.stop_at:
+            return fields.Date.to_date(session.stop_at)
+        return fields.Date.context_today(self)
+
+    def _is_fiscal_period_locked(self, check_date):
+        self.ensure_one()
+        lock_date = self.company_id._get_user_fiscal_lock_date()
+        return check_date <= lock_date
+
+    def _check_closed_session_reallocation_allowed(self):
+        """Hard blocks for closed-session payment rewrite and adjustment posting."""
+        self.ensure_one()
+        if self.state == 'invoiced' or self.account_move:
+            raise UserError(_(
+                'Cannot reallocate cash on invoiced order %(order)s.',
+                order=self.name,
+            ))
+        session_move = self.session_id.move_id
+        if not session_move:
+            raise UserError(_(
+                'Cannot reallocate cash on order %(order)s because POS session '
+                '%(session)s has no journal entry.',
+                order=self.name,
+                session=self.session_id.name,
+            ))
+        if session_move.state != 'posted':
+            raise UserError(_(
+                'Cannot reallocate cash on order %(order)s because POS session '
+                '%(session)s journal entry is not posted.',
+                order=self.name,
+                session=self.session_id.name,
+            ))
+        check_date = self._get_closed_session_reallocation_date()
+        if self._is_fiscal_period_locked(check_date):
+            lock_date = self.company_id._get_user_fiscal_lock_date()
+            raise UserError(_(
+                'Cannot reallocate cash on order %(order)s because fiscal period '
+                'is locked through %(lock_date)s.',
+                order=self.name,
+                lock_date=format_date(self.env, lock_date),
+            ))
+
+    @api.model
+    def get_reallocation_eligibility_mode(self, order):
+        """Return 'open', 'closed', or False for wizard filtering."""
+        order = order if hasattr(order, '_name') else self.browse(order)
+        if not order:
+            return False
+        order.ensure_one()
+        if order._is_eligible_for_reallocation():
+            return 'open'
+        if order._is_eligible_for_closed_session_reallocation():
+            return 'closed'
+        return False
+
     def _check_reallocation_session_open(self):
         self.ensure_one()
         if self.session_id.state == 'closed':
@@ -208,8 +290,13 @@ class PosOrder(models.Model):
                 session=self.session_id.name,
             ))
 
-    def _apply_cash_reallocation(self, wallet_amount, wallet_method):
+    def _apply_cash_reallocation(self, wallet_amount, wallet_method, closed_session=False):
+        """Rewrite payment lines; optionally skip open-session guard for closed path."""
         self.ensure_one()
+        if closed_session:
+            self._check_closed_session_reallocation_allowed()
+        else:
+            self._check_reallocation_session_open()
         if wallet_amount <= 0:
             return self.env['pos.payment']
 
@@ -266,6 +353,7 @@ class PosOrder(models.Model):
 
     @api.model
     def search_wallet_reallocated_orders(self, company, domain=None):
+        """Return orders with a Lealtad payment line, any session state."""
         company_id = company.id if hasattr(company, 'id') else company
         wallet_method = self._get_wallet_payment_method(company_id)
         if not wallet_method:

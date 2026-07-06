@@ -35,6 +35,22 @@ class PosCashReallocationWizard(models.TransientModel):
         default=True,
         readonly=True,
     )
+    include_closed_sessions = fields.Boolean(
+        string='Include Closed Sessions',
+        default=False,
+        help=(
+            'Reallocate cash from posted (done) orders on closed POS sessions. '
+            'Posts compensating journal entries. Does not modify bank statements.'
+        ),
+    )
+    has_locked_fiscal_period = fields.Boolean(
+        string='Locked Fiscal Period Detected',
+        readonly=True,
+    )
+    locked_session_warning = fields.Text(
+        string='Fiscal Period Warning',
+        readonly=True,
+    )
     amount_to_reallocate = fields.Float(
         string='Amount to Reallocate',
         digits='Product Price',
@@ -47,6 +63,22 @@ class PosCashReallocationWizard(models.TransientModel):
         string='Total Net Cash',
         digits='Product Price',
         readonly=True,
+    )
+    available_session_ids = fields.Many2many(
+        'pos.session',
+        compute='_compute_available_session_ids',
+        string='Sessions in Date Range',
+    )
+    session_ids = fields.Many2many(
+        'pos.session',
+        'pos_cash_realloc_wizard_session_rel',
+        'wizard_id',
+        'session_id',
+        string='POS Sessions to Include',
+        help=(
+            'Optional. Leave empty to include all eligible sessions in the date '
+            'range. Click Preview again after changing this selection.'
+        ),
     )
     state = fields.Selection(
         selection=[
@@ -109,6 +141,48 @@ class PosCashReallocationWizard(models.TransientModel):
             else:
                 wizard.history_log_ids = Log.browse()
 
+    @api.depends('date_from', 'date_to', 'company_id', 'include_closed_sessions')
+    def _compute_available_session_ids(self):
+        for wizard in self:
+            sessions = self.env['pos.session']
+            if wizard.date_from and wizard.date_to and wizard.date_from <= wizard.date_to:
+                eligible = wizard._get_eligible_orders_without_session_filter()
+                sessions = eligible.mapped('session_id')
+            wizard.available_session_ids = sessions
+
+    @api.onchange('date_from', 'date_to', 'include_closed_sessions', 'company_id')
+    def _onchange_search_criteria(self):
+        self.session_ids = [(5, 0, 0)]
+        self._reset_preview_for_filter_change(clear_search=True)
+
+    @api.onchange('session_ids')
+    def _onchange_session_ids(self):
+        if self.has_run_search:
+            self._reset_preview_for_filter_change(clear_search=False)
+
+    def _reset_preview_for_filter_change(self, clear_search=False):
+        self.state = 'draft'
+        self.preview_line_ids = [(5, 0, 0)]
+        if clear_search:
+            self.has_run_search = False
+            self.matched_order_count = 0
+            self.total_net_cash = 0.0
+            self.skipped_line_ids = [(5, 0, 0)]
+            self.has_locked_fiscal_period = False
+            self.locked_session_warning = False
+
+    def _check_session_filter(self):
+        self.ensure_one()
+        if not self.session_ids:
+            return
+        invalid = self.session_ids - self.available_session_ids
+        if invalid:
+            raise UserError(_(
+                'The following POS session(s) are not eligible in the selected '
+                'date range: %s',
+                ', '.join(invalid.mapped('name')),
+            ))
+
     def _check_date_range(self):
         self.ensure_one()
         if not self.date_from or not self.date_to:
@@ -119,21 +193,43 @@ class PosCashReallocationWizard(models.TransientModel):
     def _get_orders_in_date_range(self):
         self.ensure_one()
         self._check_date_range()
-        return self.env['pos.order'].search([
+        order_state = 'done' if self.include_closed_sessions else 'paid'
+        domain = [
             ('company_id', '=', self.company_id.id),
             ('date_order', '>=', self.date_from),
             ('date_order', '<=', self.date_to),
-            ('state', '=', 'paid'),
+            ('state', '=', order_state),
+            ('partner_id', '=', False),
+        ]
+        if self.session_ids:
+            domain.append(('session_id', 'in', self.session_ids.ids))
+        return self.env['pos.order'].search(domain, order='date_order asc, id asc')
+
+    def _get_eligible_orders_without_session_filter(self):
+        """Eligible orders in the date range, ignoring session_ids filter."""
+        self.ensure_one()
+        order_state = 'done' if self.include_closed_sessions else 'paid'
+        candidates = self.env['pos.order'].search([
+            ('company_id', '=', self.company_id.id),
+            ('date_order', '>=', self.date_from),
+            ('date_order', '<=', self.date_to),
+            ('state', '=', order_state),
             ('partner_id', '=', False),
         ], order='date_order asc, id asc')
+        return candidates.filtered(lambda order: self._order_is_eligible(order))
+
+    def _order_is_eligible(self, order):
+        self.ensure_one()
+        if self.include_closed_sessions:
+            return order._is_eligible_for_closed_session_reallocation()
+        return order._is_eligible_for_reallocation()
 
     def _get_eligible_orders(self):
         self.ensure_one()
         candidates = self._get_orders_in_date_range()
-        return candidates.filtered(lambda order: order._is_eligible_for_reallocation())
+        return candidates.filtered(lambda order: self._order_is_eligible(order))
 
-    def _get_reallocation_skip_reason(self, order):
-        self.ensure_one()
+    def _get_open_session_skip_reason(self, order):
         if order.state != 'paid':
             return _('Order is not paid.')
         if order.partner_id:
@@ -154,6 +250,60 @@ class PosCashReallocationWizard(models.TransientModel):
         if not payment_method.is_cash_count:
             return _('Payment method is not counted as cash.')
         return False
+
+    def _get_closed_session_skip_reason(self, order):
+        if order.state == 'invoiced' or order.account_move:
+            return _('Order is invoiced.')
+        if order.state != 'done':
+            return _('Order is not posted (done).')
+        if order.partner_id:
+            return _('Order has a customer assigned.')
+        if order.session_id.state != 'closed':
+            return _('POS session is not closed.')
+        session_move = order.session_id.move_id
+        if not session_move:
+            return _('POS session has no journal entry.')
+        if session_move.state != 'posted':
+            return _('POS session journal entry is not posted.')
+        if order._is_fiscal_period_locked(order._get_closed_session_reallocation_date()):
+            return _('Fiscal period is locked for this session.')
+        if order._has_wallet_payment(self.company_id):
+            return _('Order already has a Lealtad payment.')
+        net_cash = order._get_net_cash_amount()
+        if net_cash <= 0:
+            return _('Net cash is zero or negative.')
+        payment_methods = order.payment_ids.mapped('payment_method_id')
+        if len(payment_methods) != 1:
+            return _('Order has mixed payment methods.')
+        payment_method = payment_methods[0]
+        if payment_method.name != CASH_PAYMENT_METHOD_NAME:
+            return _('Payment method is not Efectivo.')
+        if not payment_method.is_cash_count:
+            return _('Payment method is not counted as cash.')
+        return False
+
+    def _get_reallocation_skip_reason(self, order):
+        self.ensure_one()
+        if self.include_closed_sessions:
+            return self._get_closed_session_skip_reason(order)
+        return self._get_open_session_skip_reason(order)
+
+    def _get_locked_sessions_for_preview(self, orders):
+        self.ensure_one()
+        if not self.include_closed_sessions:
+            return self.env['pos.session']
+
+        PosSession = self.env['pos.session']
+        locked_sessions = PosSession
+        seen_session_ids = set()
+        for order in orders:
+            session = order.session_id
+            if session.id in seen_session_ids:
+                continue
+            seen_session_ids.add(session.id)
+            if order._is_fiscal_period_locked(order._get_closed_session_reallocation_date()):
+                locked_sessions |= session
+        return locked_sessions
 
     @api.model
     def _compute_proportional_shares(self, orders, amount):
@@ -196,9 +346,21 @@ class PosCashReallocationWizard(models.TransientModel):
                 }))
         return commands
 
+    def _group_preview_lines_by_session(self):
+        """Return {session_id: total wallet_amount} for adjustment posting."""
+        self.ensure_one()
+        totals = {}
+        for line in self.preview_line_ids:
+            if line.wallet_amount <= 0:
+                continue
+            session_id = line.session_id.id or line.order_id.session_id.id
+            totals[session_id] = totals.get(session_id, 0.0) + line.wallet_amount
+        return totals
+
     def action_compute_totals(self):
         self.ensure_one()
         self._check_date_range()
+        self._check_session_filter()
         eligible_orders = self._get_eligible_orders()
         if not eligible_orders:
             raise UserError(_(
@@ -220,16 +382,27 @@ class PosCashReallocationWizard(models.TransientModel):
 
         candidates = self._get_orders_in_date_range()
         skipped_orders = candidates.filtered(
-            lambda order: not order._is_eligible_for_reallocation()
+            lambda order: not self._order_is_eligible(order)
         )
+        eligible_orders = self._get_eligible_orders()
+        locked_sessions = self._get_locked_sessions_for_preview(eligible_orders)
+        locked_warning = False
+        if locked_sessions:
+            locked_warning = _(
+                'Confirm is blocked: fiscal period is locked for session(s): %s',
+                ', '.join(locked_sessions.mapped('name')),
+            )
+
         base_write = {
             'has_run_search': True,
             'skipped_line_ids': self._build_skipped_lines(skipped_orders),
+            'has_locked_fiscal_period': bool(locked_sessions),
+            'locked_session_warning': locked_warning or False,
         }
 
         if self.amount_to_reallocate <= 0:
             self.write(dict(base_write, preview_line_ids=[(5, 0, 0)]))
-            return True
+            return self._preview_notification(locked_warning)
 
         precision = self.env['decimal.precision'].precision_get('Product Price')
         if float_compare(
@@ -244,7 +417,6 @@ class PosCashReallocationWizard(models.TransientModel):
                 total=self.total_net_cash,
             ))
 
-        eligible_orders = self._get_eligible_orders()
         shares = self._compute_proportional_shares(
             eligible_orders,
             self.amount_to_reallocate,
@@ -254,15 +426,32 @@ class PosCashReallocationWizard(models.TransientModel):
         for order in eligible_orders:
             wallet_amount = shares.get(order.id, 0.0)
             original_cash = order._get_net_cash_amount()
-            preview_commands.append((0, 0, {
+            preview_vals = {
                 'order_id': order.id,
                 'original_cash': original_cash,
                 'new_cash': original_cash - wallet_amount,
                 'wallet_amount': wallet_amount,
-            }))
+            }
+            if self.include_closed_sessions:
+                preview_vals['session_id'] = order.session_id.id
+            preview_commands.append((0, 0, preview_vals))
 
         self.write(dict(base_write, preview_line_ids=preview_commands, state='preview'))
-        return True
+        return self._preview_notification(locked_warning)
+
+    def _preview_notification(self, locked_warning):
+        if not locked_warning:
+            return True
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Warning'),
+                'message': locked_warning,
+                'type': 'warning',
+                'sticky': True,
+            },
+        }
 
     def _get_primary_cash_payment(self, order):
         cash_payment = order.payment_ids.filtered(
@@ -280,15 +469,8 @@ class PosCashReallocationWizard(models.TransientModel):
             )[:1]
         return cash_payment
 
-    def action_confirm(self):
+    def _get_wallet_method(self):
         self.ensure_one()
-        if self.state != 'preview':
-            raise UserError(_('Please preview the reallocation before confirming.'))
-        if self.amount_to_reallocate <= 0:
-            raise UserError(_('Please enter an amount to reallocate greater than zero.'))
-        if not self.preview_line_ids:
-            raise UserError(_('There are no preview lines to confirm.'))
-
         PosOrder = self.env['pos.order']
         wallet_method = PosOrder._get_wallet_payment_method(self.company_id)
         if not wallet_method:
@@ -299,6 +481,30 @@ class PosCashReallocationWizard(models.TransientModel):
             raise UserError(_(
                 'Lealtad payment method is not configured for this company.'
             ))
+        return wallet_method
+
+    def action_confirm(self):
+        self.ensure_one()
+        if self.state != 'preview':
+            raise UserError(_('Please preview the reallocation before confirming.'))
+        self._check_session_filter()
+        if self.amount_to_reallocate <= 0:
+            raise UserError(_('Please enter an amount to reallocate greater than zero.'))
+        if not self.preview_line_ids:
+            raise UserError(_('There are no preview lines to confirm.'))
+        if self.include_closed_sessions:
+            if self.has_locked_fiscal_period:
+                raise UserError(_(
+                    'Cannot confirm: one or more matched POS sessions fall in a '
+                    'locked fiscal period.'
+                ))
+            return self._action_confirm_closed_session()
+        return self._action_confirm_open_session()
+
+    def _action_confirm_open_session(self):
+        self.ensure_one()
+        PosOrder = self.env['pos.order']
+        wallet_method = self._get_wallet_method()
 
         pending = []
         skipped_at_confirm = []
@@ -352,6 +558,7 @@ class PosCashReallocationWizard(models.TransientModel):
 
             log_line_vals.append({
                 'order_id': order.id,
+                'session_id': order.session_id.id,
                 'original_cash_amount': original_cash,
                 'new_cash_amount': original_cash - wallet_amount,
                 'wallet_amount': wallet_amount,
@@ -365,6 +572,7 @@ class PosCashReallocationWizard(models.TransientModel):
         for item in skipped_at_confirm:
             log_line_vals.append({
                 'order_id': item['order'].id,
+                'session_id': item['order'].session_id.id,
                 'original_cash_amount': item['original_cash'],
                 'new_cash_amount': item['original_cash'],
                 'wallet_amount': 0.0,
@@ -378,6 +586,7 @@ class PosCashReallocationWizard(models.TransientModel):
             'date_to': self.date_to,
             'total_amount': total_applied,
             'order_count': applied_count,
+            'reallocation_mode': 'open_session',
             'line_ids': [(0, 0, vals) for vals in log_line_vals],
         })
 
@@ -410,3 +619,104 @@ class PosCashReallocationWizard(models.TransientModel):
                 },
             }
         return True
+
+    def _action_confirm_closed_session(self):
+        self.ensure_one()
+        Log = self.env['pos.cash.reallocation.log']
+        wallet_method = self._get_wallet_method()
+        session_totals = self._group_preview_lines_by_session()
+        if not session_totals:
+            raise UserError(_('No reallocation amounts to apply.'))
+
+        for line in self.preview_line_ids:
+            if line.wallet_amount <= 0:
+                continue
+            order = line.order_id
+            if not order._is_eligible_for_closed_session_reallocation():
+                reason = self._get_closed_session_skip_reason(order)
+                raise UserError(_(
+                    'Order %(order)s is no longer eligible: %(reason)s',
+                    order=order.name,
+                    reason=reason or _('Unknown reason.'),
+                ))
+            order._check_closed_session_reallocation_allowed()
+
+        log_name = self.env['ir.sequence'].next_by_code(
+            'pos.cash.reallocation.log'
+        ) or '/'
+
+        with self.env.cr.savepoint():
+            log_line_vals = []
+            total_applied = 0.0
+            applied_count = 0
+
+            for line in self.preview_line_ids:
+                wallet_amount = line.wallet_amount
+                if wallet_amount <= 0:
+                    continue
+
+                order = line.order_id
+                cash_payment = self._get_primary_cash_payment(order)
+                original_cash = cash_payment.amount if cash_payment else line.original_cash
+                wallet_payment = order._apply_cash_reallocation(
+                    wallet_amount,
+                    wallet_method,
+                    closed_session=True,
+                )
+                log_line_vals.append({
+                    'order_id': order.id,
+                    'session_id': order.session_id.id,
+                    'original_cash_amount': original_cash,
+                    'new_cash_amount': original_cash - wallet_amount,
+                    'wallet_amount': wallet_amount,
+                    'cash_payment_id': cash_payment.id if cash_payment else False,
+                    'wallet_payment_id': wallet_payment.id,
+                    'skipped': False,
+                })
+                total_applied += wallet_amount
+                applied_count += 1
+
+            adjustment_moves = self.env['account.move']
+            sessions = self.env['pos.session']
+            PosSession = self.env['pos.session']
+            for session_id, session_total in session_totals.items():
+                session = PosSession.browse(session_id)
+                move = session._create_reallocation_adjustment_move(
+                    session_total,
+                    log_name,
+                )
+                adjustment_moves |= move
+                sessions |= session
+
+            Log.create_closed_session_log({
+                'name': log_name,
+                'company_id': self.company_id.id,
+                'date_from': self.date_from,
+                'date_to': self.date_to,
+                'total_amount': total_applied,
+                'order_count': applied_count,
+                'line_ids': [(0, 0, vals) for vals in log_line_vals],
+            }, sessions.ids, adjustment_moves.ids)
+
+        self.write({'state': 'done'})
+        return self._notify_closed_session_success(sessions, adjustment_moves)
+
+    def _notify_closed_session_success(self, sessions, adjustment_moves):
+        self.ensure_one()
+        session_names = ', '.join(sessions.mapped('name'))
+        move_names = ', '.join(adjustment_moves.mapped('name'))
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Success'),
+                'message': _(
+                    'Closed-session reallocation completed. Sessions adjusted: '
+                    '%(sessions)s. Journal entries: %(moves)s.',
+                    sessions=session_names,
+                    moves=move_names,
+                ),
+                'type': 'success',
+                'sticky': False,
+            },
+        }

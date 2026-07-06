@@ -4,9 +4,16 @@
 
         <record id="group_pos_cash_reallocation_manager" model="res.groups">
             <field name="name">Cash Reallocation Manager</field>
-            <field name="comment">Can run POS cash reallocation wizard and view or undo reallocation history.</field>
+            <field name="comment">
+                Can run POS cash reallocation wizard and view or undo reallocation history.
+                Includes Invoicing access so closed-session runs can post and reverse
+                compensating journal entries on the Lealtad journal.
+            </field>
             <field name="category_id" ref="base.module_category_sales_point_of_sale"/>
-            <field name="implied_ids" eval="[(4, ref('point_of_sale.group_pos_manager'))]"/>
+            <field name="implied_ids" eval="[
+                (4, ref('point_of_sale.group_pos_manager')),
+                (4, ref('account.group_account_invoice')),
+            ]"/>
         </record>
 
     </data>

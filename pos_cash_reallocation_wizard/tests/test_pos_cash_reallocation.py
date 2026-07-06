@@ -430,14 +430,24 @@ class TestPosCashReallocation(TransactionCase):
         self.assertFalse(self.wallet_method.is_cash_count)
 
     def test_13_legacy_wallet_name_migrated_to_lealtad(self):
+        fresh_company = self.env['res.company'].create({
+            'name': 'Legacy Wallet Test %s' % uuid.uuid4().hex[:6],
+        })
+        receivable_type = self.env.ref('account.data_account_type_receivable')
+        receivable_account = self.env['account.account'].create({
+            'name': 'Legacy Wallet Receivable',
+            'code': '199901',
+            'user_type_id': receivable_type.id,
+            'reconcile': True,
+            'company_id': fresh_company.id,
+        })
         legacy = self.env['pos.payment.method'].sudo().create({
             'name': 'Monedero Electrónico',
             'is_cash_count': False,
-            'receivable_account_id': self.wallet_method.receivable_account_id.id,
-            'company_id': self.env.company.id,
+            'receivable_account_id': receivable_account.id,
+            'company_id': fresh_company.id,
         })
-        self.wallet_method.unlink()
-        resolved = self.PosOrder._get_wallet_payment_method(self.env.company)
+        resolved = self.PosOrder._get_wallet_payment_method(fresh_company)
         self.assertEqual(resolved, legacy)
         self.assertEqual(resolved.name, WALLET_PAYMENT_METHOD_NAME)
 

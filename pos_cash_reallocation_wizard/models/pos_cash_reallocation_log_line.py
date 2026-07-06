@@ -21,6 +21,12 @@ class PosCashReallocationLogLine(models.Model):
         ondelete='restrict',
         index=True,
     )
+    session_id = fields.Many2one(
+        'pos.session',
+        string='POS Session',
+        readonly=True,
+        index=True,
+    )
     original_cash_amount = fields.Float(string='Original Cash', digits='Product Price')
     new_cash_amount = fields.Float(string='New Cash', digits='Product Price')
     wallet_amount = fields.Float(string='Wallet Amount', digits='Product Price')

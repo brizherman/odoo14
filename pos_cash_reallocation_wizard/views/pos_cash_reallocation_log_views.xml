@@ -10,6 +10,7 @@
                 <field name="create_date"/>
                 <field name="user_id"/>
                 <field name="company_id" groups="base.group_multi_company"/>
+                <field name="reallocation_mode" optional="show"/>
                 <field name="date_from"/>
                 <field name="date_to"/>
                 <field name="total_amount"/>
@@ -27,15 +28,27 @@
         <field name="arch" type="xml">
             <form string="Cash Reallocation Log" create="0" delete="0">
                 <header>
+                    <field name="reallocation_mode" invisible="1"/>
                     <button name="action_undo"
                             string="Undo"
                             type="object"
                             class="oe_highlight"
-                            states="done"
-                            confirm="Restore original cash amounts and remove wallet payment lines?"/>
+                            attrs="{'invisible': [('state', '!=', 'done')]}"
+                            confirm="Restore original cash payment lines and remove wallet payments. Closed-session runs will also reverse posted journal entries. Continue?"/>
                     <field name="state" widget="statusbar"/>
                 </header>
                 <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_adjustment_moves"
+                                type="object"
+                                class="oe_stat_button"
+                                icon="fa-balance-scale"
+                                attrs="{'invisible': [('adjustment_move_count', '=', 0)]}">
+                            <field name="adjustment_move_count"
+                                   widget="statinfo"
+                                   string="Journal Entries"/>
+                        </button>
+                    </div>
                     <div class="oe_title">
                         <h1>
                             <field name="name" readonly="1"/>
@@ -52,13 +65,19 @@
                             <field name="date_to"/>
                             <field name="total_amount"/>
                             <field name="order_count"/>
+                            <field name="reallocation_mode"/>
                         </group>
+                    </group>
+                    <group attrs="{'invisible': [('reallocation_mode', '!=', 'closed_session')]}">
+                        <field name="session_ids" widget="many2many_tags"/>
+                        <field name="adjustment_move_ids" widget="many2many_tags"/>
                     </group>
                     <notebook>
                         <page string="Order Lines" name="lines">
                             <field name="line_ids" nolabel="1">
                                 <tree string="Reallocation Lines" create="0" delete="0" edit="0">
                                     <field name="order_id"/>
+                                    <field name="session_id" optional="hide"/>
                                     <field name="original_cash_amount"/>
                                     <field name="new_cash_amount"/>
                                     <field name="wallet_amount"/>
@@ -99,6 +118,8 @@
                 <field name="name"/>
                 <field name="user_id"/>
                 <field name="company_id" groups="base.group_multi_company"/>
+                <filter string="Open Session" name="open_session" domain="[('reallocation_mode', '=', 'open_session')]"/>
+                <filter string="Closed Session" name="closed_session" domain="[('reallocation_mode', '=', 'closed_session')]"/>
                 <filter string="Done" name="done" domain="[('state', '=', 'done')]"/>
                 <filter string="Reverted" name="reverted" domain="[('state', '=', 'reverted')]"/>
                 <separator/>
@@ -107,6 +128,7 @@
                     <filter string="User" name="group_user" domain="[]" context="{'group_by': 'user_id'}"/>
                     <filter string="Company" name="group_company" domain="[]" context="{'group_by': 'company_id'}" groups="base.group_multi_company"/>
                     <filter string="Status" name="group_state" domain="[]" context="{'group_by': 'state'}"/>
+                    <filter string="Reallocation Mode" name="group_mode" domain="[]" context="{'group_by': 'reallocation_mode'}"/>
                 </group>
             </search>
         </field>

@@ -19,6 +19,11 @@ class PosCashReallocationWizardPreviewLine(models.TransientModel):
         required=True,
         readonly=True,
     )
+    session_id = fields.Many2one(
+        'pos.session',
+        string='POS Session',
+        readonly=True,
+    )
     original_cash = fields.Float(
         string='Original Cash',
         digits='Product Price',

@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'POS Cash Reallocation Wizard',
-    'version': '14.0.1.0.0',
+    'version': '14.0.2.1.0',
     'summary': 'Proportional cash reallocation from POS orders into Lealtad',
     'description': """
-        Two-step wizard to reallocate cash from paid, cash-only, customer-less
-        POS orders into a hidden Lealtad payment method.
+        Two-step wizard to reallocate cash from paid or posted (done) cash-only,
+        customer-less POS orders into a hidden Lealtad payment method.
+        Phase 2 supports closed-session reallocation with compensating journal entries.
     """,
     'author': 'Custom',
     'category': 'Point Of Sale',

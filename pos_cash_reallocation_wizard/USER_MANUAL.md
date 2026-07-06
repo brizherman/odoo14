@@ -12,7 +12,8 @@ This module lets authorized users **proportionally reallocate** a chosen amount 
 
 Key characteristics:
 
-- Only affects **paid**, **cash-only**, **customer-less** orders in **open POS sessions**.
+- Only affects **paid**, **cash-only**, **customer-less** orders in **open POS sessions** by default.
+- **Phase 2 (optional):** can reallocate from **posted (done)** orders on **closed sessions** with compensating journal entries.
 - The order total (`amount_total`) **never changes** — only the payment-method mix is adjusted.
 - **Monedero Electrónico** is **hidden from the POS register**; cashiers cannot select it manually.
 - Every run is **audited** and can be **undone** while affected sessions remain open.
@@ -69,7 +70,9 @@ Access to the wizard and history is restricted to the **Cash Reallocation Manage
 | Group name | Cash Reallocation Manager |
 | Technical ID | `pos_cash_reallocation_wizard.group_pos_cash_reallocation_manager` |
 | Category | Point of Sale |
-| Implied access | POS Manager (`point_of_sale.group_pos_manager`) |
+| Group | Cash Reallocation Manager |
+| Implied groups | POS Manager, **Billing** (`account.group_account_invoice`) |
+| Closed-session posting | Billing access is required to create/post reversal journal entries |
 
 **To assign the group to a user:**
 
@@ -238,9 +241,79 @@ After completion, use the **History** tab in the wizard or open log records for 
 
 ---
 
-## 6. History and undo
+## 6. Posted / Closed Session Reallocation (Phase 2)
 
-### 6.1 View history
+Use this path when you need to reallocate cash **after** the POS session has already been closed and orders are in **Posted** (`done`) state.
+
+### 6.1 When to use
+
+| Scenario | Use open session (default) | Use closed session (Phase 2) |
+|----------|---------------------------|------------------------------|
+| Session still open, orders `Paid` | Yes | No |
+| Session closed, orders `Posted` | No | Yes |
+| Accounting already posted at session close | No | Yes — posts a compensating entry |
+
+### 6.2 Enable closed-session mode
+
+1. Open **Point of Sale → Cash Reallocation** as a **Cash Reallocation Manager**.
+2. Check **Include Closed Sessions**.
+3. Read the amber banner: *Posts journal entries. Cannot modify bank statements.*
+
+This checkbox is **not** available to users without the Cash Reallocation Manager group.
+
+### 6.3 Eligible orders (closed-session path)
+
+All open-session rules apply, plus:
+
+| Rule | Requirement |
+|------|-------------|
+| Order state | `Posted` (`done`) |
+| POS session | `Closed` with a **posted** session journal entry |
+| Fiscal period | Session date must **not** fall in a locked period |
+| Invoiced orders | Excluded |
+
+Closed mode searches **only** posted orders on closed sessions — it does not mix open- and closed-session orders in one run.
+
+### 6.4 Preview and confirm
+
+1. Set date range and **Amount to Reallocate**.
+2. Click **Preview** — the preview table shows a **POS Session** column.
+3. If any matched session falls in a **locked fiscal period**, a warning appears and **Confirm is blocked**.
+4. Click **Confirm** and approve: *Apply cash reallocation and post compensating journal entries?*
+
+On confirm the system:
+
+1. Rewrites `pos.payment` lines on each order (cash reduced, Lealtad line created).
+2. Creates **one compensating journal entry per POS session** on the **Lealtad journal** (`MEWLT`):
+   - **Debit** Lealtad receivable
+   - **Credit** Efectivo receivable
+3. Creates an audit log with `Reallocation Mode = Closed Session`, linked sessions, and journal entries.
+
+**Order totals are never changed.** Bank statement lines are **not** modified in MVP.
+
+### 6.5 Undo (closed-session runs)
+
+1. Open the log (mode **Closed Session**).
+2. Click **Undo** and confirm the journal-reversal warning.
+3. The system reverses linked journal entries, restores cash payments, and removes Lealtad lines.
+
+**Undo is blocked when:**
+
+- The log was already reverted.
+- The fiscal period for the reversal date is locked.
+- Any linked journal entry is reconciled or otherwise non-reversible.
+
+### 6.6 Cash-count operational note (post-close)
+
+Physical cash was collected as Efectivo at sale time. Post-close reallocation changes **ledger receivable** and payment lines only — not bank statements or physical counts already performed at session close.
+
+Whoever performs the next cash count should treat any drawer vs. ledger variance after post-close reallocation as an **expected operational difference** and reconcile manually.
+
+---
+
+## 7. History and undo
+
+### 7.1 View history
 
 Access history from the wizard:
 
@@ -260,33 +333,42 @@ Each log record shows:
 | Date From / Date To | Wizard date filter used |
 | Total Reallocated | Sum actually applied |
 | Order Count | Number of orders modified |
+| Reallocation Mode | Open Session or Closed Session |
 | Status | Done or Reverted |
+
+Closed-session logs also show linked **POS Sessions**, **Journal Entries** (smart button), and adjustment move tags.
 
 **Order Lines** tab: per-order before/after amounts, skip flag, and skip reason.
 
-### 6.2 Undo a reallocation
+### 7.2 Undo a reallocation
 
-1. Open a log with status **Done**.
+#### Open-session runs
+
+1. Open a log with status **Done** and mode **Open Session**.
 2. Click **Undo**.
 3. Confirm: *Restore original cash amounts and remove wallet payment lines?*
+
+#### Closed-session runs
+
+See **§6.5** — undo reverses journal entries first, then restores payments.
 
 Undo will:
 
 - Restore original cash payment amounts.
-- Delete Monedero Electrónico payment lines created by that run.
+- Delete Lealtad payment lines created by that run.
 - Set log status to **Reverted**.
-- Post a message on the log chatter.
+- Post a message on the log chatter (closed-session undo includes reversal move names).
 
-**Undo is blocked when:**
+**Open-session undo is blocked when:**
 
 - The log was already reverted.
 - Any affected order's POS session has since **closed**.
 
-> Undo must be performed **before** closing the POS session. Once the session is closed and accounting is posted, payments cannot be reverted through this module.
+> For open-session runs, undo must be performed **before** closing the POS session.
 
 ---
 
-## 7. POS orders — finding reallocated orders
+## 8. POS orders — finding reallocated orders
 
 The module extends the standard POS order list:
 
@@ -302,7 +384,7 @@ Each reallocated order also has a line in **Internal Note** documenting who real
 
 ---
 
-## 8. Session close — cash count impact
+## 9. Session close — cash count impact
 
 Because customers paid physical cash, reallocation lowers the **recorded** cash total without changing physical cash in the drawer.
 
@@ -318,20 +400,23 @@ At session close, the expected closing cash count will be **lower than the physi
 
 ---
 
-## 9. Reports and accounting
+## 10. Reports and accounting
 
 | Area | Impact |
 |------|--------|
 | Order totals and taxes | No change — `amount_total` is never modified |
 | Payment method reports | Show Monedero Electrónico for reallocated portions |
-| Session journal entry | Created at session close using current payment lines (including Monedero) |
+| Session journal entry | Created at session close using payment lines at close time |
+| Closed-session reallocation | Posts separate compensating entries on Lealtad journal (`MEWLT`) |
 | Stock / inventory | No impact |
 
-No accounting correction is needed during reallocation because the session's consolidated journal entry is only created when the session **closes**.
+Open-session reallocation needs no immediate accounting entry because the session move is created at close.
+
+Closed-session reallocation posts compensating entries because the session move already exists.
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 | Problem | Likely cause | Action |
 |---------|--------------|--------|
@@ -339,7 +424,9 @@ No accounting correction is needed during reallocation because the session's con
 | No eligible orders found | No paid, customer-less, Efectivo-only orders in range | Widen date range; check order states and payment methods |
 | Orders appear under Skipped Orders | See skip reason column | Common: session closed, mixed payments, already reallocated, zero cash |
 | Amount exceeds total net cash | Entered amount too high | Enter a value ≤ Total Net Cash |
-| Cannot undo | Session closed on affected orders | Undo only works while sessions remain open |
+| Cannot undo (open session) | Session closed on affected orders | Undo only while sessions remain open |
+| Cannot undo (closed session) | Fiscal period locked or journal reconciled | Unlock period or unreconcile; see §6.5 |
+| Confirm blocked (closed session) | Fiscal period locked on matched sessions | Choose orders in an open period or adjust lock dates |
 | Monedero on POS register | Misconfiguration | Remove Monedero Electrónico from all POS configs — it must stay hidden |
 | Payment method not Efectivo | Cash method has different name | Rename to **Efectivo** or align business process |
 
@@ -354,7 +441,7 @@ No accounting correction is needed during reallocation because the session's con
 
 ---
 
-## 11. For developers and integrators
+## 12. For developers and integrators
 
 ### Public API on `pos.order`
 
