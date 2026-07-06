@@ -43,6 +43,14 @@ class PosCashReallocationWizard(models.TransientModel):
             'Posts compensating journal entries. Does not modify bank statements.'
         ),
     )
+    include_orders_with_customers = fields.Boolean(
+        string='Include Orders With Customers',
+        default=False,
+        help=(
+            'Include paid or posted orders that have a customer assigned. '
+            'Invoiced orders remain excluded.'
+        ),
+    )
     has_locked_fiscal_period = fields.Boolean(
         string='Locked Fiscal Period Detected',
         readonly=True,
@@ -141,7 +149,8 @@ class PosCashReallocationWizard(models.TransientModel):
             else:
                 wizard.history_log_ids = Log.browse()
 
-    @api.depends('date_from', 'date_to', 'company_id', 'include_closed_sessions')
+    @api.depends('date_from', 'date_to', 'company_id', 'include_closed_sessions',
+                 'include_orders_with_customers')
     def _compute_available_session_ids(self):
         for wizard in self:
             sessions = self.env['pos.session']
@@ -150,7 +159,8 @@ class PosCashReallocationWizard(models.TransientModel):
                 sessions = eligible.mapped('session_id')
             wizard.available_session_ids = sessions
 
-    @api.onchange('date_from', 'date_to', 'include_closed_sessions', 'company_id')
+    @api.onchange('date_from', 'date_to', 'include_closed_sessions',
+                  'include_orders_with_customers', 'company_id')
     def _onchange_search_criteria(self):
         self.session_ids = [(5, 0, 0)]
         self._reset_preview_for_filter_change(clear_search=True)
@@ -190,17 +200,23 @@ class PosCashReallocationWizard(models.TransientModel):
         if self.date_from > self.date_to:
             raise UserError(_('Date From must be on or before Date To.'))
 
-    def _get_orders_in_date_range(self):
+    def _base_order_search_domain(self):
         self.ensure_one()
-        self._check_date_range()
         order_state = 'done' if self.include_closed_sessions else 'paid'
         domain = [
             ('company_id', '=', self.company_id.id),
             ('date_order', '>=', self.date_from),
             ('date_order', '<=', self.date_to),
             ('state', '=', order_state),
-            ('partner_id', '=', False),
         ]
+        if not self.include_orders_with_customers:
+            domain.append(('partner_id', '=', False))
+        return domain
+
+    def _get_orders_in_date_range(self):
+        self.ensure_one()
+        self._check_date_range()
+        domain = self._base_order_search_domain()
         if self.session_ids:
             domain.append(('session_id', 'in', self.session_ids.ids))
         return self.env['pos.order'].search(domain, order='date_order asc, id asc')
@@ -208,21 +224,22 @@ class PosCashReallocationWizard(models.TransientModel):
     def _get_eligible_orders_without_session_filter(self):
         """Eligible orders in the date range, ignoring session_ids filter."""
         self.ensure_one()
-        order_state = 'done' if self.include_closed_sessions else 'paid'
-        candidates = self.env['pos.order'].search([
-            ('company_id', '=', self.company_id.id),
-            ('date_order', '>=', self.date_from),
-            ('date_order', '<=', self.date_to),
-            ('state', '=', order_state),
-            ('partner_id', '=', False),
-        ], order='date_order asc, id asc')
+        candidates = self.env['pos.order'].search(
+            self._base_order_search_domain(),
+            order='date_order asc, id asc',
+        )
         return candidates.filtered(lambda order: self._order_is_eligible(order))
 
     def _order_is_eligible(self, order):
         self.ensure_one()
+        include_customer = self.include_orders_with_customers
         if self.include_closed_sessions:
-            return order._is_eligible_for_closed_session_reallocation()
-        return order._is_eligible_for_reallocation()
+            return order._is_eligible_for_closed_session_reallocation(
+                include_customer=include_customer,
+            )
+        return order._is_eligible_for_reallocation(
+            include_customer=include_customer,
+        )
 
     def _get_eligible_orders(self):
         self.ensure_one()
@@ -232,7 +249,7 @@ class PosCashReallocationWizard(models.TransientModel):
     def _get_open_session_skip_reason(self, order):
         if order.state != 'paid':
             return _('Order is not paid.')
-        if order.partner_id:
+        if not self.include_orders_with_customers and order.partner_id:
             return _('Order has a customer assigned.')
         if order.session_id.state == 'closed':
             return _('POS session is closed.')
@@ -256,7 +273,7 @@ class PosCashReallocationWizard(models.TransientModel):
             return _('Order is invoiced.')
         if order.state != 'done':
             return _('Order is not posted (done).')
-        if order.partner_id:
+        if order.partner_id and not self.include_orders_with_customers:
             return _('Order has a customer assigned.')
         if order.session_id.state != 'closed':
             return _('POS session is not closed.')
@@ -519,7 +536,8 @@ class PosCashReallocationWizard(models.TransientModel):
                     'skip_reason': _('POS session closed before confirm.'),
                 })
                 continue
-            if not order._is_eligible_for_reallocation():
+            if not order._is_eligible_for_reallocation(
+                    include_customer=self.include_orders_with_customers):
                 skip_reason = self._get_reallocation_skip_reason(order)
                 skipped_at_confirm.append({
                     'order': order,
@@ -632,7 +650,8 @@ class PosCashReallocationWizard(models.TransientModel):
             if line.wallet_amount <= 0:
                 continue
             order = line.order_id
-            if not order._is_eligible_for_closed_session_reallocation():
+            if not order._is_eligible_for_closed_session_reallocation(
+                    include_customer=self.include_orders_with_customers):
                 reason = self._get_closed_session_skip_reason(order)
                 raise UserError(_(
                     'Order %(order)s is no longer eligible: %(reason)s',

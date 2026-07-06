@@ -564,3 +564,68 @@ class TestPosCashReallocationClosedSession(TransactionCase):
         ], order='id desc', limit=1)
         self.assertEqual(log.session_ids, session_a)
         self.assertAlmostEqual(log.total_amount, 30.0, places=2)
+
+    def test_12_include_orders_with_customers_closed_session(self):
+        date_from, date_to, order_date = self._unique_date_range()
+        session = self._open_session()
+        with_customer = self._create_paid_order(
+            session, 80.0,
+            partner=self.env['res.partner'].create({'name': 'Customer'}),
+            date_order=order_date,
+        )
+        self._close_session_with_posted_move(session, with_customer)
+        with_customer.sudo().write({'state': 'done'})
+
+        self.assertFalse(
+            with_customer._is_eligible_for_closed_session_reallocation()
+        )
+        self.assertTrue(
+            with_customer._is_eligible_for_closed_session_reallocation(
+                include_customer=True,
+            )
+        )
+
+        wizard = self._create_wizard(
+            20.0, date_from, date_to, include_closed_sessions=True,
+        )
+        self.assertNotIn(
+            with_customer,
+            wizard._get_eligible_orders_without_session_filter(),
+        )
+
+        wizard.write({'include_orders_with_customers': True})
+        wizard.action_preview()
+        self.assertIn(with_customer, wizard.preview_line_ids.mapped('order_id'))
+
+    def test_13_invoiced_blocked_even_with_customers_included(self):
+        date_from, date_to, order_date = self._unique_date_range()
+        session = self._open_session()
+        invoiced = self._create_paid_order(
+            session, 100.0,
+            partner=self.env['res.partner'].create({'name': 'Invoiced Customer'}),
+            date_order=order_date,
+        )
+        invoiced_move = self._create_posted_session_move(session)
+        invoiced.sudo().write({
+            'state': 'invoiced',
+            'account_move': invoiced_move.id,
+        })
+        self._close_session_with_posted_move(session, invoiced)
+
+        wizard = self._create_wizard(
+            10.0, date_from, date_to, include_closed_sessions=True,
+        )
+        wizard.write({'include_orders_with_customers': True})
+        self.assertFalse(
+            invoiced._is_eligible_for_closed_session_reallocation(
+                include_customer=True,
+            )
+        )
+        self.assertNotIn(
+            invoiced,
+            wizard._get_eligible_orders_without_session_filter(),
+        )
+        self.assertEqual(
+            wizard._get_reallocation_skip_reason(invoiced),
+            _('Order is invoiced.'),
+        )

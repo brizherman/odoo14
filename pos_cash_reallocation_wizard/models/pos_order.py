@@ -179,10 +179,10 @@ class PosOrder(models.Model):
             lambda payment: payment.payment_method_id == wallet_method
         ))
 
-    def _passes_cash_reallocation_payment_rules(self):
+    def _passes_cash_reallocation_payment_rules(self, include_customer=False):
         """Shared customer and payment-method rules for open and closed paths."""
         self.ensure_one()
-        if self.partner_id:
+        if not include_customer and self.partner_id:
             return False
         if self._has_wallet_payment(self.company_id):
             return False
@@ -199,16 +199,18 @@ class PosOrder(models.Model):
             return False
         return True
 
-    def _is_eligible_for_reallocation(self):
+    def _is_eligible_for_reallocation(self, include_customer=False):
         """Open-session path only: paid orders on a non-closed POS session."""
         self.ensure_one()
         if self.state != 'paid':
             return False
         if self.session_id.state == 'closed':
             return False
-        return self._passes_cash_reallocation_payment_rules()
+        return self._passes_cash_reallocation_payment_rules(
+            include_customer=include_customer,
+        )
 
-    def _is_eligible_for_closed_session_reallocation(self):
+    def _is_eligible_for_closed_session_reallocation(self, include_customer=False):
         """Closed-session path: done orders on a closed session with posted move."""
         self.ensure_one()
         if self.state != 'done':
@@ -220,7 +222,9 @@ class PosOrder(models.Model):
         session_move = self.session_id.move_id
         if not session_move or session_move.state != 'posted':
             return False
-        return self._passes_cash_reallocation_payment_rules()
+        return self._passes_cash_reallocation_payment_rules(
+            include_customer=include_customer,
+        )
 
     def _get_closed_session_reallocation_date(self):
         """Accounting date used for fiscal period lock checks on closed sessions."""

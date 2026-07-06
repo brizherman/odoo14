@@ -501,3 +501,26 @@ class TestPosCashReallocation(TransactionCase):
         wizard.action_preview()
         self.assertEqual(wizard.state, 'preview')
         self.assertTrue(wizard.preview_line_ids)
+
+    def test_14_include_orders_with_customers_open_session(self):
+        date_from, date_to, order_date = self._unique_date_range()
+        session = self._open_session(self.pos_config_a)
+        eligible = self._create_paid_order(session, 100.0, date_order=order_date)
+        with_customer = self._create_paid_order(
+            session, 50.0,
+            partner=self.env['res.partner'].create({'name': 'Customer'}),
+            date_order=order_date,
+        )
+
+        wizard = self._create_wizard(60.0, date_from, date_to)
+        wizard.action_preview()
+        preview_orders = wizard.preview_line_ids.mapped('order_id')
+        self.assertIn(eligible, preview_orders)
+        self.assertNotIn(with_customer, preview_orders)
+
+        wizard.write({'include_orders_with_customers': True})
+        wizard.action_preview()
+        preview_orders = wizard.preview_line_ids.mapped('order_id')
+        self.assertIn(eligible, preview_orders)
+        self.assertIn(with_customer, preview_orders)
+        self.assertEqual(wizard.matched_order_count, 2)

@@ -48,6 +48,9 @@
                             <field name="include_closed_sessions"
                                    groups="pos_cash_reallocation_wizard.group_pos_cash_reallocation_manager"
                                    attrs="{'readonly': [('state', '!=', 'draft')]}"/>
+                            <field name="include_orders_with_customers"
+                                   groups="pos_cash_reallocation_wizard.group_pos_cash_reallocation_manager"
+                                   attrs="{'readonly': [('state', '!=', 'draft')]}"/>
                             <field name="matched_order_count"/>
                             <field name="total_net_cash"/>
                             <field name="amount_to_reallocate"
