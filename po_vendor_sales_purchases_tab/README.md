@@ -2,6 +2,10 @@
 
 Odoo 14 module — informational **Compras vs Ventas** tab on Purchase Orders.
 
+## Configuration
+
+Step-by-step setup (Google account, monthly workbooks, mappings, first sync): **[doc/configuration-guide.md](doc/configuration-guide.md)**
+
 ## Python dependencies
 
 Declared in `__manifest__.py` under `external_dependencies`:

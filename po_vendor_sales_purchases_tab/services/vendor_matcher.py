@@ -2,6 +2,15 @@
 import re
 import unicodedata
 
+FUZZY_MIN_SCORE = 60
+FUZZY_CLEAR_WIN_MARGIN = 15
+
+STOP_WORDS = frozenset({
+    'de', 'del', 'la', 'el', 'los', 'las', 'y', 'en', 'the', 'and',
+    'sa', 'cv', 's', 'a', 'c', 'b', 'rl', 'cia', 'inc', 'ltd', 'llc',
+    'corp', 'mexico', 'mx',
+})
+
 
 def normalize_match_string(value):
     """Lowercase, strip accents, remove spaces and punctuation."""
@@ -12,13 +21,77 @@ def normalize_match_string(value):
     return text
 
 
-def fuzzy_vendor_match(sheet_name, candidate_name):
-    """Match when both names contain convergram and mexico after normalization."""
-    sheet_norm = normalize_match_string(sheet_name)
-    candidate_norm = normalize_match_string(candidate_name)
-    if 'convergram' not in sheet_norm or 'mexico' not in sheet_norm:
-        return False
-    return 'convergram' in candidate_norm and 'mexico' in candidate_norm
+def extract_match_tokens(value):
+    text = (value or '').strip().lower()
+    text = unicodedata.normalize('NFD', text)
+    text = ''.join(char for char in text if unicodedata.category(char) != 'Mn')
+    text = re.sub(r'[^a-z0-9]+', ' ', text)
+    tokens = []
+    for token in text.split():
+        if len(token) <= 2 or token in STOP_WORDS:
+            continue
+        tokens.append(token)
+    return tokens
+
+
+def fuzzy_match_score(left_name, right_name):
+    """Return 0-100 similarity score between two vendor names."""
+    left_norm = normalize_match_string(left_name)
+    right_norm = normalize_match_string(right_name)
+    if not left_norm or not right_norm:
+        return 0
+    if left_norm == right_norm:
+        return 100
+    if left_norm in right_norm or right_norm in left_norm:
+        return 90
+
+    left_tokens = extract_match_tokens(left_name)
+    right_tokens = extract_match_tokens(right_name)
+    if not left_tokens or not right_tokens:
+        return 0
+
+    right_set = set(right_tokens)
+    matched = 0
+    for token in left_tokens:
+        if token in right_set:
+            matched += 1
+            continue
+        for other in right_tokens:
+            if len(token) >= 4 and (token in other or other in token):
+                matched += 1
+                break
+
+    score = (matched / max(len(left_tokens), len(right_tokens))) * 80
+    if left_tokens[0] == right_tokens[0]:
+        score += 10
+    return min(int(score), 95)
+
+
+def fuzzy_vendor_match(left_name, right_name, min_score=FUZZY_MIN_SCORE):
+    """Return True when two vendor names are similar enough to auto-match."""
+    return fuzzy_match_score(left_name, right_name) >= min_score
+
+
+def _pick_unique_fuzzy_match(scored_matches, label, multiple_warning_template):
+    if not scored_matches:
+        return None, None
+
+    scored_matches.sort(
+        key=lambda item: (-item[0], item[1].display_name or item[1].name)
+    )
+    top_score, top_record = scored_matches[0]
+    if len(scored_matches) == 1:
+        return top_record, None
+
+    second_score = scored_matches[1][0]
+    if top_score - second_score >= FUZZY_CLEAR_WIN_MARGIN:
+        return top_record, None
+
+    names = ', '.join(
+        record.display_name or record.name
+        for _score, record in scored_matches[:5]
+    )
+    return None, multiple_warning_template % (label, names)
 
 
 class VendorMatcher:
@@ -30,6 +103,14 @@ class VendorMatcher:
         self.Mapping = env['vendor.sheet.mapping']
         self.ClassificationVendor = env['product.classification.vendor']
 
+    def _score_fuzzy_matches(self, source_name, candidates):
+        scored = []
+        for candidate in candidates:
+            score = fuzzy_match_score(source_name, candidate.name)
+            if score >= FUZZY_MIN_SCORE:
+                scored.append((score, candidate))
+        return scored
+
     def resolve_partner(self, sheet_proveedor):
         """Return (partner, warning_message). Partner is empty when unmatched."""
         sheet_name = (sheet_proveedor or '').strip()
@@ -40,20 +121,22 @@ class VendorMatcher:
         if mapping:
             return mapping.partner_id, None
 
-        candidates = self.Partner.search([
-            '|', ('name', 'ilike', 'convergram'), ('name', 'ilike', 'mexico'),
+        suppliers = self.Partner.search([
+            ('supplier_rank', '>', 0),
+            ('active', '=', True),
         ])
-        matches = candidates.filtered(
-            lambda partner: fuzzy_vendor_match(sheet_name, partner.name)
+        scored_matches = self._score_fuzzy_matches(sheet_name, suppliers)
+        partner, warning = _pick_unique_fuzzy_match(
+            scored_matches,
+            sheet_name,
+            'Multiple fuzzy vendor matches for "%s": %s. Add a manual mapping.',
         )
-        if len(matches) == 1:
-            return matches, None
-        if len(matches) > 1:
-            return self.Partner.browse(), (
-                'Multiple fuzzy vendor matches for "%s". Add a manual mapping.' % sheet_name
-            )
+        if partner:
+            return partner, None
+        if warning:
+            return self.Partner.browse(), warning
         return self.Partner.browse(), (
-            'Unmapped proveedor "%s". Add a manual mapping or verify fuzzy tokens.' % sheet_name
+            'Unmapped proveedor "%s". Add a manual mapping.' % sheet_name
         )
 
     def resolve_classification_vendor(self, partner):
@@ -69,16 +152,16 @@ class VendorMatcher:
             return mapping.classification_vendor_id, None
 
         candidates = self.ClassificationVendor.search([])
-        matches = candidates.filtered(
-            lambda vendor: fuzzy_vendor_match(partner.name, vendor.name)
+        scored_matches = self._score_fuzzy_matches(partner.name, candidates)
+        class_vendor, warning = _pick_unique_fuzzy_match(
+            scored_matches,
+            partner.name,
+            'Multiple classification vendors match partner "%s": %s. Add a manual mapping.',
         )
-        if len(matches) == 1:
-            return matches, None
-        if len(matches) > 1:
-            return self.ClassificationVendor.browse(), (
-                'Multiple classification vendors match partner "%s". Add a manual mapping.'
-                % partner.name
-            )
+        if class_vendor:
+            return class_vendor, None
+        if warning:
+            return self.ClassificationVendor.browse(), warning
         return self.ClassificationVendor.browse(), (
             'No classification vendor match for partner "%s".' % partner.name
         )

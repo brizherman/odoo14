@@ -1,0 +1,57 @@
+sheet_proveedor,partner_id,classification_vendor_id,total_amount_usd,invoice_rows,rank_by_amount,import_priority,partner_match,odoo_partner_id
+FABRICAS SELECTAS DEL CENTRO,Fabricas Selectas Del Norte S.A de C.V,,1908924.58,162,2,high,exact,26371
+VM FIESTA,VM Fiesta S.A de C.V,,854328.90,74,3,high,exact,26406
+GRANMARK,Granmark S.A De C.V,,575888.67,75,4,high,exact,26750
+DISTRIBUIDORA DE GLOBOS Y ACCESORIOS (DIGLOSA),Distribuidora de Globos y Accesorios,,427576.01,20,5,high,exact,32522
+KONTEMPO,,,360666.60,47,6,high,needs_manual,
+CORPORACION IMPRESORA,Corporacion Impresora S.A. De C.V.,,276387.37,48,7,high,exact,26744
+PATRICIA MENDIVIL DE LEON,Patricia Mendivil De Leon,,166454.43,30,8,high,exact,26761
+RICARDO NUÑEZ MARTIN DEL CAMPO,Ricardo Nuñez Martin del Campo,,128792.78,16,9,high,exact,26765
+PRODUCTOS NAEN,Productos Naen S. de R.L de C.V,,117922.22,22,10,high,exact,26762
+INFRA,Infra S.A de C.V,,99419.88,14,11,medium,exact,26753
+IMPRESOS BOLPAQ,Impresos Bolpaq,,75064.46,12,12,medium,exact,26745
+MARCO ANTONIO BARRANCO GONZALEZ,,,64288.00,30,13,medium,needs_manual,
+JOSE RUBEN RODRIGUEZ LOPEZ,,,55323.00,16,14,medium,needs_manual,
+LANCERO,Lancero,,46800.00,6,15,medium,exact,31243
+IMPULSORA EURO,,,36119.84,6,16,medium,needs_manual,
+JESUS GILBERTO DURAN LUCERO,Jesus Gilberto Duran Lucero,,32250.96,10,17,medium,exact,30514
+PELUCHERA INTERNACIONAL,Pelucheria Internacional,,28036.05,32,18,medium,exact,30568
+INFRA ENSENADA,Infra S.A de C.V,,26394.65,10,19,medium,exact,26753
+SOLUCIONES COMERCIALES JM68,,,24130.32,6,20,medium,needs_manual,
+JANEL,Janel S.A de C.V,,23864.74,14,21,medium,exact,26688
+SOLUCIONES PIEDRASANTA,SOLUCIONES PIEDRASANTA,,21448.41,12,22,medium,exact,28396
+MUNDO DEL LISTON,Mundo del Liston S de RL de CV,,19401.58,10,23,medium,exact,26784
+TRANSFORMADORA DE PLASTICOS CARMAN,Transformadora de Plasticos Carman,,16713.98,4,24,medium,exact,32562
+JOSE GUADALUPE GARCIA MORALES,Jose Guadalupe Garcia Morales,,15781.15,10,25,medium,exact,26755
+VERONICA OROZCO,,,9581.60,4,26,low,needs_manual,
+RIBBONS & WRAPPING,"Ribbons & Wrapping, S.A DE C.V",,7873.60,24,27,low,exact,26764
+JOKER PARTY SUPPLY,Joker Party Supply,,5196.00,10,28,low,exact,29628
+AVANCE Y TECNOLOGIA EN PLASTICOS C00002085065,Avance y Tecnologia en Plasticos S.A de C.V,,4770.53,10,29,low,exact,26721
+TRANSPORTES GARCIA MEDRANO,,,1720.00,6,30,low,needs_manual,
+TRESGUERRAS,,,1610.62,4,31,low,needs_manual,
+LINEAS INTERNACIONALES TIJUANA DIVISION ONLINE (LIT),,,1003.44,10,32,low,needs_manual,
+ESTAFETA MEXICANA,,,288.76,8,33,low,needs_manual,
+GLOBOS SMITS,Globos Smits,,0.00,6,34,low_zero_amount,exact,28460
+ALEJANDRO URTAZA RODRIGUEZ,Alejandro Urtaza Rodriguez,,0.00,12,35,low_zero_amount,exact,26719
+BROPAC,,,0.00,6,36,low_zero_amount,needs_manual,
+BASICOS,,,0.00,4,37,low_zero_amount,needs_manual,
+JOSE ALFONSO REYNA REYES,José Alfonso Reyna Reyes,,0.00,6,38,low_zero_amount,exact,32322
+COMERCIALIZADORA Y DISTRIBUIDORA JUGUETIFIESTA,Comercializadora y Distribuidora Juguetifiesta S.A. de C.V.,,0.00,8,39,low_zero_amount,exact,26743
+DISTRIBUIDORA DE POLIETILENO ROMA,"Distribuidora de Polietileno Roma, S.A de C.V",,0.00,14,40,low_zero_amount,exact,26499
+DINORE,Dinore S. de R.L de C.V,,0.00,6,41,low_zero_amount,exact,26746
+GILDAN TIJUANA,,,0.00,2,42,low_zero_amount,needs_manual,
+"GRUPO DE ALIJADORES, ESPECIALIZADOS EN MANIOBRAS Y SERVICIOS DE MONTACARGAS Y MOVIMIENTOS EN GENERAL DE TIJUANA, B.C.",,,0.00,2,43,low_zero_amount,needs_manual,
+JOSE LUIS CARLOS CHAVEZ,,,0.00,4,44,low_zero_amount,needs_manual,
+JOFFROY,,,0.00,4,45,low_zero_amount,needs_manual,
+VERENICE VALDEZ VELAZQUEZ,,,0.00,4,46,low_zero_amount,needs_manual,
+MANUFACTURAS 8A,Manufacturas 8A S.A de C.V,,0.00,12,47,low_zero_amount,exact,26758
+"PAPEL, DISEÑO Y COLOR","Papel, Diseño y Color S.A de C.V",,0.00,18,48,low_zero_amount,exact,26759
+PORFIRIO GARRIDO HERNANDEZ,Porfirio Garrido Hernandez,,0.00,6,49,low_zero_amount,exact,23857
+PROVEEDORA DE NEGOCIOS SARO,Proveedora de Negocios Saro,,0.00,6,50,low_zero_amount,exact,31244
+RUTH SOLIS VELASCO,RUTH SOLIS VELASCO (politec),,0.00,4,51,low_zero_amount,exact,32714
+ROBERTO OMAR LOPEZ GONZALEZ,,,0.00,4,52,low_zero_amount,needs_manual,
+TI TRANSPORTES Y PAQUETERIA DEL PACIFICO,,,0.00,12,53,low_zero_amount,needs_manual,
+TRANSPORTES JULIAN DE OBREGON,,,0.00,8,54,low_zero_amount,needs_manual,
+TRANSPORTES PITIC,,,0.00,6,55,low_zero_amount,needs_manual,
+AUTOTRANSPORTES Y CARGA PTX,,,0.00,4,56,low_zero_amount,needs_manual,
+KRUS CORPORATION,Krus Corp Wintime,,0.00,12,57,low_zero_amount,exact,29683
