@@ -1,27 +1,27 @@
 # -*- coding: utf-8 -*-
-
 import csv
 import io
 import os
-import tempfile
-import unittest
 from decimal import Decimal
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
-FIXTURES = os.path.join(ROOT, 'fixtures')
+from odoo.tests import tagged
+from odoo.tests.common import BaseCase
 
-from po_vendor_sheet_parser.parser import (
+from odoo.addons.po_vendor_sales_purchases_tab.scripts.po_vendor_sheet_parser.parser import (
     parse_csv_file,
-    parse_money,
     parse_date,
+    parse_money,
     parse_sheet_rows,
 )
+from odoo.addons.po_vendor_sales_purchases_tab.services import payment_block_parser
 
 
-def _fixture(name):
-    return os.path.join(FIXTURES, name)
-
+FIXTURES = os.path.join(
+    os.path.dirname(__file__),
+    '..',
+    'scripts',
+    'fixtures',
+)
 
 SAMPLE_HEADER = (
     'Proveedor,Proveedor 2,Ubicacion,No. Factura,Fecha,Vence,Total de Factura,'
@@ -29,7 +29,12 @@ SAMPLE_HEADER = (
 )
 
 
-class TestHelpers(unittest.TestCase):
+def _fixture(name):
+    return os.path.join(FIXTURES, name)
+
+
+@tagged('post_install', '-at_install', 'po_vendor_sales_purchases_tab')
+class TestPaymentBlockParserHelpers(BaseCase):
     def test_parse_money(self):
         self.assertEqual(parse_money(' $ 1,288.16 '), Decimal('1288.16'))
         self.assertIsNone(parse_money(''))
@@ -43,7 +48,8 @@ class TestHelpers(unittest.TestCase):
         self.assertEqual(str(parse_date('22 junio')), '2026-06-22')
 
 
-class TestPaymentBlocks(unittest.TestCase):
+@tagged('post_install', '-at_install', 'po_vendor_sales_purchases_tab')
+class TestPaymentBlockParser(BaseCase):
     def _parse(self, body):
         text = SAMPLE_HEADER + body
         rows = list(csv.reader(io.StringIO(text)))
@@ -113,23 +119,36 @@ class TestPaymentBlocks(unittest.TestCase):
         self.assertTrue(any('Duplicate' in w for w in result.warnings))
         self.assertEqual(result.invoices[-1].total_factura, Decimal('200.00'))
 
+    def test_odoo_adapter_parse_dict_rows(self):
+        dict_rows = [{
+            'Proveedor': 'VENDOR',
+            'Proveedor 2': '',
+            'Ubicacion': 'RIO',
+            'No. Factura': 'INV-001',
+            'Fecha': '1/6/2026',
+            'Vence': '15/6/2026',
+            'Total de Factura': '$100.00',
+            'Total de pago': '',
+            'Fecha de pago': '',
+        }]
+        result = payment_block_parser.parse_dict_rows(dict_rows)
+        self.assertEqual(len(result.invoices), 1)
+        self.assertFalse(result.invoices[0].pagado)
 
-class TestRealFixtures(unittest.TestCase):
-    @unittest.skipUnless(
-        os.path.isfile(_fixture('pagos_proveedores_junio_2026.csv')),
-        'June fixture missing',
-    )
+
+@tagged('post_install', '-at_install', 'po_vendor_sales_purchases_tab')
+class TestPaymentBlockParserFixtures(BaseCase):
     def test_junio_fixture_parses(self):
+        if not os.path.isfile(_fixture('pagos_proveedores_junio_2026.csv')):
+            self.skipTest('June fixture missing')
         result = parse_csv_file(_fixture('pagos_proveedores_junio_2026.csv'))
         self.assertGreater(result.stats['invoice_rows'], 400)
         self.assertGreater(result.stats['paid'], 0)
         self.assertGreater(result.stats['unpaid'], 0)
 
-    @unittest.skipUnless(
-        os.path.isfile(_fixture('pagos_proveedores_junio_2026.csv')),
-        'June fixture missing',
-    )
     def test_avance_block_from_junio(self):
+        if not os.path.isfile(_fixture('pagos_proveedores_junio_2026.csv')):
+            self.skipTest('June fixture missing')
         result = parse_csv_file(_fixture('pagos_proveedores_junio_2026.csv'))
         by_no = {i.no_factura: i for i in result.invoices}
         self.assertTrue(by_no['FV1002702746'].pagado)
@@ -137,11 +156,9 @@ class TestRealFixtures(unittest.TestCase):
         self.assertFalse(by_no['FV1002748472'].pagado)
         self.assertEqual(by_no['FV1002726320'].monto_pago_grupo, Decimal('2212.13'))
 
-    @unittest.skipUnless(
-        os.path.isfile(_fixture('pagos_proveedores_junio_2026.csv')),
-        'June fixture missing',
-    )
     def test_corporacion_impresora_block_from_junio(self):
+        if not os.path.isfile(_fixture('pagos_proveedores_junio_2026.csv')):
+            self.skipTest('June fixture missing')
         result = parse_csv_file(_fixture('pagos_proveedores_junio_2026.csv'))
         by_no = {i.no_factura: i for i in result.invoices}
         inv50230 = by_no['INV50230']
@@ -150,14 +167,8 @@ class TestRealFixtures(unittest.TestCase):
         self.assertEqual(inv50230.monto_pago_grupo, Decimal('114849.37'))
         self.assertEqual(inv50230.facturas_en_grupo, 5)
 
-    @unittest.skipUnless(
-        os.path.isfile(_fixture('pagos_proveedores_julio_2026.csv')),
-        'July fixture missing',
-    )
     def test_julio_has_unpaid_invoices(self):
+        if not os.path.isfile(_fixture('pagos_proveedores_julio_2026.csv')):
+            self.skipTest('July fixture missing')
         result = parse_csv_file(_fixture('pagos_proveedores_julio_2026.csv'))
         self.assertGreater(result.stats['unpaid'], 0)
-
-
-if __name__ == '__main__':
-    unittest.main()

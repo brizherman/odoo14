@@ -1,4 +1,90 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- PO Compras vs Ventas tab added in task 6.0 -->
+    <record id="view_vendor_sheet_invoice_tree_po_tab" model="ir.ui.view">
+        <field name="name">vendor.sheet.invoice.tree.po.tab</field>
+        <field name="model">vendor.sheet.invoice</field>
+        <field name="arch" type="xml">
+            <tree string="Vendor Sheet Invoices" create="0" edit="0" delete="0">
+                <field name="no_factura"/>
+                <field name="fecha"/>
+                <field name="vence"/>
+                <field name="total_factura" sum="Total"/>
+                <field name="pagado" widget="boolean_toggle"/>
+                <field name="fecha_pago"/>
+                <field name="sucursal" optional="hide"/>
+                <field name="monto_pago_grupo" optional="hide"/>
+                <field name="facturas_en_grupo" optional="hide"/>
+                <field name="proveedor" optional="hide"/>
+                <field name="warning_message" optional="hide"/>
+                <field name="currency_id" invisible="1"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_purchase_order_form_vendor_sales_purchases_tab" model="ir.ui.view">
+        <field name="name">purchase.order.form.vendor.sales.purchases.tab</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="custom_purchase_flow.view_purchase_order_form_custom"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Compras vs Ventas"
+                      name="vendor_sales_purchases_tab"
+                      groups="custom_purchase_flow.group_purchase_direction,custom_purchase_flow.group_purchase_dept,base.group_system">
+                    <field name="vendor_sales_matrix" invisible="1"/>
+                    <div class="alert alert-warning mb-2"
+                         attrs="{'invisible': [('vendor_tab_warning', '=', False)]}">
+                        <field name="vendor_tab_warning" nolabel="1" readonly="1"/>
+                    </div>
+                    <div class="alert alert-warning mb-2"
+                         attrs="{'invisible': [('vendor_sales_matrix_warning', '=', False)]}">
+                        <field name="vendor_sales_matrix_warning" nolabel="1" readonly="1"/>
+                    </div>
+                    <div class="row mb-3 align-items-center">
+                        <div class="col-md-8">
+                            <strong>
+                                <field name="partner_id" readonly="1" nolabel="1" class="oe_inline"/>
+                                — Purchases (invoices, last 90 days) | Sales by department (last 90 days)
+                            </strong>
+                        </div>
+                        <div class="col-md-4 text-right">
+                            <span class="mr-2">
+                                Last synced:
+                                <field name="vendor_tab_last_sync" readonly="1" nolabel="1" class="oe_inline"/>
+                            </span>
+                            <button name="action_sync_vendor_sheet_data"
+                                    type="object"
+                                    string="Sync Data"
+                                    class="btn-primary"
+                                    groups="custom_purchase_flow.group_purchase_direction,custom_purchase_flow.group_purchase_dept,base.group_system"/>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5>Sales by Department</h5>
+                            <field name="vendor_sales_matrix_html" nolabel="1" readonly="1"/>
+                        </div>
+                        <div class="col-md-6">
+                            <h5>Purchases (Google Sheets)</h5>
+                            <field name="vendor_sheet_invoice_ids" nolabel="1" readonly="1">
+                                <tree create="0" edit="0" delete="0">
+                                    <field name="no_factura"/>
+                                    <field name="fecha"/>
+                                    <field name="vence"/>
+                                    <field name="total_factura" sum="Total"/>
+                                    <field name="pagado" widget="boolean_toggle"/>
+                                    <field name="fecha_pago"/>
+                                    <field name="sucursal" optional="hide"/>
+                                    <field name="monto_pago_grupo" optional="hide"/>
+                                    <field name="facturas_en_grupo" optional="hide"/>
+                                    <field name="proveedor" optional="hide"/>
+                                    <field name="warning_message" optional="hide"/>
+                                    <field name="currency_id" invisible="1"/>
+                                </tree>
+                            </field>
+                        </div>
+                    </div>
+                </page>
+            </xpath>
+        </field>
+    </record>
 </odoo>

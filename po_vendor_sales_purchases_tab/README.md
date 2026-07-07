@@ -44,3 +44,14 @@ Browser → **Apps** → `PO Vendor Purchases & Sales Tab` → **Upgrade**.
 Without the pip step, Odoo will block install/upgrade because of `external_dependencies`.
 
 See also `reqs/po_vendor_sales_purchases_tab.md` §11.1 for full production deploy notes.
+
+## Payment block parser (standalone CLI)
+
+Parser code lives inside this module at `scripts/` (not a separate repo-root folder).
+
+```bash
+cd "/Users/gab/Cursor Projects/Odoo14"
+source venv/bin/activate
+python po_vendor_sales_purchases_tab/scripts/payment_block_parser_standalone.py \
+  po_vendor_sales_purchases_tab/scripts/fixtures/pagos_proveedores_junio_2026.csv
+```

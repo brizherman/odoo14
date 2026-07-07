@@ -5,12 +5,12 @@ Standalone CLI for Pagos Proveedores payment block parser (task 3.5).
 
 Usage:
   source venv/bin/activate
-  python scripts/payment_block_parser_standalone.py \\
-    scripts/fixtures/pagos_proveedores_junio_2026.csv \\
-    -o output/pagos_proveedores_junio_normalized.csv
+  python po_vendor_sales_purchases_tab/scripts/payment_block_parser_standalone.py \\
+    po_vendor_sales_purchases_tab/scripts/fixtures/pagos_proveedores_junio_2026.csv \\
+    -o po_vendor_sales_purchases_tab/scripts/output/pagos_proveedores_junio_normalized.csv
 
   # Multiple files (e.g. cross-month upsert preview):
-  python scripts/payment_block_parser_standalone.py junio.csv julio.csv -o merged.csv
+  python po_vendor_sales_purchases_tab/scripts/payment_block_parser_standalone.py junio.csv julio.csv -o merged.csv
 """
 
 from __future__ import print_function

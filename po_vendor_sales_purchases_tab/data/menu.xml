@@ -1,4 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Menu items added in task 6.0 -->
+    <menuitem id="menu_vendor_sheet_root"
+              name="Vendor Sheets"
+              parent="purchase.menu_purchase_config"
+              sequence="50"
+              groups="custom_purchase_flow.group_purchase_direction,custom_purchase_flow.group_purchase_dept,base.group_system"/>
+
+    <menuitem id="menu_vendor_sheet_config"
+              name="Settings"
+              parent="menu_vendor_sheet_root"
+              action="action_vendor_sheet_config_singleton"
+              sequence="10"
+              groups="base.group_system"/>
+
+    <menuitem id="menu_vendor_sucursal_mapping"
+              name="Sucursal Mappings"
+              parent="menu_vendor_sheet_root"
+              action="action_vendor_sucursal_mapping"
+              sequence="20"
+              groups="custom_purchase_flow.group_purchase_direction,custom_purchase_flow.group_purchase_dept,base.group_system"/>
+
+    <menuitem id="menu_vendor_sheet_mapping"
+              name="Proveedor Mappings"
+              parent="menu_vendor_sheet_root"
+              action="action_vendor_sheet_mapping"
+              sequence="30"
+              groups="custom_purchase_flow.group_purchase_direction,custom_purchase_flow.group_purchase_dept,base.group_system"/>
+
+    <menuitem id="menu_vendor_sheet_sync_log"
+              name="Sync Log"
+              parent="menu_vendor_sheet_root"
+              action="action_vendor_sheet_sync_log"
+              sequence="40"
+              groups="custom_purchase_flow.group_purchase_direction,custom_purchase_flow.group_purchase_dept,base.group_system"/>
 </odoo>

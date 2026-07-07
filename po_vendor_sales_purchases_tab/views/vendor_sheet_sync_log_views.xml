@@ -1,4 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Sync log views added in task 6.0 -->
+    <record id="view_vendor_sheet_sync_log_tree" model="ir.ui.view">
+        <field name="name">vendor.sheet.sync.log.tree</field>
+        <field name="model">vendor.sheet.sync.log</field>
+        <field name="arch" type="xml">
+            <tree string="Vendor Sheet Sync Logs" create="0" edit="0" delete="0">
+                <field name="sync_date"/>
+                <field name="user_id"/>
+                <field name="state"/>
+                <field name="rows_created"/>
+                <field name="rows_updated"/>
+                <field name="warnings_count"/>
+                <field name="duration_seconds"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_vendor_sheet_sync_log_form" model="ir.ui.view">
+        <field name="name">vendor.sheet.sync.log.form</field>
+        <field name="model">vendor.sheet.sync.log</field>
+        <field name="arch" type="xml">
+            <form string="Vendor Sheet Sync Log" create="0" edit="0" delete="0">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="sync_date"/>
+                            <field name="user_id"/>
+                            <field name="state"/>
+                            <field name="duration_seconds"/>
+                        </group>
+                        <group>
+                            <field name="rows_created"/>
+                            <field name="rows_updated"/>
+                            <field name="warnings_count"/>
+                        </group>
+                    </group>
+                    <group string="Warning Details">
+                        <field name="warning_details" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_vendor_sheet_sync_log" model="ir.actions.act_window">
+        <field name="name">Vendor Sheet Sync Log</field>
+        <field name="res_model">vendor.sheet.sync.log</field>
+        <field name="view_mode">tree,form</field>
+    </record>
 </odoo>
