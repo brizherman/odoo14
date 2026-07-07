@@ -36,6 +36,67 @@ class GoogleSheetsClient:
                 'Paste the full JSON key file from Google Cloud.'
             )) from exc
 
+    def _get_tab_name(self, tab_name=None):
+        if tab_name:
+            name = tab_name.strip()
+        else:
+            config = self.env['vendor.sheet.config'].get_singleton()
+            name = (config.sheet_tab_name or DEFAULT_TAB_NAME).strip()
+        if not name:
+            raise UserError(_(
+                'Sheet tab name is not configured. '
+                'Open Vendor Sheet settings and set Sheet Tab Name.'
+            ))
+        return name
+
+    @staticmethod
+    def _format_sheet_range(tab_name):
+        """Quote tab names for Google Sheets A1 notation (required when name has spaces)."""
+        escaped = tab_name.replace("'", "''")
+        return "'%s'" % escaped
+
+    @staticmethod
+    def _list_sheet_titles(spreadsheet_meta):
+        return [
+            sheet['properties']['title']
+            for sheet in spreadsheet_meta.get('sheets', [])
+            if sheet.get('properties', {}).get('title') is not None
+        ]
+
+    @staticmethod
+    def _resolve_tab_title(sheet_titles, configured_name):
+        """Match configured tab name to an actual worksheet title."""
+        if configured_name in sheet_titles:
+            return configured_name
+
+        normalized = configured_name.strip()
+        stripped_matches = [
+            title for title in sheet_titles
+            if title.strip() == normalized
+        ]
+        if len(stripped_matches) == 1:
+            return stripped_matches[0]
+        if len(stripped_matches) > 1:
+            raise UserError(_(
+                'Multiple worksheet tabs match "%s": %s'
+            ) % (configured_name, ', '.join(stripped_matches)))
+
+        available = ', '.join(repr(title) for title in sheet_titles)
+        raise UserError(_(
+            'Worksheet tab "%s" was not found. Available tabs: %s'
+        ) % (configured_name, available))
+
+    def _get_spreadsheet_meta(self, service, spreadsheet_id):
+        return service.spreadsheets().get(
+            spreadsheetId=spreadsheet_id,
+            fields='sheets.properties.title',
+        ).execute()
+
+    def _resolve_tab_for_spreadsheet(self, service, spreadsheet_id, tab_name):
+        meta = self._get_spreadsheet_meta(service, spreadsheet_id)
+        sheet_titles = self._list_sheet_titles(meta)
+        return self._resolve_tab_title(sheet_titles, tab_name)
+
     def _build_service(self):
         try:
             credentials = service_account.Credentials.from_service_account_info(
@@ -57,13 +118,13 @@ class GoogleSheetsClient:
             ) % exc) from exc
 
     @staticmethod
-    def _find_header_row(values):
+    def _find_header_row(values, tab_name):
         for index, row in enumerate(values):
             if row and str(row[0]).strip() == 'Proveedor':
                 return index
         raise UserError(_(
             'Could not find header row starting with "Proveedor" in tab "%s".'
-        ) % DEFAULT_TAB_NAME)
+        ) % tab_name)
 
     @staticmethod
     def _values_to_dict_rows(values, header_row_index):
@@ -78,16 +139,24 @@ class GoogleSheetsClient:
             dict_rows.append(row_data)
         return dict_rows
 
-    def fetch_sheet_rows(self, spreadsheet_id, tab_name=DEFAULT_TAB_NAME):
+    def fetch_sheet_rows(self, spreadsheet_id, tab_name=None):
         """Fetch sheet values and return rows as dicts keyed by column header."""
         if not spreadsheet_id:
             raise UserError(_('Spreadsheet ID is missing for the selected month workbook.'))
 
+        tab_name = self._get_tab_name(tab_name)
+
         try:
             service = self._build_service()
+            resolved_tab = self._resolve_tab_for_spreadsheet(
+                service,
+                spreadsheet_id,
+                tab_name,
+            )
+            sheet_range = self._format_sheet_range(resolved_tab)
             result = service.spreadsheets().values().get(
                 spreadsheetId=spreadsheet_id,
-                range=tab_name,
+                range=sheet_range,
             ).execute()
         except HttpError as exc:
             _logger.exception('Google Sheets API request failed for %s', spreadsheet_id)
@@ -99,6 +168,19 @@ class GoogleSheetsClient:
                 )
             elif status == 404:
                 message = _('Google spreadsheet not found: %s') % spreadsheet_id
+            elif status == 400 and 'Unable to parse range' in str(exc):
+                try:
+                    service = self._build_service()
+                    meta = self._get_spreadsheet_meta(service, spreadsheet_id)
+                    available = ', '.join(
+                        repr(title) for title in self._list_sheet_titles(meta)
+                    )
+                    message = _(
+                        'Worksheet tab "%s" was not found in spreadsheet %s. '
+                        'Available tabs: %s'
+                    ) % (tab_name, spreadsheet_id, available)
+                except Exception:
+                    message = _('Google Sheets API error: %s') % exc
             else:
                 message = _('Google Sheets API error: %s') % exc
             raise UserError(message) from exc
@@ -112,10 +194,10 @@ class GoogleSheetsClient:
         if not values:
             return []
 
-        header_row_index = self._find_header_row(values)
+        header_row_index = self._find_header_row(values, resolved_tab)
         return self._values_to_dict_rows(values, header_row_index)
 
-    def fetch_sheet_values(self, spreadsheet_id, tab_name=DEFAULT_TAB_NAME):
+    def fetch_sheet_values(self, spreadsheet_id, tab_name=None):
         """Return raw 2D values from the sheet (including header row)."""
         dict_rows = self.fetch_sheet_rows(spreadsheet_id, tab_name=tab_name)
         if not dict_rows:

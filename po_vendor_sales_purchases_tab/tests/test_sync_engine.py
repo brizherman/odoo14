@@ -27,6 +27,27 @@ def _invoice_row(no_factura, fecha, total, total_pago='', fecha_pago='', sucursa
     }
 
 
+def _ensure_month(env, config, name, spreadsheet_id, synced_once=False):
+    """Create or update a month workbook row (safe on DBs with existing config)."""
+    Month = env['vendor.sheet.month']
+    month_rec = Month.search([
+        ('config_id', '=', config.id),
+        ('name', '=', name),
+    ], limit=1)
+    vals = {
+        'spreadsheet_id': spreadsheet_id,
+        'synced_once': synced_once,
+    }
+    if month_rec:
+        month_rec.write(vals)
+        return month_rec
+    return Month.create({
+        'config_id': config.id,
+        'name': name,
+        **vals,
+    })
+
+
 @tagged('post_install', '-at_install', 'po_vendor_sales_purchases_tab')
 class TestSyncEngineHelpers(TransactionCase):
     def test_months_in_90_day_window(self):
@@ -36,20 +57,9 @@ class TestSyncEngineHelpers(TransactionCase):
         self.assertEqual(months[-1], '2026-07')
 
     def test_months_to_sync_skips_closed_synced_month(self):
-        Month = self.env['vendor.sheet.month']
         config = self.env['vendor.sheet.config'].get_singleton()
-        june = Month.create({
-            'config_id': config.id,
-            'name': '2026-06',
-            'spreadsheet_id': 'sheet-june',
-            'synced_once': True,
-        })
-        july = Month.create({
-            'config_id': config.id,
-            'name': '2026-07',
-            'spreadsheet_id': 'sheet-july',
-            'synced_once': False,
-        })
+        june = _ensure_month(self.env, config, '2026-06', 'sheet-june', synced_once=True)
+        _ensure_month(self.env, config, '2026-07', 'sheet-july', synced_once=False)
         window = ['2026-05', '2026-06', '2026-07']
         result = months_to_sync(config.sheet_month_ids, window, '2026-07')
         self.assertIn('2026-07', result)
@@ -66,26 +76,49 @@ class TestSyncEngine(TransactionCase):
             'name': 'Convergram Mexico SA',
             'supplier_rank': 1,
         })
-        self.env['vendor.sucursal.mapping'].create({
-            'sucursal': 'RIO',
-            'company_id': self.company.id,
-        })
-        self.env['vendor.sheet.mapping'].create({
-            'sheet_proveedor': 'Test Vendor',
-            'partner_id': self.vendor.id,
-        })
+        SucursalMapping = self.env['vendor.sucursal.mapping']
+        self.sucursal_mapping = SucursalMapping.search([
+            ('sucursal', '=', 'RIO'),
+        ], limit=1)
+        if not self.sucursal_mapping:
+            self.sucursal_mapping = SucursalMapping.create({
+                'sucursal': 'RIO',
+                'company_id': self.company.id,
+            })
+        VendorMapping = self.env['vendor.sheet.mapping']
+        self.vendor_mapping = VendorMapping.search([
+            ('sheet_proveedor', '=', 'Test Vendor'),
+        ], limit=1)
+        if not self.vendor_mapping:
+            self.vendor_mapping = VendorMapping.create({
+                'sheet_proveedor': 'Test Vendor',
+                'partner_id': self.vendor.id,
+            })
         self.config = self.env['vendor.sheet.config'].get_singleton()
         self.Month = self.env['vendor.sheet.month']
         self.Invoice = self.env['vendor.sheet.invoice']
         self.SyncLog = self.env['vendor.sheet.sync.log']
 
-    def _create_month(self, name, spreadsheet_id, synced_once=False):
-        return self.Month.create({
-            'config_id': self.config.id,
-            'name': name,
-            'spreadsheet_id': spreadsheet_id,
-            'synced_once': synced_once,
-        })
+    def _prepare_months(self, reference_date, month_specs):
+        """Configure only the months under test; skip others in the 90-day window."""
+        window = months_in_90_day_window(reference_date=reference_date)
+        for month_label in window:
+            if month_label in month_specs:
+                spreadsheet_id, synced_once = month_specs[month_label]
+                _ensure_month(
+                    self.env,
+                    self.config,
+                    month_label,
+                    spreadsheet_id,
+                    synced_once=synced_once,
+                )
+                continue
+            month_rec = self.Month.search([
+                ('config_id', '=', self.config.id),
+                ('name', '=', month_label),
+            ], limit=1)
+            if month_rec:
+                month_rec.write({'synced_once': True})
 
     def _mock_client(self, sheet_data):
         client = MagicMock()
@@ -96,8 +129,18 @@ class TestSyncEngine(TransactionCase):
 
     def test_closed_month_synced_once_then_skipped(self):
         ref = date(2026, 7, 15)
-        june = self._create_month('2026-06', 'sheet-june', synced_once=False)
-        july = self._create_month('2026-07', 'sheet-july', synced_once=False)
+        self._prepare_months(ref, {
+            '2026-06': ('sheet-june', False),
+            '2026-07': ('sheet-july', False),
+        })
+        june = self.Month.search([
+            ('config_id', '=', self.config.id),
+            ('name', '=', '2026-06'),
+        ], limit=1)
+        july = self.Month.search([
+            ('config_id', '=', self.config.id),
+            ('name', '=', '2026-07'),
+        ], limit=1)
         sheet_data = {
             'sheet-june': [_invoice_row('JUN-001', '1/6/2026', '$100.00')],
             'sheet-july': [_invoice_row('JUL-001', '1/7/2026', '$200.00')],
@@ -128,8 +171,10 @@ class TestSyncEngine(TransactionCase):
 
     def test_current_month_resynced_every_run(self):
         ref = date(2026, 7, 15)
-        self._create_month('2026-06', 'sheet-june', synced_once=True)
-        self._create_month('2026-07', 'sheet-july', synced_once=True)
+        self._prepare_months(ref, {
+            '2026-06': ('sheet-june', True),
+            '2026-07': ('sheet-july', True),
+        })
         client = self._mock_client({
             'sheet-july': [_invoice_row('JUL-002', '5/7/2026', '$300.00')],
         })
@@ -145,8 +190,10 @@ class TestSyncEngine(TransactionCase):
 
     def test_upsert_updates_payment_state_agd_200(self):
         ref = date(2026, 8, 15)
-        self._create_month('2026-07', 'sheet-july', synced_once=True)
-        self._create_month('2026-08', 'sheet-august', synced_once=False)
+        self._prepare_months(ref, {
+            '2026-07': ('sheet-july', True),
+            '2026-08': ('sheet-august', False),
+        })
         self.Invoice.create({
             'sucursal': 'RIO',
             'company_id': self.company.id,
@@ -192,7 +239,12 @@ class TestSyncEngine(TransactionCase):
 
     def test_google_api_failure_aborts_sync(self):
         ref = date(2026, 7, 15)
-        self._create_month('2026-07', 'sheet-july', synced_once=False)
+        self._prepare_months(ref, {
+            '2026-07': ('sheet-july', False),
+        })
+        before_invoices = self.Invoice.search_count([
+            ('no_factura', 'in', ['JUN-001', 'JUL-001', 'JUL-002', 'AGD-200', 'INV-X']),
+        ])
         client = MagicMock()
         client.fetch_sheet_rows.side_effect = UserError('Google Sheets API error')
 
@@ -203,14 +255,19 @@ class TestSyncEngine(TransactionCase):
             reference_date=ref,
         )
         self.assertEqual(result['error'], 'Google Sheets API error')
-        self.assertEqual(self.Invoice.search_count([]), 0)
+        self.assertEqual(self.Invoice.search_count([
+            ('no_factura', 'in', ['JUN-001', 'JUL-001', 'JUL-002', 'AGD-200', 'INV-X']),
+        ]), before_invoices)
         self.assertEqual(self.SyncLog.search_count([]), before_logs + 1)
         last_log = self.SyncLog.search([], order='sync_date desc', limit=1)
         self.assertEqual(last_log.state, 'error')
 
     def test_unmapped_sucursal_skips_row_with_warning(self):
         ref = date(2026, 7, 15)
-        self._create_month('2026-07', 'sheet-july', synced_once=False)
+        self._prepare_months(ref, {
+            '2026-07': ('sheet-july', False),
+        })
+        before_invoices = self.Invoice.search_count([('no_factura', '=', 'INV-X')])
         client = self._mock_client({
             'sheet-july': [_invoice_row('INV-X', '1/7/2026', '$50.00', sucursal='UNKNOWN')],
         })
@@ -220,6 +277,6 @@ class TestSyncEngine(TransactionCase):
             sheets_client=client,
             reference_date=ref,
         )
-        self.assertEqual(self.Invoice.search_count([]), 0)
+        self.assertEqual(self.Invoice.search_count([('no_factura', '=', 'INV-X')]), before_invoices)
         self.assertEqual(len(result['warnings']), 1)
         self.assertIn('Unmapped sucursal', result['warnings'][0])

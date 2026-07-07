@@ -5,7 +5,9 @@
         <field name="model">vendor.sheet.month</field>
         <field name="arch" type="xml">
             <tree string="Monthly Workbooks" editable="bottom">
-                <field name="name"/>
+                <field name="year"/>
+                <field name="month"/>
+                <field name="name" readonly="1" optional="hide"/>
                 <field name="spreadsheet_id"/>
                 <field name="synced_once" readonly="1"/>
                 <field name="last_sync" readonly="1"/>
@@ -21,6 +23,8 @@
                 <sheet>
                     <group>
                         <field name="name" readonly="1"/>
+                        <field name="sheet_tab_name"
+                               groups="base.group_system"/>
                         <field name="google_service_account_json"
                                widget="text"
                                groups="base.group_system"/>
@@ -29,7 +33,9 @@
                         <page string="Monthly Workbooks">
                             <field name="sheet_month_ids" nolabel="1">
                                 <tree editable="bottom">
-                                    <field name="name"/>
+                                    <field name="year"/>
+                                    <field name="month"/>
+                                    <field name="name" readonly="1" optional="hide"/>
                                     <field name="spreadsheet_id"/>
                                     <field name="synced_once" readonly="1"/>
                                     <field name="last_sync" readonly="1"/>

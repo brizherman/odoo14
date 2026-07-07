@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'PO Vendor Purchases & Sales Tab',
-    'version': '14.0.1.0.0',
+    'version': '14.0.1.0.5',
     'summary': 'PO tab comparing vendor purchases (Google Sheets) vs sales by department',
     'author': 'Custom',
     'category': 'Purchase',
