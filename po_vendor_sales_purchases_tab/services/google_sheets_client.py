@@ -5,7 +5,6 @@ import logging
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from odoo import _
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
@@ -24,17 +23,17 @@ class GoogleSheetsClient:
         config = self.env['vendor.sheet.config'].get_singleton()
         raw_json = (config.google_service_account_json or '').strip()
         if not raw_json:
-            raise UserError(_(
-                'Google service account JSON is not configured. '
-                'Open Vendor Sheet settings and paste the credentials.'
-            ))
+            raise UserError(
+                'El JSON de la cuenta de servicio de Google no está configurado. '
+                'Abra la configuración de hoja de proveedor y pegue las credenciales.'
+            )
         try:
             return json.loads(raw_json)
         except json.JSONDecodeError as exc:
-            raise UserError(_(
-                'Google service account JSON is invalid. '
-                'Paste the full JSON key file from Google Cloud.'
-            )) from exc
+            raise UserError(
+                'El JSON de la cuenta de servicio de Google no es válido. '
+                'Pegue el archivo JSON completo de Google Cloud.'
+            ) from exc
 
     def _get_tab_name(self, tab_name=None):
         if tab_name:
@@ -43,10 +42,10 @@ class GoogleSheetsClient:
             config = self.env['vendor.sheet.config'].get_singleton()
             name = (config.sheet_tab_name or DEFAULT_TAB_NAME).strip()
         if not name:
-            raise UserError(_(
-                'Sheet tab name is not configured. '
-                'Open Vendor Sheet settings and set Sheet Tab Name.'
-            ))
+            raise UserError(
+                'El nombre de pestaña de hoja no está configurado. '
+                'Abra la configuración de hoja de proveedor y establezca el nombre de pestaña.'
+            )
         return name
 
     @staticmethod
@@ -77,14 +76,16 @@ class GoogleSheetsClient:
         if len(stripped_matches) == 1:
             return stripped_matches[0]
         if len(stripped_matches) > 1:
-            raise UserError(_(
-                'Multiple worksheet tabs match "%s": %s'
-            ) % (configured_name, ', '.join(stripped_matches)))
+            raise UserError(
+                'Múltiples pestañas de hoja coinciden con "%s": %s'
+                % (configured_name, ', '.join(stripped_matches))
+            )
 
         available = ', '.join(repr(title) for title in sheet_titles)
-        raise UserError(_(
-            'Worksheet tab "%s" was not found. Available tabs: %s'
-        ) % (configured_name, available))
+        raise UserError(
+            'No se encontró la pestaña de hoja "%s". Pestañas disponibles: %s'
+            % (configured_name, available)
+        )
 
     def _get_spreadsheet_meta(self, service, spreadsheet_id):
         return service.spreadsheets().get(
@@ -113,18 +114,19 @@ class GoogleSheetsClient:
             raise
         except Exception as exc:
             _logger.exception('Google Sheets authentication failed')
-            raise UserError(_(
-                'Google Sheets authentication failed: %s'
-            ) % exc) from exc
+            raise UserError(
+                'Error de autenticación con Google Sheets: %s' % exc
+            ) from exc
 
     @staticmethod
     def _find_header_row(values, tab_name):
         for index, row in enumerate(values):
             if row and str(row[0]).strip() == 'Proveedor':
                 return index
-        raise UserError(_(
-            'Could not find header row starting with "Proveedor" in tab "%s".'
-        ) % tab_name)
+        raise UserError(
+            'No se encontró la fila de encabezado que comienza con "Proveedor" en la pestaña "%s".'
+            % tab_name
+        )
 
     @staticmethod
     def _values_to_dict_rows(values, header_row_index):
@@ -142,7 +144,9 @@ class GoogleSheetsClient:
     def fetch_sheet_rows(self, spreadsheet_id, tab_name=None):
         """Fetch sheet values and return rows as dicts keyed by column header."""
         if not spreadsheet_id:
-            raise UserError(_('Spreadsheet ID is missing for the selected month workbook.'))
+            raise UserError(
+                'Falta el ID de hoja de cálculo para el libro de trabajo mensual seleccionado.'
+            )
 
         tab_name = self._get_tab_name(tab_name)
 
@@ -162,12 +166,12 @@ class GoogleSheetsClient:
             _logger.exception('Google Sheets API request failed for %s', spreadsheet_id)
             status = getattr(exc.resp, 'status', None)
             if status == 403:
-                message = _(
-                    'Google Sheets access denied. Share the spreadsheet with the '
-                    'service account email from your JSON credentials.'
+                message = (
+                    'Acceso denegado a Google Sheets. Comparta la hoja de cálculo con el '
+                    'correo de la cuenta de servicio de sus credenciales JSON.'
                 )
             elif status == 404:
-                message = _('Google spreadsheet not found: %s') % spreadsheet_id
+                message = 'Hoja de cálculo de Google no encontrada: %s' % spreadsheet_id
             elif status == 400 and 'Unable to parse range' in str(exc):
                 try:
                     service = self._build_service()
@@ -175,20 +179,20 @@ class GoogleSheetsClient:
                     available = ', '.join(
                         repr(title) for title in self._list_sheet_titles(meta)
                     )
-                    message = _(
-                        'Worksheet tab "%s" was not found in spreadsheet %s. '
-                        'Available tabs: %s'
+                    message = (
+                        'No se encontró la pestaña de hoja "%s" en la hoja de cálculo %s. '
+                        'Pestañas disponibles: %s'
                     ) % (tab_name, spreadsheet_id, available)
                 except Exception:
-                    message = _('Google Sheets API error: %s') % exc
+                    message = 'Error de API de Google Sheets: %s' % exc
             else:
-                message = _('Google Sheets API error: %s') % exc
+                message = 'Error de API de Google Sheets: %s' % exc
             raise UserError(message) from exc
         except UserError:
             raise
         except Exception as exc:
             _logger.exception('Google Sheets fetch failed for %s', spreadsheet_id)
-            raise UserError(_('Google Sheets fetch failed: %s') % exc) from exc
+            raise UserError('Error al obtener datos de Google Sheets: %s' % exc) from exc
 
         values = result.get('values', [])
         if not values:

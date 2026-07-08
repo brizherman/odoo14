@@ -1,34 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <menuitem id="menu_vendor_sheet_root"
-              name="Vendor Sheets"
+              name="Hojas de proveedor"
               parent="purchase.menu_purchase_config"
               sequence="50"
               groups="custom_purchase_flow.group_purchase_direction,custom_purchase_flow.group_purchase_dept,base.group_system"/>
 
     <menuitem id="menu_vendor_sheet_config"
-              name="Settings"
+              name="Configuración"
               parent="menu_vendor_sheet_root"
               action="action_vendor_sheet_config_singleton"
               sequence="10"
               groups="base.group_system"/>
 
     <menuitem id="menu_vendor_sucursal_mapping"
-              name="Sucursal Mappings"
+              name="Mapeos de sucursal"
               parent="menu_vendor_sheet_root"
               action="action_vendor_sucursal_mapping"
               sequence="20"
               groups="custom_purchase_flow.group_purchase_direction,custom_purchase_flow.group_purchase_dept,base.group_system"/>
 
     <menuitem id="menu_vendor_sheet_mapping"
-              name="Proveedor Mappings"
+              name="Mapeos de proveedor"
               parent="menu_vendor_sheet_root"
               action="action_vendor_sheet_mapping"
               sequence="30"
               groups="custom_purchase_flow.group_purchase_direction,custom_purchase_flow.group_purchase_dept,base.group_system"/>
 
     <menuitem id="menu_vendor_sheet_sync_log"
-              name="Sync Log"
+              name="Registro de sincronización"
               parent="menu_vendor_sheet_root"
               action="action_vendor_sheet_sync_log"
               sequence="40"

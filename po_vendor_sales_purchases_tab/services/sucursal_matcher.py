@@ -13,12 +13,12 @@ class SucursalMatcher:
         """Return (company, warning_message). Company is empty when unmapped."""
         sucursal_name = (sucursal or '').strip()
         if not sucursal_name:
-            return self.Company.browse(), 'Missing sheet sucursal value.'
+            return self.Company.browse(), 'Falta el valor de sucursal en la hoja.'
 
         mapping = self.Mapping.search([('sucursal', '=', sucursal_name)], limit=1)
         if mapping:
             return mapping.company_id, None
 
         return self.Company.browse(), (
-            'Unmapped sucursal "%s". Add a vendor sucursal mapping.' % sucursal_name
+            'Sucursal sin mapear "%s". Agregue un mapeo de sucursal de proveedor.' % sucursal_name
         )

@@ -9,6 +9,10 @@ from odoo.addons.po_vendor_sales_purchases_tab.services.sales_aggregator import 
     compute_sales_matrix,
     local_day_range_utc_naive,
 )
+from odoo.addons.po_vendor_sales_purchases_tab.services.sync_engine import (
+    months_in_window,
+    window_start_date,
+)
 
 
 @tagged('post_install', '-at_install', 'po_vendor_sales_purchases_tab')
@@ -17,6 +21,14 @@ class TestSalesAggregatorHelpers(TransactionCase):
         start_utc, end_utc = local_day_range_utc_naive(date(2026, 6, 1), date(2026, 6, 1))
         self.assertEqual(start_utc, datetime(2026, 6, 1, 7, 0, 0))
         self.assertEqual(end_utc.strftime('%Y-%m-%d'), '2026-06-02')
+
+    def test_calendar_window_includes_full_oldest_month(self):
+        ref = date(2026, 7, 8)
+        self.assertEqual(window_start_date(ref), date(2026, 4, 1))
+        self.assertEqual(
+            months_in_window(reference_date=ref),
+            ['2026-04', '2026-05', '2026-06', '2026-07'],
+        )
 
 
 @tagged('post_install', '-at_install', 'po_vendor_sales_purchases_tab')
@@ -129,6 +141,26 @@ class TestSalesAggregator(TransactionCase):
         )
         self.assertAlmostEqual(matrix['total'], june_total + july_total)
 
+    def test_full_oldest_month_included_not_clipped(self):
+        """April 2 is inside the window on July 8 (unlike old rolling 90 days)."""
+        sale_april = self._create_sale(self.product_a, 150.0, '2026-04-02 12:00:00')
+        expected = self._line_total(sale_april)
+        matrix = compute_sales_matrix(
+            self.env,
+            self.vendor.id,
+            self.company.id,
+            reference_date=date(2026, 7, 8),
+        )
+        self.assertEqual(
+            matrix['months'],
+            ['2026-04', '2026-05', '2026-06', '2026-07', 'TOTAL'],
+        )
+        self.assertAlmostEqual(
+            matrix['cells'][str(self.dept_a.id)]['2026-04'],
+            expected,
+        )
+        self.assertAlmostEqual(matrix['total'], expected)
+
     def test_empty_department_shows_zero_with_warning(self):
         sale = self._create_sale(self.product_a, 120.0, '2026-07-10 12:00:00')
         expected_total = self._line_total(sale)
@@ -142,7 +174,7 @@ class TestSalesAggregator(TransactionCase):
         self.assertAlmostEqual(matrix['cells'][str(self.dept_b.id)]['TOTAL'], 0.0)
         self.assertAlmostEqual(matrix['total'], expected_total)
         self.assertTrue(matrix['has_warning'])
-        self.assertIn('Some departments have no sales', matrix['warning'])
+        self.assertIn('Algunos departamentos no tienen ventas', matrix['warning'])
 
     def test_purchase_order_compute_populates_matrix(self):
         sale = self._create_sale(self.product_a, 80.0, '2026-07-05 12:00:00')
@@ -151,9 +183,13 @@ class TestSalesAggregator(TransactionCase):
             'partner_id': self.vendor.id,
             'company_id': self.company.id,
         })
+        po.action_sync_po_vendor_tab()
         matrix = json.loads(po.vendor_sales_matrix)
         self.assertAlmostEqual(matrix['total'], expected_total)
         self.assertIn(str(self.dept_a.id), matrix['cells'])
+        html = po.vendor_sales_matrix_html or ''
+        self.assertIn('Total general', html)
+        self.assertIn('o_vendor_sales_grand_total', html)
 
     def test_missing_classification_vendor_returns_warning(self):
         unknown_vendor = self.env['res.partner'].create({
@@ -167,4 +203,4 @@ class TestSalesAggregator(TransactionCase):
             reference_date=self.reference_date,
         )
         self.assertTrue(matrix['has_warning'])
-        self.assertIn('classification vendor', matrix['warning'].lower())
+        self.assertIn('proveedor de clasificación', matrix['warning'].lower())

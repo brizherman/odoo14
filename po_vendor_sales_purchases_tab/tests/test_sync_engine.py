@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
 from datetime import date
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from odoo.exceptions import UserError
 from odoo.tests import tagged
 from odoo.tests.common import TransactionCase
 
 from odoo.addons.po_vendor_sales_purchases_tab.services.sync_engine import (
-    months_in_90_day_window,
+    months_in_window,
     months_to_sync,
     run_global_sync,
+    window_start_date,
 )
 
 
@@ -50,11 +51,17 @@ def _ensure_month(env, config, name, spreadsheet_id, synced_once=False):
 
 @tagged('post_install', '-at_install', 'po_vendor_sales_purchases_tab')
 class TestSyncEngineHelpers(TransactionCase):
-    def test_months_in_90_day_window(self):
-        ref = date(2026, 7, 7)
-        months = months_in_90_day_window(reference_date=ref)
-        self.assertEqual(months[0], '2026-04')
-        self.assertEqual(months[-1], '2026-07')
+    def test_months_in_window(self):
+        ref = date(2026, 7, 8)
+        months = months_in_window(reference_date=ref)
+        self.assertEqual(months, ['2026-04', '2026-05', '2026-06', '2026-07'])
+        self.assertEqual(window_start_date(ref), date(2026, 4, 1))
+
+    def test_months_in_window_year_boundary(self):
+        ref = date(2026, 1, 15)
+        months = months_in_window(reference_date=ref)
+        self.assertEqual(months, ['2025-10', '2025-11', '2025-12', '2026-01'])
+        self.assertEqual(window_start_date(ref), date(2025, 10, 1))
 
     def test_months_to_sync_skips_closed_synced_month(self):
         config = self.env['vendor.sheet.config'].get_singleton()
@@ -100,8 +107,8 @@ class TestSyncEngine(TransactionCase):
         self.SyncLog = self.env['vendor.sheet.sync.log']
 
     def _prepare_months(self, reference_date, month_specs):
-        """Configure only the months under test; skip others in the 90-day window."""
-        window = months_in_90_day_window(reference_date=reference_date)
+        """Configure only the months under test; skip others in the analysis window."""
+        window = months_in_window(reference_date=reference_date)
         for month_label in window:
             if month_label in month_specs:
                 spreadsheet_id, synced_once = month_specs[month_label]
@@ -262,6 +269,50 @@ class TestSyncEngine(TransactionCase):
         last_log = self.SyncLog.search([], order='sync_date desc', limit=1)
         self.assertEqual(last_log.state, 'error')
 
+    def test_global_sync_does_not_write_sales_snapshots(self):
+        ref = date(2026, 7, 15)
+        self._prepare_months(ref, {
+            '2026-07': ('sheet-july', False),
+        })
+        client = self._mock_client({
+            'sheet-july': [_invoice_row('JUL-001', '1/7/2026', '$200.00')],
+        })
+        Snapshot = self.env['vendor.sales.snapshot']
+        before = Snapshot.search_count([])
+
+        result = run_global_sync(
+            self.env,
+            sheets_client=client,
+            reference_date=ref,
+            refresh_sales_snapshots=False,
+        )
+        self.assertIsNone(result['error'])
+        self.assertEqual(Snapshot.search_count([]), before)
+
+        last_log = self.SyncLog.search([], order='sync_date desc', limit=1)
+        self.assertEqual(last_log.sync_type, 'global')
+
+    def test_global_sync_can_refresh_sales_when_requested(self):
+        ref = date(2026, 7, 15)
+        self._prepare_months(ref, {
+            '2026-07': ('sheet-july', False),
+        })
+        client = self._mock_client({
+            'sheet-july': [_invoice_row('JUL-001', '1/7/2026', '$200.00')],
+        })
+
+        with patch(
+            'odoo.addons.po_vendor_sales_purchases_tab.services.sales_snapshot.recompute_all_sales_snapshots',
+            return_value=3,
+        ) as mock_recompute:
+            run_global_sync(
+                self.env,
+                sheets_client=client,
+                reference_date=ref,
+                refresh_sales_snapshots=True,
+            )
+        mock_recompute.assert_called_once()
+
     def test_unmapped_sucursal_skips_row_with_warning(self):
         ref = date(2026, 7, 15)
         self._prepare_months(ref, {
@@ -279,4 +330,4 @@ class TestSyncEngine(TransactionCase):
         )
         self.assertEqual(self.Invoice.search_count([('no_factura', '=', 'INV-X')]), before_invoices)
         self.assertEqual(len(result['warnings']), 1)
-        self.assertIn('Unmapped sucursal', result['warnings'][0])
+        self.assertIn('Sucursal sin mapear', result['warnings'][0])

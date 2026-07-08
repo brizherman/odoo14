@@ -4,7 +4,7 @@
         <field name="name">vendor.sheet.month.tree</field>
         <field name="model">vendor.sheet.month</field>
         <field name="arch" type="xml">
-            <tree string="Monthly Workbooks" editable="bottom">
+            <tree string="Libros de trabajo mensuales" editable="bottom">
                 <field name="year"/>
                 <field name="month"/>
                 <field name="name" readonly="1" optional="hide"/>
@@ -19,7 +19,7 @@
         <field name="name">vendor.sheet.config.form</field>
         <field name="model">vendor.sheet.config</field>
         <field name="arch" type="xml">
-            <form string="Vendor Sheet Configuration">
+            <form string="Configuración de hoja de proveedor">
                 <sheet>
                     <group>
                         <field name="name" readonly="1"/>
@@ -30,7 +30,7 @@
                                groups="base.group_system"/>
                     </group>
                     <notebook>
-                        <page string="Monthly Workbooks">
+                        <page string="Libros de trabajo mensuales">
                             <field name="sheet_month_ids" nolabel="1">
                                 <tree editable="bottom">
                                     <field name="year"/>
@@ -49,7 +49,7 @@
     </record>
 
     <record id="action_vendor_sheet_config" model="ir.actions.act_window">
-        <field name="name">Vendor Sheet Settings</field>
+        <field name="name">Configuración de hoja de proveedor</field>
         <field name="res_model">vendor.sheet.config</field>
         <field name="view_mode">form</field>
         <field name="target">current</field>
@@ -57,14 +57,14 @@
     </record>
 
     <record id="action_vendor_sheet_config_singleton" model="ir.actions.server">
-        <field name="name">Vendor Sheet Settings</field>
+        <field name="name">Configuración de hoja de proveedor</field>
         <field name="model_id" ref="model_vendor_sheet_config"/>
         <field name="state">code</field>
         <field name="code">
 config = env['vendor.sheet.config'].get_singleton()
 action = {
     'type': 'ir.actions.act_window',
-    'name': 'Vendor Sheet Settings',
+    'name': 'Configuración de hoja de proveedor',
     'res_model': 'vendor.sheet.config',
     'view_mode': 'form',
     'res_id': config.id,

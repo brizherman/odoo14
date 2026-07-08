@@ -3,41 +3,45 @@ from odoo import api, fields, models
 from odoo.exceptions import ValidationError
 
 MONTH_SELECTION = [
-    ('01', 'January'),
-    ('02', 'February'),
-    ('03', 'March'),
-    ('04', 'April'),
-    ('05', 'May'),
-    ('06', 'June'),
-    ('07', 'July'),
-    ('08', 'August'),
-    ('09', 'September'),
-    ('10', 'October'),
-    ('11', 'November'),
-    ('12', 'December'),
+    ('01', 'Enero'),
+    ('02', 'Febrero'),
+    ('03', 'Marzo'),
+    ('04', 'Abril'),
+    ('05', 'Mayo'),
+    ('06', 'Junio'),
+    ('07', 'Julio'),
+    ('08', 'Agosto'),
+    ('09', 'Septiembre'),
+    ('10', 'Octubre'),
+    ('11', 'Noviembre'),
+    ('12', 'Diciembre'),
 ]
 
 
 class VendorSheetConfig(models.Model):
     _name = 'vendor.sheet.config'
-    _description = 'Vendor Google Sheet Configuration'
+    _description = 'Configuración de hoja de Google del proveedor'
 
-    name = fields.Char(string='Name', default='Vendor Sheet Configuration', required=True)
+    name = fields.Char(
+        string='Nombre',
+        default='Configuración de hoja de proveedor',
+        required=True,
+    )
     google_service_account_json = fields.Text(
-        string='Google Service Account JSON',
-        help='Service account credentials JSON for Google Sheets API access.',
+        string='JSON de cuenta de servicio de Google',
+        help='Credenciales JSON de la cuenta de servicio para acceso a la API de Google Sheets.',
     )
     sheet_tab_name = fields.Char(
-        string='Sheet Tab Name',
+        string='Nombre de pestaña de hoja',
         default='Pagos Proveedores',
         required=True,
-        help='Exact name of the worksheet tab at the bottom of each monthly Google '
-             'Spreadsheet (e.g. Pagos Proveedores).',
+        help='Nombre exacto de la pestaña de la hoja de cálculo en cada libro mensual de Google '
+             '(p. ej. Pagos Proveedores).',
     )
     sheet_month_ids = fields.One2many(
         'vendor.sheet.month',
         'config_id',
-        string='Monthly Workbooks',
+        string='Libros de trabajo mensuales',
     )
 
     @api.model
@@ -45,18 +49,18 @@ class VendorSheetConfig(models.Model):
         """Return the single configuration record, creating it if needed."""
         config = self.search([], limit=1)
         if not config:
-            config = self.create({'name': 'Vendor Sheet Configuration'})
+            config = self.create({'name': 'Configuración de hoja de proveedor'})
         return config
 
 
 class VendorSheetMonth(models.Model):
     _name = 'vendor.sheet.month'
-    _description = 'Vendor Sheet Monthly Workbook'
+    _description = 'Libro de trabajo mensual de hoja de proveedor'
     _order = 'name desc'
 
     config_id = fields.Many2one(
         'vendor.sheet.config',
-        string='Configuration',
+        string='Configuración',
         required=True,
         ondelete='cascade',
         index=True,
@@ -68,33 +72,33 @@ class VendorSheetMonth(models.Model):
 
     year = fields.Selection(
         selection='_year_selection',
-        string='Year',
+        string='Año',
         required=True,
         default=lambda self: str(fields.Date.context_today(self).year),
     )
     month = fields.Selection(
         selection=MONTH_SELECTION,
-        string='Month',
+        string='Mes',
         required=True,
         default=lambda self: fields.Date.context_today(self).strftime('%m'),
     )
     name = fields.Char(
-        string='Month Key',
+        string='Clave de mes',
         compute='_compute_name',
         store=True,
         readonly=True,
-        help='Internal YYYY-MM label used by sync, e.g. 2026-07',
+        help='Etiqueta interna AAAA-MM usada por la sincronización, p. ej. 2026-07',
         index=True,
     )
-    spreadsheet_id = fields.Char(string='Spreadsheet ID')
-    synced_once = fields.Boolean(string='Synced Once', default=False)
-    last_sync = fields.Datetime(string='Last Sync')
+    spreadsheet_id = fields.Char(string='ID de hoja de cálculo')
+    synced_once = fields.Boolean(string='Sincronizado una vez', default=False)
+    last_sync = fields.Datetime(string='Última sincronización')
 
     _sql_constraints = [
         (
             'config_month_uniq',
             'unique(config_id, year, month)',
-            'This month is already configured.',
+            'Este mes ya está configurado.',
         ),
     ]
 
@@ -110,7 +114,7 @@ class VendorSheetMonth(models.Model):
     def _check_year_month(self):
         for record in self:
             if record.year and (int(record.year) < 2000 or int(record.year) > 2100):
-                raise ValidationError('Year must be between 2000 and 2100.')
+                raise ValidationError('El año debe estar entre 2000 y 2100.')
 
     @api.model
     def _normalize_year_vals(self, vals):

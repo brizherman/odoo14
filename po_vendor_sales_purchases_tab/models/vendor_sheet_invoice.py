@@ -4,20 +4,20 @@ from odoo import fields, models
 
 class VendorSheetInvoice(models.Model):
     _name = 'vendor.sheet.invoice'
-    _description = 'Vendor Sheet Invoice (Purchases Staging)'
+    _description = 'Factura de hoja de proveedor (staging de compras)'
     _order = 'fecha desc, no_factura, id desc'
 
     sucursal = fields.Char(string='Sucursal', index=True)
     company_id = fields.Many2one(
         'res.company',
-        string='Company',
+        string='Empresa',
         index=True,
         ondelete='set null',
     )
-    proveedor = fields.Char(string='Proveedor (Sheet)')
+    proveedor = fields.Char(string='Proveedor (hoja)')
     partner_id = fields.Many2one(
         'res.partner',
-        string='Vendor',
+        string='Proveedor',
         index=True,
         ondelete='set null',
     )
@@ -26,7 +26,7 @@ class VendorSheetInvoice(models.Model):
     vence = fields.Date(string='Vence')
     currency_id = fields.Many2one(
         'res.currency',
-        string='Currency',
+        string='Moneda',
         related='company_id.currency_id',
         store=True,
         readonly=True,
@@ -35,20 +35,20 @@ class VendorSheetInvoice(models.Model):
     pagado = fields.Boolean(string='Pagado', default=False)
     fecha_pago = fields.Date(string='Fecha de Pago')
     monto_pago_grupo = fields.Monetary(
-        string='Monto Pago Grupo',
+        string='Monto pago grupo',
         currency_field='currency_id',
     )
-    facturas_en_grupo = fields.Integer(string='Facturas en Grupo')
-    source_month = fields.Char(string='Source Month', help='e.g. 2026-07')
-    sheet_row = fields.Integer(string='Sheet Row')
-    block_valid = fields.Boolean(string='Block Valid', default=True)
-    warning_message = fields.Text(string='Warning')
-    last_sync = fields.Datetime(string='Last Sync')
+    facturas_en_grupo = fields.Integer(string='Facturas en grupo')
+    source_month = fields.Char(string='Mes de origen', help='p. ej. 2026-07')
+    sheet_row = fields.Integer(string='Fila de hoja')
+    block_valid = fields.Boolean(string='Bloque válido', default=True)
+    warning_message = fields.Text(string='Advertencia')
+    last_sync = fields.Datetime(string='Última sincronización')
 
     _sql_constraints = [
         (
             'sucursal_no_factura_uniq',
             'unique(sucursal, no_factura)',
-            'Invoice number must be unique per sucursal.',
+            'El número de factura debe ser único por sucursal.',
         ),
     ]

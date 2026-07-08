@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 import pytz
 from odoo import fields, _
@@ -16,6 +16,7 @@ _logger = logging.getLogger(__name__)
 
 TZ_TIJUANA = pytz.timezone('America/Tijuana')
 MONTH_FMT = '%Y-%m'
+PREVIOUS_FULL_MONTHS = 3
 
 
 def _today_tijuana(reference_date=None):
@@ -24,11 +25,23 @@ def _today_tijuana(reference_date=None):
     return datetime.now(TZ_TIJUANA).date()
 
 
-def months_in_90_day_window(reference_date=None):
-    """Return YYYY-MM labels for months overlapping the rolling 90-day window."""
+def window_start_date(reference_date=None):
+    """First calendar day of the analysis window (current month + 3 prior months)."""
     today = _today_tijuana(reference_date)
-    date_from = today - timedelta(days=90)
-    year, month = date_from.year, date_from.month
+    year, month = today.year, today.month
+    for _ in range(PREVIOUS_FULL_MONTHS):
+        month -= 1
+        if month < 1:
+            month = 12
+            year -= 1
+    return date(year, month, 1)
+
+
+def months_in_window(reference_date=None):
+    """YYYY-MM labels: current month plus the previous 3 full calendar months."""
+    today = _today_tijuana(reference_date)
+    start = window_start_date(today)
+    year, month = start.year, start.month
     end_year, end_month = today.year, today.month
     months = []
     while (year, month) <= (end_year, end_month):
@@ -45,11 +58,11 @@ def current_month_label(reference_date=None):
     return today.strftime(MONTH_FMT)
 
 
-def months_to_sync(month_records, months_in_window, current_month):
+def months_to_sync(month_records, window_months, current_month):
     """Return month labels to fetch: unsynced closed months plus current month."""
     record_by_name = {rec.name: rec for rec in month_records}
     to_sync = []
-    for month_label in months_in_window:
+    for month_label in window_months:
         if month_label == current_month:
             to_sync.append(month_label)
             continue
@@ -91,12 +104,12 @@ class SyncEngine:
             month_rec = self._get_month_record(config, month_label)
             if not month_rec:
                 self._add_warning(
-                    'Month workbook "%s" is not configured; skipped.' % month_label
+                    'El libro de trabajo del mes "%s" no está configurado; omitido.' % month_label
                 )
                 continue
             if not month_rec.spreadsheet_id:
                 self._add_warning(
-                    'Spreadsheet ID missing for month "%s"; skipped.' % month_label
+                    'Falta el ID de hoja de cálculo para el mes "%s"; omitido.' % month_label
                 )
                 continue
 
@@ -181,6 +194,19 @@ class SyncEngine:
             'synced_once': True,
         })
 
+    def _recompute_sales_snapshots(self, sync_time):
+        from .sales_snapshot import recompute_all_sales_snapshots
+        try:
+            rows = recompute_all_sales_snapshots(
+                self.env,
+                reference_date=self.reference_date,
+                sync_time=sync_time,
+            )
+            _logger.info('Sales snapshots refreshed: %s rows written.', rows)
+        except Exception as exc:
+            _logger.exception('Sales snapshot refresh failed.')
+            self._add_warning('Error al actualizar instantáneas de ventas: %s' % exc)
+
     def _write_sync_log(self, user, sync_time, duration, state='success', error_message=None):
         details = error_message
         if not details and self.warnings:
@@ -194,15 +220,16 @@ class SyncEngine:
             'duration_seconds': duration,
             'warning_details': details,
             'state': state,
+            'sync_type': 'global',
         })
 
-    def run(self, triggered_by_user=None):
+    def run(self, triggered_by_user=None, refresh_sales_snapshots=False):
         start = time.time()
         user = triggered_by_user or self.env.user
         sync_time = fields.Datetime.now()
         config = self.env['vendor.sheet.config'].get_singleton()
         current_month = current_month_label(self.reference_date)
-        window_months = months_in_90_day_window(self.reference_date)
+        window_months = months_in_window(self.reference_date)
         target_months = months_to_sync(
             config.sheet_month_ids,
             window_months,
@@ -235,6 +262,8 @@ class SyncEngine:
                 'error': str(exc),
             }
 
+        if refresh_sales_snapshots:
+            self._recompute_sales_snapshots(sync_time)
         duration = time.time() - start
         self._write_sync_log(user, sync_time, duration, state='success')
         return {
@@ -245,11 +274,20 @@ class SyncEngine:
         }
 
 
-def run_global_sync(env, triggered_by_user=None, sheets_client=None, reference_date=None):
+def run_global_sync(
+    env,
+    triggered_by_user=None,
+    sheets_client=None,
+    reference_date=None,
+    refresh_sales_snapshots=False,
+):
     """Run global vendor sheet sync and return summary counters."""
     engine = SyncEngine(
         env,
         sheets_client=sheets_client,
         reference_date=reference_date,
     )
-    return engine.run(triggered_by_user=triggered_by_user)
+    return engine.run(
+        triggered_by_user=triggered_by_user,
+        refresh_sales_snapshots=refresh_sales_snapshots,
+    )

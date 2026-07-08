@@ -239,8 +239,8 @@ def parse_sheet_rows(
     warning = ''
     if not block_valid:
       warning = (
-        'Payment block sum mismatch: invoices net %(sum).2f != payment %(pay).2f '
-        '(block size %(n)s, sheet rows %(rows)s)'
+        'Desajuste en suma del bloque de pago: neto de facturas %(sum).2f != pago %(pay).2f '
+        '(tamaño del bloque %(n)s, filas de hoja %(rows)s)'
       ) % {
         'sum': float(block_sum),
         'pay': float(pago),
@@ -269,7 +269,7 @@ def parse_sheet_rows(
 
     if key in seen_keys:
       result.warnings.append(
-        'Duplicate (sucursal, no_factura)=%s — last row wins (lines %s and %s)'
+        'Duplicado (sucursal, no_factura)=%s — gana la última fila (líneas %s y %s)'
         % (key, seen_keys[key], sheet_line)
       )
     seen_keys[key] = sheet_line

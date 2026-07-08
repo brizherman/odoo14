@@ -66,7 +66,7 @@ class TestVendorMatcher(TransactionCase):
 
     def test_fuzzy_match_resolves_convergram_partner(self):
         resolved, warning = self.matcher.resolve_partner('CONVERGRAM DE MEXICO')
-        if warning and 'Multiple fuzzy vendor matches' in warning:
+        if warning and 'Múltiples coincidencias aproximadas de proveedor' in warning:
             self.assertFalse(resolved)
             return
         self.assertFalse(warning)
@@ -94,7 +94,7 @@ class TestVendorMatcher(TransactionCase):
     def test_unmatched_vendor_returns_warning(self):
         partner, warning = self.matcher.resolve_partner('Unknown Vendor LLC')
         self.assertFalse(partner)
-        self.assertIn('Unmapped proveedor', warning)
+        self.assertIn('Proveedor sin mapear', warning)
 
     def test_multiple_fuzzy_matches_return_warning(self):
         self.env['res.partner'].create({
@@ -107,7 +107,7 @@ class TestVendorMatcher(TransactionCase):
         })
         partner, warning = self.matcher.resolve_partner('FABRICAS SELECTAS')
         self.assertFalse(partner)
-        self.assertIn('Multiple fuzzy vendor matches', warning)
+        self.assertIn('Múltiples coincidencias aproximadas de proveedor', warning)
 
     def test_resolve_classification_vendor_from_mapping(self):
         self.env['vendor.sheet.mapping'].create({

@@ -4,8 +4,11 @@ from unittest.mock import patch
 import re
 
 from odoo import fields
+from odoo.exceptions import UserError
 from odoo.tests import tagged
 from odoo.tests.common import TransactionCase
+
+from odoo.addons.po_vendor_sales_purchases_tab.services.sync_engine import window_start_date
 
 
 @tagged('post_install', '-at_install', 'po_vendor_sales_purchases_tab')
@@ -77,8 +80,10 @@ class TestPoVendorTab(TransactionCase):
 
     def test_filtered_invoices_match_vendor_company_and_window(self):
         today = fields.Date.context_today(self.env.user)
+        window_start = window_start_date(today)
         in_window = today - timedelta(days=10)
-        out_window = today - timedelta(days=120)
+        early_oldest_month = window_start
+        out_window = window_start - timedelta(days=1)
         other_company = self.env['res.company'].search([
             ('id', '!=', self.company.id),
         ], limit=1)
@@ -92,6 +97,15 @@ class TestPoVendorTab(TransactionCase):
                 'no_factura': 'INV-IN',
                 'fecha': in_window,
                 'total_factura': 100.0,
+            },
+            {
+                'sucursal': 'RIO',
+                'company_id': self.company.id,
+                'proveedor': 'Test',
+                'partner_id': self.vendor.id,
+                'no_factura': 'INV-EARLY',
+                'fecha': early_oldest_month,
+                'total_factura': 40.0,
             },
             {
                 'sucursal': 'RIO',
@@ -125,18 +139,82 @@ class TestPoVendorTab(TransactionCase):
 
         po = self._create_po()
         invoice_nos = set(po.vendor_sheet_invoice_ids.mapped('no_factura'))
-        self.assertEqual(invoice_nos, {'INV-IN'})
+        self.assertEqual(invoice_nos, {'INV-IN', 'INV-EARLY'})
+
+    def test_purchases_html_groups_invoices_by_month(self):
+        today = fields.Date.context_today(self.env.user)
+        in_window_june = today.replace(day=15)
+        if in_window_june.month == 1:
+            in_window_may = in_window_june.replace(year=in_window_june.year - 1, month=12, day=10)
+        else:
+            in_window_may = in_window_june.replace(month=in_window_june.month - 1, day=10)
+
+        self.Invoice.sudo().create([
+            {
+                'sucursal': 'RIO',
+                'company_id': self.company.id,
+                'proveedor': 'Test',
+                'partner_id': self.vendor.id,
+                'no_factura': 'INV-JUN',
+                'fecha': in_window_june,
+                'total_factura': 100.0,
+            },
+            {
+                'sucursal': 'RIO',
+                'company_id': self.company.id,
+                'proveedor': 'Test',
+                'partner_id': self.vendor.id,
+                'no_factura': 'INV-MAY',
+                'fecha': in_window_may,
+                'total_factura': 50.0,
+            },
+        ])
+        po = self._create_po()
+        html = po.vendor_sheet_purchases_html or ''
+        self.assertIn('INV-JUN', html)
+        self.assertIn('INV-MAY', html)
+        self.assertIn('o_vendor_purchases_month', html)
+        self.assertIn('<details', html)
+        self.assertIn('<summary', html)
+        self.assertIn('Total general', html)
+        self.assertIn('o_vendor_purchases_grand_total', html)
 
     @patch(
         'odoo.addons.po_vendor_sales_purchases_tab.services.sync_engine.run_global_sync',
         return_value={'created': 3, 'updated': 1, 'warnings': ['test'], 'error': None},
     )
-    def test_sync_button_triggers_global_sync(self, mock_sync):
+    def test_sync_global_button_triggers_global_sync(self, mock_sync):
         po = self._create_po()
-        action = po.with_user(self.user_direction).action_sync_vendor_sheet_data()
+        action = po.with_user(self.user_direction).action_sync_global_vendor_sheets()
         mock_sync.assert_called_once()
+        self.assertFalse(mock_sync.call_args.kwargs.get('refresh_sales_snapshots', True))
         self.assertEqual(action['tag'], 'display_notification')
-        self.assertIn('Synced 4 invoices', action['params']['message'])
+        self.assertIn('Sincronización global: 4 facturas', action['params']['message'])
+
+    @patch(
+        'odoo.addons.po_vendor_sales_purchases_tab.services.sales_snapshot.recompute_sales_snapshot',
+        return_value=12,
+    )
+    def test_sync_po_button_refreshes_po_panels(self, mock_recompute):
+        po = self._create_po()
+        action = po.with_user(self.user_dept).action_sync_po_vendor_tab()
+        mock_recompute.assert_called_once()
+        self.assertEqual(action['tag'], 'display_notification')
+        self.assertIn('Paneles de OC actualizados', action['params']['message'])
+        self.assertTrue(po.vendor_tab_po_last_sync)
+        last_log = self.env['vendor.sheet.sync.log'].search([
+            ('sync_type', '=', 'po'),
+            ('po_id', '=', po.id),
+        ], limit=1)
+        self.assertTrue(last_log)
+
+    def test_sync_po_requires_vendor_and_company(self):
+        po = self.PO.new({
+            'company_id': self.company.id,
+            'temporada_id': self.temporada.id,
+        })
+        with self.assertRaises(UserError):
+            po.action_sync_po_vendor_tab()
 
     def test_staging_readonly_for_tab_users(self):
         with self.assertRaises(Exception):

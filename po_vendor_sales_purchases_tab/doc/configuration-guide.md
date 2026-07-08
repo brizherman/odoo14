@@ -2,7 +2,7 @@
 
 **Module:** `po_vendor_sales_purchases_tab`  
 **Odoo version:** 14.0  
-**Last updated:** 2026-07-07
+**Last updated:** 2026-07-08
 
 This guide walks through everything needed before the **Compras vs Ventas** tab on Purchase Orders shows useful data.
 
@@ -14,10 +14,15 @@ The module compares, for each PO vendor and branch (company):
 
 | Panel | Source | What it shows |
 |-------|--------|---------------|
-| **Left — Sales** | Odoo SO + POS | Tax-inclusive totals by month × `classification_department` (last 90 days) |
-| **Right — Purchases** | Google Sheets (`Pagos Proveedores`) | Vendor invoices with paid/unpaid status (last 90 days) |
+| **Left — Sales** | Odoo SO + POS | Tax-inclusive totals by month × `classification_department` (current month day 1→today + previous 3 full months) |
+| **Right — Purchases** | Google Sheets (`Pagos Proveedores`) | Vendor invoices with paid/unpaid status (same window) |
 
-Data is loaded with a **manual Sync** button. Sync is **global** (all vendors and branches), not limited to the open PO.
+Data is loaded with two manual sync actions on the PO tab:
+
+| Button | Scope | What it updates |
+|--------|-------|-----------------|
+| **Sync Global** | All vendors and branches | Google Sheets → purchase staging (`vendor.sheet.invoice`) |
+| **Sync PO** | Open PO vendor + branch only | Sales snapshot + filtered purchase panel for this PO |
 
 **Menu location:** Purchase → Configuration → **Vendor Sheets**
 
@@ -134,7 +139,7 @@ On the same Settings form, tab **Monthly Workbooks**:
 | **Month** | `2026-07` | Format `YYYY-MM` |
 | **Spreadsheet ID** | `1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms` | From the sheet URL |
 
-Add every month that falls inside the rolling **90-day window**. Example on 2026-07-07: include at least `2026-04`, `2026-05`, `2026-06`, `2026-07`.
+Add every month in the analysis window: **current month + the previous 3 full calendar months**. Example on 2026-07-08: include `2026-04`, `2026-05`, `2026-06`, `2026-07`.
 
 | Sync behavior | |
 |---------------|--|
@@ -217,30 +222,39 @@ Sales use products where `product.template.classification_vendor` matches the PO
 
 1. Open any **Purchase Order**.
 2. Go to tab **Compras vs Ventas**.
-3. Click **Sync Data**.
+3. Click **Sync Global** to load purchase invoices from Google Sheets for all branches.
+4. Click **Sync PO** to refresh sales and purchases for this PO’s vendor and branch.
 
-Sync will:
+**Sync Global** will:
 
 1. Fetch closed months not yet synced (bootstrap).
 2. Re-fetch the **current month** workbook.
 3. Parse payment blocks and upsert staging invoices.
-4. Recompute sales snapshots for all vendors/companies.
 
-A notification shows how many invoices were synced and how many warnings occurred (e.g. *"Synced 312 invoices, 4 warnings."*).
+It does **not** recalculate sales snapshots.
+
+**Sync PO** will:
+
+1. Recompute the sales snapshot for this PO vendor and company only.
+2. Refresh the purchase panel from existing staging data (no Google API call).
+
+A notification shows the result of each action.
 
 ### Read the tab
 
-**Header:** vendor name, last sync time, warnings banner if needed.
+**Header:** vendor name, last global sync, last PO sync, and warning banners when needed.
 
-**Left panel:** matrix — rows = departments, columns = months in the 90-day window + **TOTAL**.
+If PO data may be stale (no PO sync yet, PO sync older than the last global sync, or older than 24 hours), a banner prompts you to click **Sync PO**.
 
-**Right panel:** invoice list filtered to PO vendor + PO company. Use the column menu (⋮) to show/hide optional columns (Sucursal, Monto pago grupo, etc.).
+**Left panel:** matrix — rows = departments, columns = months in the analysis window (current + previous 3) + **TOTAL**. Shows cached snapshot data after **Sync PO**; empty until then.
+
+**Right panel:** invoice list filtered to PO vendor + PO company. Updated after **Sync Global** (new staging data) and re-filtered on **Sync PO**. Use the column menu (⋮) to show/hide optional columns (Sucursal, Monto pago grupo, etc.).
 
 ### Sync log
 
 **Purchase → Configuration → Vendor Sheets → Sync Log**
 
-Review past sync runs, warning counts, and who triggered each sync.
+Review past sync runs (`global` or `po`), warning counts, linked PO (for PO syncs), and who triggered each sync.
 
 ---
 
@@ -277,7 +291,7 @@ Invoices are unique by **`(sucursal, no_factura)`**. If invoice AGD-200 is copie
 | No purchase rows for a vendor | Proveedor not mapped | Add row in Proveedor Mappings (except Convergram auto-match) |
 | Sales matrix empty | No classification on products | Set `classification_vendor` on product templates |
 | Payment block warnings | Sheet block total ≠ sum of invoices | Fix the sheet or review Sync Log / row warnings |
-| Old month data missing | Month not in 90-day window or no spreadsheet ID | Add month row in Settings with correct ID before month ages out |
+| Old month data missing | Month not in analysis window or no spreadsheet ID | Add month row in Settings with correct ID before month ages out |
 | Closed month wrong forever | Synced Once = true | Closed months are not re-read; fix data in Odoo staging only or adjust business process for future months |
 
 ---
@@ -287,7 +301,8 @@ Invoices are unique by **`(sucursal, no_factura)`**. If invoice AGD-200 is copie
 | Action | Direction | Purchase Dept | Administrator |
 |--------|-----------|---------------|---------------|
 | View PO tab | Yes | Yes | Yes |
-| Click Sync on PO | Yes | Yes | Yes |
+| Click Sync Global on PO | Yes | Yes | Yes |
+| Click Sync PO on PO | Yes | Yes | Yes |
 | Edit sucursal / proveedor mappings | Yes | Yes | Yes |
 | Edit Google JSON + monthly workbooks | No | No | Yes |
 | View sync log | Yes | Yes | Yes |

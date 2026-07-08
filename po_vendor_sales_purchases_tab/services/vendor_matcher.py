@@ -115,7 +115,7 @@ class VendorMatcher:
         """Return (partner, warning_message). Partner is empty when unmatched."""
         sheet_name = (sheet_proveedor or '').strip()
         if not sheet_name:
-            return self.Partner.browse(), 'Missing sheet proveedor value.'
+            return self.Partner.browse(), 'Falta el valor de proveedor en la hoja.'
 
         mapping = self.Mapping.search([('sheet_proveedor', '=', sheet_name)], limit=1)
         if mapping:
@@ -129,20 +129,20 @@ class VendorMatcher:
         partner, warning = _pick_unique_fuzzy_match(
             scored_matches,
             sheet_name,
-            'Multiple fuzzy vendor matches for "%s": %s. Add a manual mapping.',
+            'Múltiples coincidencias aproximadas de proveedor para "%s": %s. Agregue un mapeo manual.',
         )
         if partner:
             return partner, None
         if warning:
             return self.Partner.browse(), warning
         return self.Partner.browse(), (
-            'Unmapped proveedor "%s". Add a manual mapping.' % sheet_name
+            'Proveedor sin mapear "%s". Agregue un mapeo manual.' % sheet_name
         )
 
     def resolve_classification_vendor(self, partner):
         """Return (classification_vendor, warning_message)."""
         if not partner:
-            return self.ClassificationVendor.browse(), 'No partner to resolve classification vendor.'
+            return self.ClassificationVendor.browse(), 'No hay contacto para resolver el proveedor de clasificación.'
 
         mapping = self.Mapping.search([
             ('partner_id', '=', partner.id),
@@ -156,12 +156,12 @@ class VendorMatcher:
         class_vendor, warning = _pick_unique_fuzzy_match(
             scored_matches,
             partner.name,
-            'Multiple classification vendors match partner "%s": %s. Add a manual mapping.',
+            'Múltiples proveedores de clasificación coinciden con el contacto "%s": %s. Agregue un mapeo manual.',
         )
         if class_vendor:
             return class_vendor, None
         if warning:
             return self.ClassificationVendor.browse(), warning
         return self.ClassificationVendor.browse(), (
-            'No classification vendor match for partner "%s".' % partner.name
+            'No hay coincidencia de proveedor de clasificación para el contacto "%s".' % partner.name
         )

@@ -5,12 +5,12 @@ from datetime import date, datetime, time, timedelta
 import pytz
 from odoo import fields
 
-from .sync_engine import months_in_90_day_window
+from .sync_engine import months_in_window, window_start_date
 from .vendor_matcher import VendorMatcher
 
 TZ_TIJUANA = pytz.timezone('America/Tijuana')
 UNASSIGNED_DEPARTMENT_ID = 0
-UNASSIGNED_DEPARTMENT_NAME = 'Unassigned'
+UNASSIGNED_DEPARTMENT_NAME = 'Sin asignar'
 
 SALE_ORDER_STATES = ('sale', 'done')
 POS_ORDER_STATES = ('paid', 'done', 'invoiced')
@@ -163,7 +163,7 @@ class SalesAggregator:
             cells[str(dept_id)]['TOTAL'] = 0.0
         return cells
 
-    def compute_matrix(self, partner_id, company_id, days=90):
+    def compute_matrix(self, partner_id, company_id):
         partner = self.env['res.partner'].browse(partner_id)
         company = self.env['res.company'].browse(company_id)
         if not partner or not company:
@@ -184,8 +184,8 @@ class SalesAggregator:
         product_ids = products.ids
 
         today = self._reference_today()
-        window_start = today - timedelta(days=days)
-        month_labels = months_in_90_day_window(reference_date=today)
+        window_start = window_start_date(today)
+        month_labels = months_in_window(reference_date=today)
         display_months = month_labels + ['TOTAL']
         cells = self._init_cells(departments, display_months)
         grand_total = 0.0
@@ -222,15 +222,18 @@ class SalesAggregator:
         if not products:
             has_warning = True
             warning_message = (
-                'No products found for classification vendor "%s".'
+                'No se encontraron productos para el proveedor de clasificación "%s".'
                 % classification_vendor.name
             )
         elif grand_total == 0.0:
             has_warning = True
-            warning_message = 'No sales found for this vendor in the last %s days.' % days
+            warning_message = (
+                'No se encontraron ventas para este proveedor en el período '
+                '(mes actual y 3 meses anteriores).'
+            )
         elif any(cells[str(dept_id)]['TOTAL'] == 0.0 for dept_id in departments):
             has_warning = True
-            warning_message = 'Some departments have no sales in the selected period.'
+            warning_message = 'Algunos departamentos no tienen ventas en el período seleccionado.'
 
         return {
             'departments': department_rows,
@@ -242,7 +245,7 @@ class SalesAggregator:
         }
 
 
-def compute_sales_matrix(env, partner_id, company_id, days=90, reference_date=None):
+def compute_sales_matrix(env, partner_id, company_id, reference_date=None):
     """Return month x department sales totals for a PO vendor and company."""
     aggregator = SalesAggregator(env, reference_date=reference_date)
-    return aggregator.compute_matrix(partner_id, company_id, days=days)
+    return aggregator.compute_matrix(partner_id, company_id)

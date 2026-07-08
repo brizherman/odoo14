@@ -85,7 +85,7 @@ class TestPaymentBlockParser(BaseCase):
         inv_b = result.invoices[1]
         self.assertTrue(inv_b.pagado)
         self.assertFalse(inv_b.block_valid)
-        self.assertIn('mismatch', inv_b.warning_message.lower())
+        self.assertIn('desajuste', inv_b.warning_message.lower())
 
     def test_separator_row_breaks_block(self):
         result = self._parse(
@@ -116,7 +116,7 @@ class TestPaymentBlockParser(BaseCase):
             'VENDOR,,RIO,DUP-001,1/6/2026,15/6/2026,$100.00,,,\n'
             'VENDOR,,RIO,DUP-001,2/6/2026,16/6/2026,$200.00,,,\n'
         )
-        self.assertTrue(any('Duplicate' in w for w in result.warnings))
+        self.assertTrue(any('Duplicado' in w for w in result.warnings))
         self.assertEqual(result.invoices[-1].total_factura, Decimal('200.00'))
 
     def test_odoo_adapter_parse_dict_rows(self):

@@ -4,7 +4,7 @@
         <field name="name">vendor.sucursal.mapping.tree</field>
         <field name="model">vendor.sucursal.mapping</field>
         <field name="arch" type="xml">
-            <tree string="Sucursal Mappings" editable="bottom">
+            <tree string="Mapeos de sucursal" editable="bottom">
                 <field name="sucursal"/>
                 <field name="company_id"/>
             </tree>
@@ -15,7 +15,7 @@
         <field name="name">vendor.sucursal.mapping.form</field>
         <field name="model">vendor.sucursal.mapping</field>
         <field name="arch" type="xml">
-            <form string="Sucursal Mapping">
+            <form string="Mapeo de sucursal">
                 <sheet>
                     <group>
                         <field name="sucursal"/>
@@ -30,7 +30,7 @@
         <field name="name">vendor.sheet.mapping.tree</field>
         <field name="model">vendor.sheet.mapping</field>
         <field name="arch" type="xml">
-            <tree string="Proveedor Mappings" editable="bottom">
+            <tree string="Mapeos de proveedor" editable="bottom">
                 <field name="sheet_proveedor"/>
                 <field name="partner_id"/>
                 <field name="classification_vendor_id"/>
@@ -42,7 +42,7 @@
         <field name="name">vendor.sheet.mapping.form</field>
         <field name="model">vendor.sheet.mapping</field>
         <field name="arch" type="xml">
-            <form string="Proveedor Mapping">
+            <form string="Mapeo de proveedor">
                 <sheet>
                     <group>
                         <field name="sheet_proveedor"/>
@@ -55,13 +55,13 @@
     </record>
 
     <record id="action_vendor_sucursal_mapping" model="ir.actions.act_window">
-        <field name="name">Sucursal Mappings</field>
+        <field name="name">Mapeos de sucursal</field>
         <field name="res_model">vendor.sucursal.mapping</field>
         <field name="view_mode">tree,form</field>
     </record>
 
     <record id="action_vendor_sheet_mapping" model="ir.actions.act_window">
-        <field name="name">Proveedor Mappings</field>
+        <field name="name">Mapeos de proveedor</field>
         <field name="res_model">vendor.sheet.mapping</field>
         <field name="view_mode">tree,form</field>
     </record>
