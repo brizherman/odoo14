@@ -1,0 +1,18 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_vendor_sheet_invoice_direction,vendor.sheet.invoice direction,model_vendor_sheet_invoice,custom_purchase_flow.group_purchase_direction,1,0,0,0
+access_vendor_sheet_invoice_dept,vendor.sheet.invoice dept,model_vendor_sheet_invoice,custom_purchase_flow.group_purchase_dept,1,0,0,0
+access_vendor_sheet_invoice_system,vendor.sheet.invoice system,model_vendor_sheet_invoice,base.group_system,1,0,0,0
+access_vendor_sucursal_mapping_direction,vendor.sucursal.mapping direction,model_vendor_sucursal_mapping,custom_purchase_flow.group_purchase_direction,1,1,1,1
+access_vendor_sucursal_mapping_dept,vendor.sucursal.mapping dept,model_vendor_sucursal_mapping,custom_purchase_flow.group_purchase_dept,1,1,1,1
+access_vendor_sucursal_mapping_system,vendor.sucursal.mapping system,model_vendor_sucursal_mapping,base.group_system,1,1,1,1
+access_vendor_sheet_mapping_direction,vendor.sheet.mapping direction,model_vendor_sheet_mapping,custom_purchase_flow.group_purchase_direction,1,1,1,1
+access_vendor_sheet_mapping_dept,vendor.sheet.mapping dept,model_vendor_sheet_mapping,custom_purchase_flow.group_purchase_dept,1,1,1,1
+access_vendor_sheet_mapping_system,vendor.sheet.mapping system,model_vendor_sheet_mapping,base.group_system,1,1,1,1
+access_vendor_sheet_config_system,vendor.sheet.config system,model_vendor_sheet_config,base.group_system,1,1,1,1
+access_vendor_sheet_month_system,vendor.sheet.month system,model_vendor_sheet_month,base.group_system,1,1,1,1
+access_vendor_sheet_sync_log_direction,vendor.sheet.sync.log direction,model_vendor_sheet_sync_log,custom_purchase_flow.group_purchase_direction,1,0,0,0
+access_vendor_sheet_sync_log_dept,vendor.sheet.sync.log dept,model_vendor_sheet_sync_log,custom_purchase_flow.group_purchase_dept,1,0,0,0
+access_vendor_sheet_sync_log_system,vendor.sheet.sync.log system,model_vendor_sheet_sync_log,base.group_system,1,0,0,0
+access_vendor_sales_snapshot_direction,vendor.sales.snapshot direction,model_vendor_sales_snapshot,custom_purchase_flow.group_purchase_direction,1,0,0,0
+access_vendor_sales_snapshot_dept,vendor.sales.snapshot dept,model_vendor_sales_snapshot,custom_purchase_flow.group_purchase_dept,1,0,0,0
+access_vendor_sales_snapshot_system,vendor.sales.snapshot system,model_vendor_sales_snapshot,base.group_system,1,0,0,0
