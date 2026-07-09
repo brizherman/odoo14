@@ -8,7 +8,10 @@ from odoo.exceptions import UserError
 from odoo.tests import tagged
 from odoo.tests.common import TransactionCase
 
-from odoo.addons.po_vendor_sales_purchases_tab.services.sync_engine import window_start_date
+from odoo.addons.po_vendor_sales_purchases_tab.services.sync_engine import (
+    months_in_window,
+    window_start_date,
+)
 
 
 @tagged('post_install', '-at_install', 'po_vendor_sales_purchases_tab')
@@ -81,6 +84,7 @@ class TestPoVendorTab(TransactionCase):
     def test_filtered_invoices_match_vendor_company_and_window(self):
         today = fields.Date.context_today(self.env.user)
         window_start = window_start_date(today)
+        window_month_labels = months_in_window(today)
         in_window = today - timedelta(days=10)
         early_oldest_month = window_start
         out_window = window_start - timedelta(days=1)
@@ -111,6 +115,16 @@ class TestPoVendorTab(TransactionCase):
                 'sucursal': 'RIO',
                 'company_id': self.company.id,
                 'proveedor': 'Test',
+                'partner_id': self.vendor.id,
+                'no_factura': 'INV-SOURCE-MONTH',
+                'fecha': out_window,
+                'source_month': window_month_labels[0],
+                'total_factura': 30.0,
+            },
+            {
+                'sucursal': 'RIO',
+                'company_id': self.company.id,
+                'proveedor': 'Test',
                 'partner_id': self.other_vendor.id,
                 'no_factura': 'INV-OTHER-VENDOR',
                 'fecha': in_window,
@@ -123,6 +137,7 @@ class TestPoVendorTab(TransactionCase):
                 'partner_id': self.vendor.id,
                 'no_factura': 'INV-OLD',
                 'fecha': out_window,
+                'source_month': '1999-01',
                 'total_factura': 25.0,
             },
         ])
@@ -139,15 +154,54 @@ class TestPoVendorTab(TransactionCase):
 
         po = self._create_po()
         invoice_nos = set(po.vendor_sheet_invoice_ids.mapped('no_factura'))
-        self.assertEqual(invoice_nos, {'INV-IN', 'INV-EARLY'})
+        self.assertEqual(invoice_nos, {'INV-IN', 'INV-EARLY', 'INV-SOURCE-MONTH'})
 
-    def test_purchases_html_groups_invoices_by_month(self):
+    def test_mapping_assignment_backfills_staging_invoices(self):
+        sheet_name = 'Backfill Vendor Test 20260709'
+        self.Invoice.sudo().create([
+            {
+                'sucursal': 'RIO',
+                'company_id': self.company.id,
+                'proveedor': sheet_name,
+                'no_factura': 'INV-BACKFILL-1',
+                'fecha': date.today(),
+                'total_factura': 10.0,
+                'warning_message': (
+                    'Proveedor en hoja "%s" pendiente de asignación en Mapeos de proveedor.'
+                    % sheet_name
+                ),
+            },
+            {
+                'sucursal': 'RIO',
+                'company_id': self.company.id,
+                'proveedor': sheet_name,
+                'partner_id': self.other_vendor.id,
+                'no_factura': 'INV-BACKFILL-2',
+                'fecha': date.today(),
+                'total_factura': 20.0,
+            },
+        ])
+        mapping = self.env['vendor.sheet.mapping'].create({
+            'sheet_proveedor': sheet_name,
+            'partner_id': self.vendor.id,
+        })
+        self.assertTrue(mapping.is_assigned)
+        invoices = self.Invoice.sudo().search([
+            ('proveedor', '=', sheet_name),
+        ])
+        self.assertEqual(
+            set(invoices.mapped('partner_id')),
+            {self.vendor},
+        )
+        self.assertFalse(invoices.filtered(lambda inv: inv.no_factura == 'INV-BACKFILL-1').warning_message)
+
+    def test_purchases_html_groups_invoices_by_source_month(self):
         today = fields.Date.context_today(self.env.user)
-        in_window_june = today.replace(day=15)
-        if in_window_june.month == 1:
-            in_window_may = in_window_june.replace(year=in_window_june.year - 1, month=12, day=10)
+        current_month = today.strftime('%Y-%m')
+        if today.month == 1:
+            previous_month = '%d-12' % (today.year - 1)
         else:
-            in_window_may = in_window_june.replace(month=in_window_june.month - 1, day=10)
+            previous_month = '%d-%02d' % (today.year, today.month - 1)
 
         self.Invoice.sudo().create([
             {
@@ -156,7 +210,8 @@ class TestPoVendorTab(TransactionCase):
                 'proveedor': 'Test',
                 'partner_id': self.vendor.id,
                 'no_factura': 'INV-JUN',
-                'fecha': in_window_june,
+                'fecha': today.replace(day=15),
+                'source_month': current_month,
                 'total_factura': 100.0,
             },
             {
@@ -165,7 +220,8 @@ class TestPoVendorTab(TransactionCase):
                 'proveedor': 'Test',
                 'partner_id': self.vendor.id,
                 'no_factura': 'INV-MAY',
-                'fecha': in_window_may,
+                'fecha': today.replace(day=10),
+                'source_month': previous_month,
                 'total_factura': 50.0,
             },
         ])
