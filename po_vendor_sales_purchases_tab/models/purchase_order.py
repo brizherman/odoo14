@@ -7,7 +7,10 @@ from odoo import api, fields, models
 from odoo.exceptions import UserError
 from odoo.tools.misc import format_date, formatLang
 
-from odoo.addons.po_vendor_sales_purchases_tab.services.sync_engine import window_start_date
+from odoo.addons.po_vendor_sales_purchases_tab.services.sync_engine import (
+    months_in_window,
+    window_start_date,
+)
 
 
 class PurchaseOrder(models.Model):
@@ -117,6 +120,13 @@ class PurchaseOrder(models.Model):
         rows.append('</tr></tfoot></table>')
         return ''.join(rows)
 
+    def _source_month_label(self, source_month):
+        if not source_month or len(source_month) != 7:
+            return 'Sin mes de origen'
+        year, month = source_month.split('-')
+        month_start = fields.Date.from_string('%s-%s-01' % (year, month))
+        return format_date(self.env, month_start, date_format='MMMM yyyy')
+
     def _render_purchases_by_month_html(self, invoices):
         if not invoices:
             return '<p class="text-muted">No hay facturas de compra en el período (mes actual y 3 meses anteriores).</p>'
@@ -124,26 +134,19 @@ class PurchaseOrder(models.Model):
         currency = self.company_id.currency_id
         by_month = {}
         for invoice in invoices:
-            month_key = invoice.fecha.replace(day=1) if invoice.fecha else False
+            month_key = invoice.source_month or ''
             by_month.setdefault(month_key, []).append(invoice)
 
-        month_keys = sorted(
-            by_month.keys(),
-            key=lambda month: month or fields.Date.from_string('1900-01-01'),
-            reverse=True,
-        )
+        month_keys = sorted(by_month.keys(), reverse=True)
         grand_total = sum(invoice.total_factura or 0.0 for invoice in invoices)
         parts = []
-        for month_start in month_keys:
+        for month_key in month_keys:
             month_invoices = sorted(
-                by_month[month_start],
-                key=lambda inv: (inv.fecha or month_start, inv.no_factura or ''),
+                by_month[month_key],
+                key=lambda inv: (inv.fecha or fields.Date.from_string('1900-01-01'), inv.no_factura or ''),
                 reverse=True,
             )
-            if month_start:
-                label = format_date(self.env, month_start, date_format='MMMM yyyy')
-            else:
-                label = 'Sin fecha'
+            label = self._source_month_label(month_key)
             month_total = sum(inv.total_factura or 0.0 for inv in month_invoices)
             parts.append('<details class="o_vendor_purchases_month mb-2">')
             parts.append(
@@ -219,6 +222,14 @@ class PurchaseOrder(models.Model):
         )
         return ''.join(parts)
 
+    def _vendor_sheet_invoice_window_domain(self):
+        today = fields.Date.context_today(self)
+        return [
+            '|',
+            ('fecha', '>=', window_start_date(today)),
+            ('source_month', 'in', months_in_window(today)),
+        ]
+
     def _vendor_sheet_invoices_for_po(self):
         self.ensure_one()
         if not self.partner_id or not self.company_id:
@@ -226,8 +237,7 @@ class PurchaseOrder(models.Model):
         return self.env['vendor.sheet.invoice'].search([
             ('partner_id', '=', self.partner_id.id),
             ('company_id', '=', self.company_id.id),
-            ('fecha', '>=', self._vendor_sheet_invoice_date_from()),
-        ], order='fecha desc, no_factura, id desc')
+        ] + self._vendor_sheet_invoice_window_domain(), order='fecha desc, no_factura, id desc')
 
     @api.depends('partner_id', 'company_id')
     def _compute_vendor_sheet_invoice_ids(self):
