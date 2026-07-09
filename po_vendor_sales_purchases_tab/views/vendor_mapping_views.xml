@@ -30,11 +30,27 @@
         <field name="name">vendor.sheet.mapping.tree</field>
         <field name="model">vendor.sheet.mapping</field>
         <field name="arch" type="xml">
-            <tree string="Mapeos de proveedor" editable="bottom">
+            <tree string="Mapeos de proveedor" editable="bottom"
+                  decoration-warning="not partner_id">
                 <field name="sheet_proveedor"/>
                 <field name="partner_id"/>
                 <field name="classification_vendor_id"/>
+                <field name="is_assigned" invisible="1"/>
             </tree>
+        </field>
+    </record>
+
+    <record id="view_vendor_sheet_mapping_search" model="ir.ui.view">
+        <field name="name">vendor.sheet.mapping.search</field>
+        <field name="model">vendor.sheet.mapping</field>
+        <field name="arch" type="xml">
+            <search string="Mapeos de proveedor">
+                <field name="sheet_proveedor"/>
+                <field name="partner_id"/>
+                <filter name="filter_pending_assignment"
+                        string="Pendientes de asignar"
+                        domain="[('partner_id', '=', False)]"/>
+            </search>
         </field>
     </record>
 
@@ -48,6 +64,7 @@
                         <field name="sheet_proveedor"/>
                         <field name="partner_id"/>
                         <field name="classification_vendor_id"/>
+                        <field name="is_assigned" invisible="1"/>
                     </group>
                 </sheet>
             </form>

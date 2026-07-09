@@ -90,6 +90,7 @@ class SyncEngine:
         self.warnings = []
         self.created = 0
         self.updated = 0
+        self.mappings_created = 0
 
     def _add_warning(self, message):
         self.warnings.append(message)
@@ -122,6 +123,51 @@ class SyncEngine:
                 'parse_result': parse_result,
             }
         return fetched
+
+    def _collect_proveedor_names(self, fetched_months_payload):
+        """Distinct non-empty proveedor strings from parsed invoices."""
+        names = set()
+        for payload in (fetched_months_payload or {}).values():
+            for parsed in payload['parse_result'].invoices:
+                proveedor = (parsed.proveedor or '').strip()
+                if proveedor:
+                    names.add(proveedor)
+        return names
+
+    def _collect_proveedor_names_from_staging(self):
+        """Distinct non-empty proveedor strings from all staged invoices."""
+        Invoice = self.env['vendor.sheet.invoice'].sudo()
+        groups = Invoice.read_group(
+            [('proveedor', '!=', False)],
+            ['proveedor'],
+            ['proveedor'],
+            lazy=False,
+        )
+        names = set()
+        for group in groups:
+            proveedor = group.get('proveedor')
+            if not proveedor:
+                continue
+            name = proveedor.strip()
+            if name:
+                names.add(name)
+        return names
+
+    def _collect_all_proveedor_names(self, fetched_months_payload):
+        """Union of proveedor names from this fetch and all historical staging."""
+        names = self._collect_proveedor_names(fetched_months_payload)
+        names |= self._collect_proveedor_names_from_staging()
+        return names
+
+    def _ensure_mapping_stubs(self, proveedor_names):
+        """Create vendor.sheet.mapping rows only for names not already present."""
+        Mapping = self.env['vendor.sheet.mapping'].sudo()
+        for name in proveedor_names:
+            existing = Mapping.search([('sheet_proveedor', '=', name)], limit=1)
+            if existing:
+                continue
+            Mapping.create({'sheet_proveedor': name})
+            self.mappings_created += 1
 
     def _build_invoice_vals(self, parsed, source_month, company, partner, sync_time):
         warning_parts = []
@@ -216,6 +262,7 @@ class SyncEngine:
             'user_id': user.id,
             'rows_created': self.created,
             'rows_updated': self.updated,
+            'mappings_created': self.mappings_created,
             'warnings_count': len(self.warnings),
             'duration_seconds': duration,
             'warning_details': details,
@@ -237,8 +284,14 @@ class SyncEngine:
         )
 
         try:
+            fetched = {}
             if target_months:
                 fetched = self._fetch_month_data(config, target_months)
+
+            proveedor_names = self._collect_all_proveedor_names(fetched)
+            self._ensure_mapping_stubs(proveedor_names)
+
+            if fetched:
                 for month_label, payload in fetched.items():
                     self._upsert_invoices(
                         payload['parse_result'],
@@ -258,6 +311,7 @@ class SyncEngine:
             return {
                 'created': self.created,
                 'updated': self.updated,
+                'mappings_created': self.mappings_created,
                 'warnings': self.warnings,
                 'error': str(exc),
             }
@@ -269,6 +323,7 @@ class SyncEngine:
         return {
             'created': self.created,
             'updated': self.updated,
+            'mappings_created': self.mappings_created,
             'warnings': self.warnings,
             'error': None,
         }

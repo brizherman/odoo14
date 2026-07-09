@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from odoo import fields, models
+from odoo import api, fields, models
 
 
 class VendorSheetMapping(models.Model):
@@ -11,7 +11,6 @@ class VendorSheetMapping(models.Model):
     partner_id = fields.Many2one(
         'res.partner',
         string='Proveedor',
-        required=True,
         ondelete='restrict',
         index=True,
     )
@@ -20,6 +19,16 @@ class VendorSheetMapping(models.Model):
         string='Proveedor de clasificación',
         ondelete='set null',
     )
+    is_assigned = fields.Boolean(
+        string='Asignado',
+        compute='_compute_is_assigned',
+        store=True,
+    )
+
+    @api.depends('partner_id')
+    def _compute_is_assigned(self):
+        for mapping in self:
+            mapping.is_assigned = bool(mapping.partner_id)
 
     _sql_constraints = [
         (

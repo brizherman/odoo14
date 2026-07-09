@@ -181,7 +181,13 @@ class TestPoVendorTab(TransactionCase):
 
     @patch(
         'odoo.addons.po_vendor_sales_purchases_tab.services.sync_engine.run_global_sync',
-        return_value={'created': 3, 'updated': 1, 'warnings': ['test'], 'error': None},
+        return_value={
+            'created': 3,
+            'updated': 1,
+            'mappings_created': 2,
+            'warnings': ['test'],
+            'error': None,
+        },
     )
     def test_sync_global_button_triggers_global_sync(self, mock_sync):
         po = self._create_po()
@@ -190,6 +196,7 @@ class TestPoVendorTab(TransactionCase):
         self.assertFalse(mock_sync.call_args.kwargs.get('refresh_sales_snapshots', True))
         self.assertEqual(action['tag'], 'display_notification')
         self.assertIn('Sincronización global: 4 facturas', action['params']['message'])
+        self.assertIn('2 proveedores nuevos en mapeos', action['params']['message'])
 
     @patch(
         'odoo.addons.po_vendor_sales_purchases_tab.services.sales_snapshot.recompute_sales_snapshot',

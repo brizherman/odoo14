@@ -20,17 +20,21 @@
               sequence="20"
               groups="custom_purchase_flow.group_purchase_direction,custom_purchase_flow.group_purchase_dept,base.group_system"/>
 
+    <record id="purchase.purchase_report" model="ir.ui.menu">
+        <field name="groups_id" eval="[(4, ref('custom_purchase_flow.group_purchase_dept'))]"/>
+    </record>
+
     <menuitem id="menu_vendor_sheet_mapping"
               name="Mapeos de proveedor"
-              parent="menu_vendor_sheet_root"
+              parent="purchase.purchase_report"
               action="action_vendor_sheet_mapping"
-              sequence="30"
+              sequence="10"
               groups="custom_purchase_flow.group_purchase_direction,custom_purchase_flow.group_purchase_dept,base.group_system"/>
 
     <menuitem id="menu_vendor_sheet_sync_log"
               name="Registro de sincronización"
-              parent="menu_vendor_sheet_root"
+              parent="purchase.purchase_report"
               action="action_vendor_sheet_sync_log"
-              sequence="40"
+              sequence="20"
               groups="custom_purchase_flow.group_purchase_direction,custom_purchase_flow.group_purchase_dept,base.group_system"/>
 </odoo>

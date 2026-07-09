@@ -23,6 +23,7 @@ class VendorSheetSyncLog(models.Model):
     )
     rows_created = fields.Integer(string='Filas creadas', default=0)
     rows_updated = fields.Integer(string='Filas actualizadas', default=0)
+    mappings_created = fields.Integer(string='Mapeos creados', default=0)
     warnings_count = fields.Integer(string='Advertencias', default=0)
     duration_seconds = fields.Float(string='Duración (segundos)')
     warning_details = fields.Text(string='Detalles de advertencias')
