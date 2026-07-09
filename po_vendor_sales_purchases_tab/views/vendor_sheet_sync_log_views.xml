@@ -12,6 +12,7 @@
                 <field name="state"/>
                 <field name="rows_created"/>
                 <field name="rows_updated"/>
+                <field name="mappings_created" optional="show"/>
                 <field name="warnings_count"/>
                 <field name="duration_seconds"/>
             </tree>
@@ -36,6 +37,7 @@
                         <group>
                             <field name="rows_created"/>
                             <field name="rows_updated"/>
+                            <field name="mappings_created"/>
                             <field name="warnings_count"/>
                         </group>
                     </group>

@@ -175,15 +175,17 @@ Link sheet **Proveedor** names to Odoo **Vendor** (`res.partner`).
 | Field | Required | Description |
 |-------|----------|-------------|
 | Sheet Proveedor | Yes | Exact name as it appears in the sheet |
-| Vendor | Yes | Odoo supplier partner |
+| Vendor | No (until assigned) | Odoo supplier partner — blank on auto-discovered rows |
 | Classification Vendor | No | Optional link to `product.classification.vendor` for sales matching |
 
-#### Auto fuzzy-match (no mapping row needed)
+#### Auto-discovered proveedor names
 
-If there is no manual row, Odoo compares the sheet **Proveedor** name against all active suppliers using fuzzy matching (ignores case, accents, legal suffixes like S.A. de C.V.).
+Every **Sync Global** scans fetched sheet rows **and all staged invoices (all months)** and registers each distinct sheet **Proveedor** name in **Proveedor Mappings**:
 
-- **Auto-matches** when one supplier is clearly the best match (e.g. `VM FIESTA` → `VM Fiesta S.A de C.V`)
-- **Warning + no auto-match** when several suppliers score similarly (e.g. multiple `Fabricas Selectas...`) — add a manual mapping for those cases
+- New names get a row with only **Sheet Proveedor** filled; **Vendor** and **Classification Vendor** stay blank.
+- Re-sync adds **only new** names — existing rows are never modified.
+- Open **Proveedor Mappings**, use the **Pendientes de asignar** filter, and assign **Vendor** (and optional classification vendor).
+- Until **Vendor** is assigned, invoices stay in staging but do not appear on PO purchase panels (sync warnings mention pending assignment).
 
 #### Bulk import from CSV
 

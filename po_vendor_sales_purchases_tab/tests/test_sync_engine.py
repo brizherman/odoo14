@@ -331,3 +331,165 @@ class TestSyncEngine(TransactionCase):
         self.assertEqual(self.Invoice.search_count([('no_factura', '=', 'INV-X')]), before_invoices)
         self.assertEqual(len(result['warnings']), 1)
         self.assertIn('Sucursal sin mapear', result['warnings'][0])
+
+    def test_global_sync_creates_mapping_stub_for_new_proveedor(self):
+        ref = date(2026, 7, 15)
+        self._prepare_months(ref, {
+            '2026-07': ('sheet-july', False),
+        })
+        self.env['vendor.sheet.mapping'].search([
+            ('sheet_proveedor', '=', 'New Sheet Vendor'),
+        ]).unlink()
+        client = self._mock_client({})
+        client.fetch_sheet_rows.side_effect = (
+            lambda spreadsheet_id, tab_name='Pagos Proveedores': [
+                dict(_invoice_row('INV-NEW', '1/7/2026', '$50.00'), Proveedor='New Sheet Vendor'),
+            ]
+        )
+
+        result = run_global_sync(
+            self.env,
+            sheets_client=client,
+            reference_date=ref,
+        )
+        self.assertIsNone(result['error'])
+        stub = self.env['vendor.sheet.mapping'].search([
+            ('sheet_proveedor', '=', 'New Sheet Vendor'),
+        ], limit=1)
+        self.assertTrue(stub)
+        self.assertFalse(stub.partner_id)
+        self.assertGreaterEqual(result['mappings_created'], 1)
+
+    def test_global_sync_stub_creation_is_idempotent(self):
+        ref = date(2026, 7, 15)
+        self._prepare_months(ref, {
+            '2026-07': ('sheet-july', False),
+        })
+        self.env['vendor.sheet.mapping'].search([
+            ('sheet_proveedor', '=', 'Repeat Vendor'),
+        ]).unlink()
+        client = self._mock_client({})
+        client.fetch_sheet_rows.side_effect = (
+            lambda spreadsheet_id, tab_name='Pagos Proveedores': [
+                dict(_invoice_row('INV-R1', '1/7/2026', '$50.00'), Proveedor='Repeat Vendor'),
+            ]
+        )
+
+        first = run_global_sync(
+            self.env,
+            sheets_client=client,
+            reference_date=ref,
+        )
+        stub = self.env['vendor.sheet.mapping'].search([
+            ('sheet_proveedor', '=', 'Repeat Vendor'),
+        ], limit=1)
+        self.assertTrue(stub)
+        self.assertFalse(stub.partner_id)
+        self.assertGreaterEqual(first['mappings_created'], 1)
+
+        second = run_global_sync(
+            self.env,
+            sheets_client=client,
+            reference_date=ref,
+        )
+        stubs = self.env['vendor.sheet.mapping'].search([
+            ('sheet_proveedor', '=', 'Repeat Vendor'),
+        ])
+        self.assertEqual(len(stubs), 1)
+        self.assertFalse(stubs.partner_id)
+        self.assertEqual(second['mappings_created'], 0)
+
+    def test_global_sync_does_not_modify_existing_mapping(self):
+        ref = date(2026, 7, 15)
+        self._prepare_months(ref, {
+            '2026-07': ('sheet-july', False),
+        })
+        existing = self.env['vendor.sheet.mapping'].create({
+            'sheet_proveedor': 'Assigned Vendor',
+            'partner_id': self.vendor.id,
+        })
+        client = self._mock_client({})
+        client.fetch_sheet_rows.side_effect = (
+            lambda spreadsheet_id, tab_name='Pagos Proveedores': [
+                dict(_invoice_row('INV-A1', '1/7/2026', '$50.00'), Proveedor='Assigned Vendor'),
+            ]
+        )
+
+        run_global_sync(
+            self.env,
+            sheets_client=client,
+            reference_date=ref,
+        )
+        mapping = self.env['vendor.sheet.mapping'].browse(existing.id)
+        self.assertEqual(mapping.partner_id, self.vendor)
+        self.assertEqual(
+            self.env['vendor.sheet.mapping'].search_count([
+                ('sheet_proveedor', '=', 'Assigned Vendor'),
+            ]),
+            1,
+        )
+
+    def test_global_sync_creates_two_stubs_for_two_new_proveedores(self):
+        ref = date(2026, 7, 15)
+        self._prepare_months(ref, {
+            '2026-07': ('sheet-july', False),
+        })
+        self.env['vendor.sheet.mapping'].search([
+            ('sheet_proveedor', 'in', ['Vendor Alpha', 'Vendor Beta']),
+        ]).unlink()
+        client = self._mock_client({})
+        client.fetch_sheet_rows.side_effect = (
+            lambda spreadsheet_id, tab_name='Pagos Proveedores': [
+                dict(_invoice_row('INV-A', '1/7/2026', '$50.00'), Proveedor='Vendor Alpha'),
+                dict(_invoice_row('INV-B', '1/7/2026', '$60.00'), Proveedor='Vendor Beta'),
+            ]
+        )
+
+        result = run_global_sync(
+            self.env,
+            sheets_client=client,
+            reference_date=ref,
+        )
+        self.assertGreaterEqual(result['mappings_created'], 2)
+        self.assertEqual(
+            self.env['vendor.sheet.mapping'].search_count([
+                ('sheet_proveedor', 'in', ['Vendor Alpha', 'Vendor Beta']),
+                ('partner_id', '=', False),
+            ]),
+            2,
+        )
+
+    def test_global_sync_creates_stub_from_historical_staging(self):
+        ref = date(2026, 7, 15)
+        self._prepare_months(ref, {
+            '2026-06': ('sheet-june', True),
+            '2026-07': ('sheet-july', True),
+        })
+        historic_name = 'Historic Staging Only Vendor 20260708'
+        self.env['vendor.sheet.mapping'].search([
+            ('sheet_proveedor', '=', historic_name),
+        ]).unlink()
+        self.Invoice.create({
+            'sucursal': 'RIO',
+            'company_id': self.company.id,
+            'proveedor': historic_name,
+            'partner_id': False,
+            'no_factura': 'HIST-001',
+            'fecha': date(2026, 5, 1),
+            'total_factura': 100.0,
+            'source_month': '2026-05',
+        })
+        client = self._mock_client({
+            'sheet-july': [_invoice_row('JUL-ONLY', '1/7/2026', '$10.00')],
+        })
+
+        run_global_sync(
+            self.env,
+            sheets_client=client,
+            reference_date=ref,
+        )
+        stub = self.env['vendor.sheet.mapping'].search([
+            ('sheet_proveedor', '=', historic_name),
+        ], limit=1)
+        self.assertTrue(stub)
+        self.assertFalse(stub.partner_id)

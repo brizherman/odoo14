@@ -354,9 +354,15 @@ class PurchaseOrder(models.Model):
         else:
             total_rows = result.get('created', 0) + result.get('updated', 0)
             warning_count = len(result.get('warnings') or [])
+            mappings_created = result.get('mappings_created', 0)
             message = (
-                'Sincronización global: %(rows)s facturas, %(warnings)s advertencias.'
-                % {'rows': total_rows, 'warnings': warning_count}
+                'Sincronización global: %(rows)s facturas, %(warnings)s advertencias, '
+                '%(mappings)s proveedores nuevos en mapeos.'
+                % {
+                    'rows': total_rows,
+                    'warnings': warning_count,
+                    'mappings': mappings_created,
+                }
             )
             notification_type = 'warning' if warning_count else 'success'
 
