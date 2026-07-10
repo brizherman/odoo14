@@ -46,7 +46,7 @@
                     <div class="row mb-3 align-items-center">
                         <div class="col-md-8">
                             <strong>
-                                <field name="partner_id" readonly="1" nolabel="1" class="oe_inline"/>
+                                <field name="vendor_tab_partner_name" nolabel="1" class="oe_inline"/>
                                 — Compras (facturas, mes actual + 3 meses anteriores) | Ventas por departamento (mes actual + 3 meses anteriores)
                             </strong>
                         </div>

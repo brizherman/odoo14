@@ -33,6 +33,11 @@ class PurchaseOrder(models.Model):
         compute='_compute_vendor_tab_sync_info',
         readonly=True,
     )
+    vendor_tab_partner_name = fields.Char(
+        string='Proveedor (pestaña)',
+        related='partner_id.display_name',
+        readonly=True,
+    )
     vendor_tab_po_stale_warning = fields.Text(
         string='Advertencia de datos de OC desactualizados',
         compute='_compute_vendor_tab_sync_info',
