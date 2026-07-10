@@ -37,6 +37,14 @@ def window_start_date(reference_date=None):
     return date(year, month, 1)
 
 
+def window_end_date(reference_date=None):
+    """Last calendar day of the current month in the analysis window."""
+    today = _today_tijuana(reference_date)
+    if today.month == 12:
+        return date(today.year, 12, 31)
+    return date(today.year, today.month + 1, 1) - timedelta(days=1)
+
+
 def months_in_window(reference_date=None):
     """YYYY-MM labels: current month plus the previous 3 full calendar months."""
     today = _today_tijuana(reference_date)
@@ -212,6 +220,17 @@ class SyncEngine:
             if vendor_warning:
                 self._add_warning(
                     '[%s] %s' % (parsed.no_factura, vendor_warning)
+                )
+
+            if not parsed.fecha:
+                self._add_warning(
+                    '[%s] Factura sin Fecha: sucursal=%s proveedor=%s no_factura=%s'
+                    % (
+                        source_month,
+                        parsed.sucursal or '',
+                        parsed.proveedor or '',
+                        parsed.no_factura or '',
+                    )
                 )
 
             vals = self._build_invoice_vals(

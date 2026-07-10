@@ -10,6 +10,7 @@ from odoo.addons.po_vendor_sales_purchases_tab.services.sync_engine import (
     months_in_window,
     months_to_sync,
     run_global_sync,
+    window_end_date,
     window_start_date,
 )
 
@@ -56,6 +57,7 @@ class TestSyncEngineHelpers(TransactionCase):
         months = months_in_window(reference_date=ref)
         self.assertEqual(months, ['2026-04', '2026-05', '2026-06', '2026-07'])
         self.assertEqual(window_start_date(ref), date(2026, 4, 1))
+        self.assertEqual(window_end_date(ref), date(2026, 7, 31))
 
     def test_months_in_window_year_boundary(self):
         ref = date(2026, 1, 15)
@@ -194,6 +196,28 @@ class TestSyncEngine(TransactionCase):
             client.fetch_sheet_rows.call_args_list[0][0][0],
             'sheet-july',
         )
+
+    def test_sync_warns_on_missing_fecha(self):
+        ref = date(2026, 7, 15)
+        self._prepare_months(ref, {
+            '2026-07': ('sheet-july', False),
+        })
+        client = self._mock_client({
+            'sheet-july': [_invoice_row('NO-DATE-001', '', '$100.00')],
+        })
+        result = run_global_sync(
+            self.env,
+            sheets_client=client,
+            reference_date=ref,
+        )
+        self.assertIsNone(result['error'])
+        self.assertTrue(
+            any('Factura sin Fecha' in warning for warning in result['warnings']),
+        )
+        invoice = self.Invoice.search([
+            ('no_factura', '=', 'NO-DATE-001'),
+        ], limit=1)
+        self.assertFalse(invoice.fecha)
 
     def test_upsert_updates_payment_state_agd_200(self):
         ref = date(2026, 8, 15)

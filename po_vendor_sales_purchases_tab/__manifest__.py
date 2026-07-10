@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Pestaña Compras y Ventas del Proveedor en OC',
-    'version': '14.0.1.0.9',
+    'version': '14.0.1.0.10',
     'summary': 'Pestaña en OC que compara compras del proveedor (Google Sheets) vs ventas por departamento',
     'author': 'Custom',
     'category': 'Purchase',

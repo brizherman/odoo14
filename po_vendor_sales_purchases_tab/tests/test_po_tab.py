@@ -35,12 +35,13 @@ class TestPoVendorTab(TransactionCase):
 
         self.group_direction = self.env.ref('custom_purchase_flow.group_purchase_direction')
         self.group_dept = self.env.ref('custom_purchase_flow.group_purchase_dept')
-        self.group_coordinator = self.env.ref('custom_purchase_flow.group_purchase_coordinator')
+        self.group_purchase_user = self.env.ref('purchase.group_purchase_user')
         self.group_system = self.env.ref('base.group_system')
 
         self.user_direction = self._create_user('tab_test_direction', self.group_direction)
         self.user_dept = self._create_user('tab_test_dept', self.group_dept)
-        self.user_coordinator = self._create_user('tab_test_coordinator', self.group_coordinator)
+        self.user_purchase = self._create_user('tab_test_purchase_user', self.group_purchase_user)
+        self.user_unauthorized = self._create_user('tab_test_unauthorized', self.env.ref('base.group_user'))
         self.user_admin = self.env.ref('base.user_admin')
 
     def _create_user(self, login, group):
@@ -64,16 +65,16 @@ class TestPoVendorTab(TransactionCase):
         match = re.search(r'<page[^>]*name="vendor_sales_purchases_tab"[^>]*>', arch)
         return match.group(0) if match else ''
 
-    def test_tab_visible_for_direction_dept_admin(self):
+    def test_tab_visible_for_purchase_direction_dept_admin(self):
         po = self._create_po()
         po.read(['vendor_sales_matrix'])
-        for user in (self.user_direction, self.user_dept, self.user_admin):
+        for user in (self.user_purchase, self.user_direction, self.user_dept, self.user_admin):
             page_tag = self._tab_page_opening_tag(self._form_arch(user))
             self.assertIn('vendor_sales_purchases_tab', page_tag, user.login)
             self.assertNotIn('invisible="1"', page_tag, user.login)
 
     def test_tab_hidden_for_unauthorized_user(self):
-        page_tag = self._tab_page_opening_tag(self._form_arch(self.user_coordinator))
+        page_tag = self._tab_page_opening_tag(self._form_arch(self.user_unauthorized))
         self.assertIn('vendor_sales_purchases_tab', page_tag)
         self.assertIn('invisible="1"', page_tag)
 
@@ -154,7 +155,40 @@ class TestPoVendorTab(TransactionCase):
 
         po = self._create_po()
         invoice_nos = set(po.vendor_sheet_invoice_ids.mapped('no_factura'))
-        self.assertEqual(invoice_nos, {'INV-IN', 'INV-EARLY', 'INV-SOURCE-MONTH'})
+        self.assertEqual(invoice_nos, {'INV-IN', 'INV-EARLY'})
+
+    def test_carryover_invoice_excluded_when_fecha_outside_window(self):
+        today = fields.Date.context_today(self.env.user)
+        window_start = window_start_date(today)
+        carryover_fecha = window_start - timedelta(days=15)
+
+        self.Invoice.sudo().create({
+            'sucursal': 'RIO',
+            'company_id': self.company.id,
+            'proveedor': 'Test',
+            'partner_id': self.vendor.id,
+            'no_factura': 'INV-CARRYOVER',
+            'fecha': carryover_fecha,
+            'source_month': today.strftime('%Y-%m'),
+            'total_factura': 99.0,
+        })
+        po = self._create_po()
+        self.assertNotIn('INV-CARRYOVER', po.vendor_sheet_invoice_ids.mapped('no_factura'))
+
+    def test_sin_fecha_invoices_shown_in_separate_bucket(self):
+        self.Invoice.sudo().create({
+            'sucursal': 'RIO',
+            'company_id': self.company.id,
+            'proveedor': 'Test',
+            'partner_id': self.vendor.id,
+            'no_factura': 'INV-NO-DATE',
+            'total_factura': 15.0,
+        })
+        po = self._create_po()
+        self.assertIn('INV-NO-DATE', po.vendor_sheet_invoice_ids.mapped('no_factura'))
+        html = po.vendor_sheet_purchases_html or ''
+        self.assertIn('Sin fecha', html)
+        self.assertIn('INV-NO-DATE', html)
 
     def test_mapping_assignment_backfills_staging_invoices(self):
         sheet_name = 'Backfill Vendor Test 20260709'
@@ -195,13 +229,15 @@ class TestPoVendorTab(TransactionCase):
         )
         self.assertFalse(invoices.filtered(lambda inv: inv.no_factura == 'INV-BACKFILL-1').warning_message)
 
-    def test_purchases_html_groups_invoices_by_source_month(self):
+    def test_purchases_html_groups_invoices_by_fecha_month(self):
         today = fields.Date.context_today(self.env.user)
         current_month = today.strftime('%Y-%m')
         if today.month == 1:
             previous_month = '%d-12' % (today.year - 1)
+            previous_fecha = date(today.year - 1, 12, 10)
         else:
             previous_month = '%d-%02d' % (today.year, today.month - 1)
+            previous_fecha = date(today.year, today.month - 1, 10)
 
         self.Invoice.sudo().create([
             {
@@ -209,9 +245,9 @@ class TestPoVendorTab(TransactionCase):
                 'company_id': self.company.id,
                 'proveedor': 'Test',
                 'partner_id': self.vendor.id,
-                'no_factura': 'INV-JUN',
+                'no_factura': 'INV-CURRENT',
                 'fecha': today.replace(day=15),
-                'source_month': current_month,
+                'source_month': previous_month,
                 'total_factura': 100.0,
             },
             {
@@ -219,21 +255,24 @@ class TestPoVendorTab(TransactionCase):
                 'company_id': self.company.id,
                 'proveedor': 'Test',
                 'partner_id': self.vendor.id,
-                'no_factura': 'INV-MAY',
-                'fecha': today.replace(day=10),
-                'source_month': previous_month,
+                'no_factura': 'INV-PREVIOUS',
+                'fecha': previous_fecha,
+                'source_month': current_month,
                 'total_factura': 50.0,
             },
         ])
         po = self._create_po()
         html = po.vendor_sheet_purchases_html or ''
-        self.assertIn('INV-JUN', html)
-        self.assertIn('INV-MAY', html)
+        self.assertIn('INV-CURRENT', html)
+        self.assertIn('INV-PREVIOUS', html)
         self.assertIn('o_vendor_purchases_month', html)
         self.assertIn('<details', html)
         self.assertIn('<summary', html)
         self.assertIn('Total general', html)
         self.assertIn('o_vendor_purchases_grand_total', html)
+        current_pos = html.index('INV-CURRENT')
+        previous_pos = html.index('INV-PREVIOUS')
+        self.assertLess(current_pos, previous_pos)
 
     @patch(
         'odoo.addons.po_vendor_sales_purchases_tab.services.sync_engine.run_global_sync',
