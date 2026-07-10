@@ -8,9 +8,11 @@ from odoo.exceptions import UserError
 from odoo.tools.misc import format_date, formatLang
 
 from odoo.addons.po_vendor_sales_purchases_tab.services.sync_engine import (
-    months_in_window,
+    window_end_date,
     window_start_date,
 )
+
+NO_FECHA_MONTH_KEY = '__no_fecha__'
 
 
 class PurchaseOrder(models.Model):
@@ -120,12 +122,30 @@ class PurchaseOrder(models.Model):
         rows.append('</tr></tfoot></table>')
         return ''.join(rows)
 
-    def _source_month_label(self, source_month):
-        if not source_month or len(source_month) != 7:
-            return 'Sin mes de origen'
-        year, month = source_month.split('-')
+    @api.model
+    def _invoice_fecha_month_key(self, invoice):
+        if not invoice.fecha:
+            return NO_FECHA_MONTH_KEY
+        return invoice.fecha.strftime('%Y-%m')
+
+    def _fecha_month_label(self, month_key):
+        if month_key == NO_FECHA_MONTH_KEY:
+            return 'Sin fecha'
+        if not month_key or len(month_key) != 7:
+            return 'Sin fecha'
+        year, month = month_key.split('-')
         month_start = fields.Date.from_string('%s-%s-01' % (year, month))
         return format_date(self.env, month_start, date_format='MMMM yyyy')
+
+    @api.model
+    def _sort_fecha_month_keys(self, month_keys):
+        dated = sorted(
+            (key for key in month_keys if key != NO_FECHA_MONTH_KEY),
+            reverse=True,
+        )
+        if NO_FECHA_MONTH_KEY in month_keys:
+            dated.append(NO_FECHA_MONTH_KEY)
+        return dated
 
     def _render_purchases_by_month_html(self, invoices):
         if not invoices:
@@ -134,10 +154,10 @@ class PurchaseOrder(models.Model):
         currency = self.company_id.currency_id
         by_month = {}
         for invoice in invoices:
-            month_key = invoice.source_month or ''
+            month_key = self._invoice_fecha_month_key(invoice)
             by_month.setdefault(month_key, []).append(invoice)
 
-        month_keys = sorted(by_month.keys(), reverse=True)
+        month_keys = self._sort_fecha_month_keys(by_month.keys())
         grand_total = sum(invoice.total_factura or 0.0 for invoice in invoices)
         parts = []
         for month_key in month_keys:
@@ -146,7 +166,7 @@ class PurchaseOrder(models.Model):
                 key=lambda inv: (inv.fecha or fields.Date.from_string('1900-01-01'), inv.no_factura or ''),
                 reverse=True,
             )
-            label = self._source_month_label(month_key)
+            label = self._fecha_month_label(month_key)
             month_total = sum(inv.total_factura or 0.0 for inv in month_invoices)
             parts.append('<details class="o_vendor_purchases_month mb-2">')
             parts.append(
@@ -225,19 +245,27 @@ class PurchaseOrder(models.Model):
     def _vendor_sheet_invoice_window_domain(self):
         today = fields.Date.context_today(self)
         return [
-            '|',
             ('fecha', '>=', window_start_date(today)),
-            ('source_month', 'in', months_in_window(today)),
+            ('fecha', '<=', window_end_date(today)),
         ]
 
     def _vendor_sheet_invoices_for_po(self):
         self.ensure_one()
         if not self.partner_id or not self.company_id:
             return self.env['vendor.sheet.invoice'].browse()
-        return self.env['vendor.sheet.invoice'].search([
+        base_domain = [
             ('partner_id', '=', self.partner_id.id),
             ('company_id', '=', self.company_id.id),
-        ] + self._vendor_sheet_invoice_window_domain(), order='fecha desc, no_factura, id desc')
+        ]
+        in_window = self.env['vendor.sheet.invoice'].search(
+            base_domain + self._vendor_sheet_invoice_window_domain(),
+            order='fecha desc, no_factura, id desc',
+        )
+        sin_fecha = self.env['vendor.sheet.invoice'].search(
+            base_domain + [('fecha', '=', False)],
+            order='no_factura, id desc',
+        )
+        return in_window | sin_fecha
 
     @api.depends('partner_id', 'company_id')
     def _compute_vendor_sheet_invoice_ids(self):
