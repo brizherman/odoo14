@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem id="menu_sat_root"
+              name="SAT"
+              sequence="45"
+              web_icon="sat_cfdi_received,static/description/icon.png"
+              groups="sat_cfdi_received.group_sat_user"/>
+
+    <menuitem id="menu_sat_cfdi_received"
+              name="CFDIs recibidos"
+              parent="menu_sat_root"
+              action="action_sat_cfdi_received"
+              sequence="10"/>
+
+    <menuitem id="menu_sat_download_requests"
+              name="Solicitudes de descarga"
+              parent="menu_sat_root"
+              action="action_sat_download_request"
+              sequence="20"/>
+
+    <menuitem id="menu_sat_download_wizard"
+              name="Descargar CFDIs recibidos"
+              parent="menu_sat_root"
+              action="action_sat_download_wizard"
+              sequence="30"
+              groups="sat_cfdi_received.group_sat_manager"/>
+
+    <menuitem id="menu_sat_configuration"
+              name="Configuración"
+              parent="menu_sat_root"
+              action="action_sat_fiel_configuration"
+              sequence="90"
+              groups="sat_cfdi_received.group_sat_manager"/>
+</odoo>

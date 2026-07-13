@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_company_form_sat_fiel" model="ir.ui.view">
+        <field name="name">res.company.form.sat.fiel</field>
+        <field name="model">res.company</field>
+        <field name="inherit_id" ref="base.view_company_form"/>
+        <field name="arch" type="xml">
+            <notebook position="inside">
+                <page string="SAT / FIEL" groups="sat_cfdi_received.group_sat_manager,base.group_system">
+                    <group>
+                        <group>
+                            <field name="sat_fiel_configured" readonly="1"/>
+                            <field name="sat_fiel_cert_rfc" readonly="1"/>
+                            <field name="sat_fiel_rfc_mismatch" readonly="1"
+                                   attrs="{'invisible': [('sat_fiel_rfc_mismatch', '=', False)]}"/>
+                        </group>
+                        <group>
+                            <field name="sat_fiel_cer"/>
+                            <field name="sat_fiel_key"/>
+                            <field name="sat_fiel_password" password="True"/>
+                        </group>
+                    </group>
+                    <div class="alert alert-warning" role="alert"
+                         attrs="{'invisible': [('sat_fiel_rfc_mismatch', '=', False)]}">
+                        El RFC del certificado FIEL no coincide con el RFC de la empresa.
+                    </div>
+                    <button name="action_sat_test_connection" type="object"
+                            string="Probar conexión" class="btn-primary"
+                            attrs="{'invisible': [('sat_fiel_configured', '=', False)]}"/>
+                </page>
+            </notebook>
+        </field>
+    </record>
+
+    <record id="view_company_form_sat_fiel_only" model="ir.ui.view">
+        <field name="name">res.company.form.sat.fiel.only</field>
+        <field name="model">res.company</field>
+        <field name="priority">99</field>
+        <field name="arch" type="xml">
+            <form string="Configuración FIEL SAT">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="name" readonly="1"/>
+                            <field name="vat" readonly="1"/>
+                            <field name="sat_fiel_configured" readonly="1"/>
+                            <field name="sat_fiel_cert_rfc" readonly="1"/>
+                            <field name="sat_fiel_rfc_mismatch" readonly="1"
+                                   attrs="{'invisible': [('sat_fiel_rfc_mismatch', '=', False)]}"/>
+                        </group>
+                        <group>
+                            <field name="sat_fiel_cer"/>
+                            <field name="sat_fiel_key"/>
+                            <field name="sat_fiel_password" password="True"/>
+                        </group>
+                    </group>
+                    <div class="alert alert-warning" role="alert"
+                         attrs="{'invisible': [('sat_fiel_rfc_mismatch', '=', False)]}">
+                        El RFC del certificado FIEL no coincide con el RFC de la empresa.
+                    </div>
+                    <button name="action_sat_test_connection" type="object"
+                            string="Probar conexión" class="btn-primary"
+                            attrs="{'invisible': [('sat_fiel_configured', '=', False)]}"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_sat_fiel_configuration" model="ir.actions.server">
+        <field name="name">Configuración FIEL SAT</field>
+        <field name="model_id" ref="base.model_res_company"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_open_sat_fiel_config()</field>
+    </record>
+</odoo>

@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_sat_cfdi_received_tree" model="ir.ui.view">
+        <field name="name">sat.cfdi.received.tree</field>
+        <field name="model">sat.cfdi.received</field>
+        <field name="arch" type="xml">
+            <tree string="CFDIs recibidos">
+                <field name="invoice_date"/>
+                <field name="supplier_name"/>
+                <field name="total"/>
+                <field name="supplier_rfc" optional="hide"/>
+                <field name="uuid" optional="hide"/>
+                <field name="company_id" groups="base.group_multi_company" optional="hide"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_sat_cfdi_received_form" model="ir.ui.view">
+        <field name="name">sat.cfdi.received.form</field>
+        <field name="model">sat.cfdi.received</field>
+        <field name="arch" type="xml">
+            <form string="CFDI recibido" create="false" edit="false" delete="false">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="invoice_date"/>
+                            <field name="supplier_name"/>
+                            <field name="total"/>
+                        </group>
+                        <group>
+                            <field name="supplier_rfc"/>
+                            <field name="uuid"/>
+                            <field name="currency"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="download_request_id"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_sat_cfdi_received_search" model="ir.ui.view">
+        <field name="name">sat.cfdi.received.search</field>
+        <field name="model">sat.cfdi.received</field>
+        <field name="arch" type="xml">
+            <search string="CFDIs recibidos">
+                <field name="supplier_name"/>
+                <field name="supplier_rfc"/>
+                <field name="uuid"/>
+                <filter string="Este mes" name="filter_this_month"
+                        domain="[('invoice_date', '&gt;=', (context_today() + relativedelta(day=1)).strftime('%Y-%m-%d'))]"/>
+                <separator/>
+                <filter string="Fecha de factura" name="filter_invoice_date" date="invoice_date"/>
+                <group expand="0" string="Agrupar por">
+                    <filter string="Mes" name="group_month" context="{'group_by': 'invoice_date:month'}"/>
+                    <filter string="Proveedor" name="group_supplier" context="{'group_by': 'supplier_name'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_sat_cfdi_received" model="ir.actions.act_window">
+        <field name="name">CFDIs recibidos</field>
+        <field name="res_model">sat.cfdi.received</field>
+        <field name="view_mode">tree,form</field>
+        <field name="search_view_id" ref="view_sat_cfdi_received_search"/>
+    </record>
+
+    <record id="action_sat_cfdi_export_csv" model="ir.actions.server">
+        <field name="name">Exportar CSV</field>
+        <field name="model_id" ref="model_sat_cfdi_received"/>
+        <field name="binding_model_id" ref="model_sat_cfdi_received"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">action = records.action_export_csv()</field>
+    </record>
+</odoo>
