@@ -1,0 +1,10 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_sat_cfdi_received_user,sat.cfdi.received user,model_sat_cfdi_received,group_sat_user,1,0,0,0
+access_sat_cfdi_received_manager,sat.cfdi.received manager,model_sat_cfdi_received,group_sat_manager,1,1,1,1
+access_sat_cfdi_received_system,sat.cfdi.received system,model_sat_cfdi_received,base.group_system,1,1,1,1
+access_sat_download_request_user,sat.download.request user,model_sat_download_request,group_sat_user,1,0,0,0
+access_sat_download_request_manager,sat.download.request manager,model_sat_download_request,group_sat_manager,1,1,1,1
+access_sat_download_request_system,sat.download.request system,model_sat_download_request,base.group_system,1,1,1,1
+access_sat_download_wizard_manager,sat.download.wizard manager,model_sat_download_wizard,group_sat_manager,1,1,1,1
+access_sat_cfdi_export_csv_user,sat.cfdi.export.csv user,model_sat_cfdi_export_csv,group_sat_user,1,1,1,1
+access_sat_cfdi_export_csv_manager,sat.cfdi.export.csv manager,model_sat_cfdi_export_csv,group_sat_manager,1,1,1,1

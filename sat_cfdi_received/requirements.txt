@@ -1,0 +1,3 @@
+# SAT Descarga Masiva v1.5 client for Python 3.8 (Odoo 14 venv).
+# Direct library approach — cfdiclient 1.6.2 verified on Python 3.8.18.
+cfdiclient==1.6.2
