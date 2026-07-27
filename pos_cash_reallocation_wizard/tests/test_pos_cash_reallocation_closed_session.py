@@ -300,6 +300,35 @@ class TestPosCashReallocationClosedSession(TransactionCase):
             _('Order has a customer assigned.'),
         )
 
+    def test_02d_hard_block_multiple_positive_cash_lines(self):
+        date_from, date_to, order_date = self._unique_date_range()
+        session = self._open_session()
+        multi_cash = self._create_paid_order(
+            session, 800.0,
+            second_payment_method=self.cash_payment_method,
+            second_amount=100.0,
+            date_order=order_date,
+        )
+        self.env['pos.payment'].create({
+            'pos_order_id': multi_cash.id,
+            'amount': -45.68,
+            'payment_date': fields.Datetime.now(),
+            'payment_method_id': self.cash_payment_method.id,
+        })
+        multi_cash.amount_paid = sum(multi_cash.payment_ids.mapped('amount'))
+        self._close_session_with_posted_move(session, multi_cash)
+
+        wizard = self._create_wizard(
+            10.0, date_from, date_to, include_closed_sessions=True,
+        )
+
+        self.assertFalse(multi_cash._is_eligible_for_closed_session_reallocation())
+        self.assertEqual(
+            wizard._get_reallocation_skip_reason(multi_cash),
+            _('Order has multiple cash payment lines.'),
+        )
+        self.assertFalse(wizard._get_eligible_orders())
+
     def test_02b_hard_block_no_session_move(self):
         date_from, date_to, order_date = self._unique_date_range()
         session = self._open_session()

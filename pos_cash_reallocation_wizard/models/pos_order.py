@@ -169,6 +169,24 @@ class PosOrder(models.Model):
         )
         return sum(cash_payments.mapped('amount'))
 
+    def _get_positive_cash_payments(self):
+        """Positive cash lines eligible to reduce (excludes change / negatives)."""
+        self.ensure_one()
+        positive = self.payment_ids.filtered(
+            lambda payment: (
+                payment.payment_method_id.is_cash_count
+                and payment.amount > 0
+                and not payment.is_change
+            )
+        )
+        if positive:
+            return positive
+        return self.payment_ids.filtered(
+            lambda payment: (
+                payment.payment_method_id.is_cash_count and payment.amount > 0
+            )
+        )
+
     def _has_wallet_payment(self, company=None):
         self.ensure_one()
         company = company or self.company_id
@@ -196,6 +214,10 @@ class PosOrder(models.Model):
         if payment_method.name != CASH_PAYMENT_METHOD_NAME:
             return False
         if not payment_method.is_cash_count:
+            return False
+        # Apply only reduces one cash line; require a single positive line so
+        # proportional shares (based on net cash) cannot exceed that line.
+        if len(self._get_positive_cash_payments()) != 1:
             return False
         return True
 
@@ -307,22 +329,14 @@ class PosOrder(models.Model):
         if wallet_amount <= 0:
             return self.env['pos.payment']
 
-        cash_payment = self.payment_ids.filtered(
-            lambda payment: (
-                payment.payment_method_id.is_cash_count
-                and payment.amount > 0
-                and not payment.is_change
-            )
-        )[:1]
-        if not cash_payment:
-            cash_payment = self.payment_ids.filtered(
-                lambda payment: payment.payment_method_id.is_cash_count and payment.amount > 0
-            )[:1]
-        if not cash_payment:
+        cash_payments = self._get_positive_cash_payments()
+        if len(cash_payments) != 1:
             raise UserError(_(
-                'Order %s has no cash payment line to reallocate.',
+                'Order %s must have exactly one positive cash payment line '
+                'to reallocate.',
                 self.name,
             ))
+        cash_payment = cash_payments
 
         original_cash = cash_payment.amount
         new_cash = original_cash - wallet_amount

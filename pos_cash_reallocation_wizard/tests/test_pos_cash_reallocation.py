@@ -2,7 +2,7 @@
 import uuid
 from datetime import timedelta
 
-from odoo import fields
+from odoo import _, fields
 from odoo.exceptions import AccessError, UserError
 from odoo.tests.common import TransactionCase
 
@@ -211,6 +211,56 @@ class TestPosCashReallocation(TransactionCase):
         self.assertNotIn(with_customer, preview_orders)
         self.assertIn(mixed, skipped_orders)
         self.assertEqual(wizard.matched_order_count, 1)
+
+    def test_01b_skip_multiple_positive_cash_lines(self):
+        date_from, date_to, order_date = self._unique_date_range()
+        session = self._open_session(self.pos_config_a)
+
+        multi_cash = self._create_paid_order(
+            session, 800.0,
+            second_payment_method=self.cash_payment_method,
+            second_amount=100.0,
+            date_order=order_date,
+        )
+        # Change-style negative cash line must not count as a second positive.
+        self.env['pos.payment'].create({
+            'pos_order_id': multi_cash.id,
+            'amount': -45.68,
+            'payment_date': fields.Datetime.now(),
+            'payment_method_id': self.cash_payment_method.id,
+        })
+        multi_cash.amount_paid = sum(multi_cash.payment_ids.mapped('amount'))
+
+        single_cash = self._create_paid_order(
+            session, 50.0, date_order=order_date,
+        )
+        single_with_change = self._create_paid_order(
+            session, 100.0, date_order=order_date,
+        )
+        self.env['pos.payment'].create({
+            'pos_order_id': single_with_change.id,
+            'amount': -10.0,
+            'payment_date': fields.Datetime.now(),
+            'payment_method_id': self.cash_payment_method.id,
+        })
+        single_with_change.amount_paid = sum(
+            single_with_change.payment_ids.mapped('amount')
+        )
+
+        wizard = self._create_wizard(10.0, date_from, date_to)
+        wizard.action_preview()
+
+        self.assertFalse(multi_cash._is_eligible_for_reallocation())
+        self.assertEqual(
+            wizard._get_reallocation_skip_reason(multi_cash),
+            _('Order has multiple cash payment lines.'),
+        )
+        self.assertIn(multi_cash, wizard.skipped_line_ids.mapped('order_id'))
+        self.assertTrue(single_cash._is_eligible_for_reallocation())
+        self.assertTrue(single_with_change._is_eligible_for_reallocation())
+        self.assertIn(single_cash, wizard.preview_line_ids.mapped('order_id'))
+        self.assertIn(single_with_change, wizard.preview_line_ids.mapped('order_id'))
+        self.assertEqual(wizard.matched_order_count, 2)
 
     # ------------------------------------------------------------------
     # 7.4 Proportional split

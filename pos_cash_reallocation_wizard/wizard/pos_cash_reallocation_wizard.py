@@ -246,13 +246,8 @@ class PosCashReallocationWizard(models.TransientModel):
         candidates = self._get_orders_in_date_range()
         return candidates.filtered(lambda order: self._order_is_eligible(order))
 
-    def _get_open_session_skip_reason(self, order):
-        if order.state != 'paid':
-            return _('Order is not paid.')
-        if not self.include_orders_with_customers and order.partner_id:
-            return _('Order has a customer assigned.')
-        if order.session_id.state == 'closed':
-            return _('POS session is closed.')
+    def _get_payment_rules_skip_reason(self, order):
+        """Shared payment-shape skip reasons for open and closed paths."""
         if order._has_wallet_payment(self.company_id):
             return _('Order already has a Lealtad payment.')
         net_cash = order._get_net_cash_amount()
@@ -266,7 +261,18 @@ class PosCashReallocationWizard(models.TransientModel):
             return _('Payment method is not Efectivo.')
         if not payment_method.is_cash_count:
             return _('Payment method is not counted as cash.')
+        if len(order._get_positive_cash_payments()) != 1:
+            return _('Order has multiple cash payment lines.')
         return False
+
+    def _get_open_session_skip_reason(self, order):
+        if order.state != 'paid':
+            return _('Order is not paid.')
+        if not self.include_orders_with_customers and order.partner_id:
+            return _('Order has a customer assigned.')
+        if order.session_id.state == 'closed':
+            return _('POS session is closed.')
+        return self._get_payment_rules_skip_reason(order)
 
     def _get_closed_session_skip_reason(self, order):
         if order.state == 'invoiced' or order.account_move:
@@ -284,20 +290,7 @@ class PosCashReallocationWizard(models.TransientModel):
             return _('POS session journal entry is not posted.')
         if order._is_fiscal_period_locked(order._get_closed_session_reallocation_date()):
             return _('Fiscal period is locked for this session.')
-        if order._has_wallet_payment(self.company_id):
-            return _('Order already has a Lealtad payment.')
-        net_cash = order._get_net_cash_amount()
-        if net_cash <= 0:
-            return _('Net cash is zero or negative.')
-        payment_methods = order.payment_ids.mapped('payment_method_id')
-        if len(payment_methods) != 1:
-            return _('Order has mixed payment methods.')
-        payment_method = payment_methods[0]
-        if payment_method.name != CASH_PAYMENT_METHOD_NAME:
-            return _('Payment method is not Efectivo.')
-        if not payment_method.is_cash_count:
-            return _('Payment method is not counted as cash.')
-        return False
+        return self._get_payment_rules_skip_reason(order)
 
     def _get_reallocation_skip_reason(self, order):
         self.ensure_one()
@@ -471,20 +464,7 @@ class PosCashReallocationWizard(models.TransientModel):
         }
 
     def _get_primary_cash_payment(self, order):
-        cash_payment = order.payment_ids.filtered(
-            lambda payment: (
-                payment.payment_method_id.is_cash_count
-                and payment.amount > 0
-                and not payment.is_change
-            )
-        )[:1]
-        if not cash_payment:
-            cash_payment = order.payment_ids.filtered(
-                lambda payment: (
-                    payment.payment_method_id.is_cash_count and payment.amount > 0
-                )
-            )[:1]
-        return cash_payment
+        return order._get_positive_cash_payments()[:1]
 
     def _get_wallet_method(self):
         self.ensure_one()
