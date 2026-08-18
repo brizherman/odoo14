@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="PartnerClassifierList.controls">
+        <div class="o_partner_classifier_controls d-inline-flex align-items-center ml-3">
+            <span class="font-weight-bold mr-2">Tipo:</span>
+            <label class="o_partner_classifier_label mr-2 mb-0">
+                <input type="checkbox" class="o_partner_classifier_type mr-1" value="mayorista"/>
+                Mayorista
+            </label>
+            <label class="o_partner_classifier_label mr-3 mb-0">
+                <input type="checkbox" class="o_partner_classifier_type mr-1" value="publico_general"/>
+                Público General
+            </label>
+            <button type="button" class="btn btn-primary o_partner_classifier_update">
+                Update
+            </button>
+        </div>
+    </t>
+</templates>

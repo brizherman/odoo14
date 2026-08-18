@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <t t-name="FieldCustomerTypeCheckboxes.button">
+        <div class="custom-control custom-checkbox o_customer_type_checkbox_item">
+            <input type="checkbox" class="custom-control-input o_customer_type_checkbox_input"
+                t-att-checked="checked ? true : undefined"
+                t-att-data-value="value[0]" t-att-data-index="index" t-att-id="id"/>
+            <label class="custom-control-label o_form_label" t-att-for="id">
+                <t t-esc="value[1]"/>
+            </label>
+        </div>
+    </t>
+
+</templates>

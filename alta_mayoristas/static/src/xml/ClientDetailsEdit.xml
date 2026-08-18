@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <t t-name="ClientDetailsEdit" t-inherit="point_of_sale.ClientDetailsEdit" t-inherit-mode="extension" owl="1">
+        <xpath expr="//input[hasclass('client-name')]" position="after">
+            <div class="client-detail customer-type-options">
+                <label class="customer-type-option">
+                    <input type="checkbox"
+                           data-customer-type="mayorista"
+                           t-att-checked="isCustomerTypeSelected('mayorista') ? true : undefined"
+                           t-on-change="onCustomerTypeChange"/>
+                    <span>Mayorista</span>
+                </label>
+                <label class="customer-type-option">
+                    <input type="checkbox"
+                           data-customer-type="publico_general"
+                           t-att-checked="isCustomerTypeSelected('publico_general') ? true : undefined"
+                           t-on-change="onCustomerTypeChange"/>
+                    <span>Público General</span>
+                </label>
+            </div>
+        </xpath>
+        <xpath expr="//select[@name='property_product_pricelist']/t[@t-foreach='env.pos.pricelists']" position="before">
+            <option value="" t-if="!props.partner.id">
+                <t t-esc="env._t('Select Pricelist')"/>
+            </option>
+        </xpath>
+    </t>
+
+</templates>

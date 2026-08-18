@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="assets" inherit_id="point_of_sale.assets">
+        <xpath expr="." position="inside">
+            <script type="text/javascript" src="/alta_mayoristas/static/src/js/models.js"/>
+            <script type="text/javascript" src="/alta_mayoristas/static/src/js/ClientDetailsEdit.js"/>
+        </xpath>
+        <xpath expr="//link[@id='pos-stylesheet']" position="after">
+            <link rel="stylesheet" href="/alta_mayoristas/static/src/css/client_details.css"/>
+        </xpath>
+    </template>
+
+    <template id="assets_backend" inherit_id="web.assets_backend">
+        <xpath expr="." position="inside">
+            <script type="text/javascript" src="/alta_mayoristas/static/src/js/customer_type_checkboxes_field.js"/>
+            <script type="text/javascript" src="/alta_mayoristas/static/src/js/partner_classifier_list.js"/>
+            <link rel="stylesheet" type="text/scss" href="/alta_mayoristas/static/src/scss/customer_type_checkboxes.scss"/>
+            <link rel="stylesheet" type="text/scss" href="/alta_mayoristas/static/src/scss/partner_classifier_list.scss"/>
+        </xpath>
+    </template>
+</odoo>

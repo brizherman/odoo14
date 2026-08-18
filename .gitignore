@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+
+# Odoo source (not part of the custom module)
+odoo-src/
+
+# OS
+.DS_Store
+
+# Misc
+*.tar.gz
+*.log
+*.dump
+*.sql
+.python-version
+reqs/
+tasks/
+ai-dev-tasks-main-ryan/
+fabien14.md
+.o_action_manager
+
+# Odoo RPC secrets
+Actualizar catalogos odoo/.env
+odoo sales reports/.env
+odoo sales reports/output/*.csv
+.odoo-data/
