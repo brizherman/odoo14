@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_partner_classifier_tree" model="ir.ui.view">
+        <field name="name">res.partner.classifier.tree</field>
+        <field name="model">res.partner</field>
+        <field name="arch" type="xml">
+            <tree string="Classify Customers" default_order="total_sales_amount desc,name asc">
+                <field name="name"/>
+                <field name="customer_type"/>
+                <field name="property_product_pricelist"/>
+                <field name="vat"/>
+                <field name="phone_display" string="Phone"/>
+                <field name="total_sales_amount" optional="show"
+                       groups="point_of_sale.group_pos_manager"/>
+                <field name="phone" invisible="1"/>
+                <field name="mobile" invisible="1"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_partner_classifier_search" model="ir.ui.view">
+        <field name="name">res.partner.classifier.search</field>
+        <field name="model">res.partner</field>
+        <field name="arch" type="xml">
+            <search string="Classify Customers">
+                <field name="name"/>
+                <field name="vat"/>
+                <field name="phone"/>
+                <field name="mobile"/>
+                <separator/>
+                <filter string="Sin clasificar" name="unclassified"
+                        domain="[('customer_type', '=', False)]"/>
+                <filter string="Mayorista" name="mayorista"
+                        domain="[('customer_type', '=', 'mayorista')]"/>
+                <filter string="Público General" name="publico_general"
+                        domain="[('customer_type', '=', 'publico_general')]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_partner_classifier" model="ir.actions.act_window">
+        <field name="name">Clasificar clientes</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">tree</field>
+        <field name="search_view_id" ref="view_partner_classifier_search"/>
+        <field name="context">{'search_default_unclassified': 1, 'partner_classifier_view': True}</field>
+        <field name="groups_id" eval="[(6, 0, [ref('point_of_sale.group_pos_user')])]"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                All contacts are classified
+            </p>
+            <p>
+                Select contacts, choose Mayorista or Público General, then click Update.
+            </p>
+        </field>
+    </record>
+
+    <record id="action_partner_classifier_view_tree" model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">tree</field>
+        <field name="view_id" ref="view_partner_classifier_tree"/>
+        <field name="act_window_id" ref="action_partner_classifier"/>
+    </record>
+
+    <menuitem id="menu_contacts_customers"
+        name="Customers"
+        parent="contacts.menu_contacts"
+        sequence="3"/>
+
+    <menuitem id="menu_partner_classifier"
+        name="Clasificar clientes"
+        parent="menu_contacts_customers"
+        action="action_partner_classifier"
+        groups="point_of_sale.group_pos_user"
+        sequence="1"/>
+
+    <menuitem id="menu_partner_classifier_pos"
+        name="Clasificar Clientes"
+        parent="point_of_sale.menu_point_of_sale"
+        action="action_partner_classifier"
+        groups="point_of_sale.group_pos_user"
+        sequence="3"/>
+
+    <function model="res.partner" name="_recompute_all_total_sales_amounts"/>
+</odoo>

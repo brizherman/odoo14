@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_partner_form_customer_type" model="ir.ui.view">
+        <field name="name">res.partner.form.customer.type</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[hasclass('oe_title')]/h1" position="after">
+                <field name="customer_type" widget="customer_type_checkboxes" nolabel="1"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,47 @@
+.o_field_customer_type_checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1.5rem;
+    margin-top: 0.35rem;
+    margin-bottom: 0.75rem;
+}
+
+.o_field_customer_type_checkboxes .o_customer_type_checkbox_item {
+    margin-bottom: 0;
+    padding-left: 2.25rem;
+    min-height: 1.75rem;
+}
+
+.o_field_customer_type_checkboxes .custom-control-label {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+    font-weight: 500;
+    padding-top: 0.05rem;
+    cursor: pointer;
+}
+
+.o_field_customer_type_checkboxes .custom-control-input {
+    width: 1.35rem;
+    height: 1.35rem;
+    top: 0.2rem;
+    left: -2.25rem;
+}
+
+.o_field_customer_type_checkboxes .custom-control-input:checked ~ .custom-control-label::before {
+    border-width: 2px;
+}
+
+.o_field_customer_type_checkboxes .custom-control-label::before {
+    width: 1.35rem;
+    height: 1.35rem;
+    top: 0.2rem;
+    left: -2.25rem;
+}
+
+.o_field_customer_type_checkboxes .custom-control-label::after {
+    width: 1.35rem;
+    height: 1.35rem;
+    top: 0.2rem;
+    left: -2.25rem;
+}
