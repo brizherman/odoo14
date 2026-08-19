@@ -90,10 +90,14 @@ class ResPartner(models.Model):
 
     @api.model
     def _read_max_order_date_by_partner(self, model_name, states, partner_ids):
-        """Return partner_id -> max date_order as Date for counted orders."""
+        """Return partner_id -> max date_order as Date for counted orders.
+
+        Dates are global (all companies). sudo() is required so company
+        record rules on pos.order / sale.order do not hide other sucursales.
+        """
         if not partner_ids or model_name not in self.env:
             return {}
-        groups = self.env[model_name].read_group(
+        groups = self.env[model_name].sudo().read_group(
             [('partner_id', 'in', partner_ids), ('state', 'in', list(states))],
             ['date_order:max'],
             ['partner_id'],

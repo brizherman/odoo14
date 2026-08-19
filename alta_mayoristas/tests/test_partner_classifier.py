@@ -39,10 +39,11 @@ class TestPartnerClassifier(TransactionCase):
             config.open_session_cb(check_coa=False)
         return config.current_session_id
 
-    def _create_sale_order(self, partner, amount):
+    def _create_sale_order(self, partner, amount, company=None):
+        company = company or self.env.company
         order_vals = {
             'partner_id': partner.id,
-            'company_id': self.env.company.id,
+            'company_id': company.id,
             'order_line': [(0, 0, {
                 'product_id': self.product.id,
                 'product_uom_qty': 1,
@@ -51,11 +52,18 @@ class TestPartnerClassifier(TransactionCase):
             })],
         }
         team = self.env['crm.team'].search([
-            ('company_id', 'in', [False, self.env.company.id]),
+            ('company_id', 'in', [False, company.id]),
         ], limit=1)
         if team:
             order_vals['team_id'] = team.id
-        order = self.env['sale.order'].create(order_vals)
+        if 'stock.warehouse' in self.env:
+            warehouse = self.env['stock.warehouse'].search(
+                [('company_id', '=', company.id)],
+                limit=1,
+            )
+            if warehouse:
+                order_vals['warehouse_id'] = warehouse.id
+        order = self.env['sale.order'].with_company(company).create(order_vals)
         order.action_confirm()
         return order
 
@@ -136,6 +144,23 @@ class TestPartnerClassifier(TransactionCase):
         })
         self.assertFalse(draft_partner.last_pos_sale_date)
         self.assertFalse(draft_partner.last_sale_order_date)
+
+    def test_last_sale_order_date_all_companies(self):
+        company_b = self._second_company()
+        partner = self.env['res.partner'].create({
+            'name': 'Cross Company SO Partner',
+        })
+        sale_order = self._create_sale_order(partner, 150.0, company=company_b)
+        self.pos_user.write({
+            'company_id': self.env.company.id,
+            'company_ids': [(6, 0, [self.env.company.id])],
+        })
+        partner_as_user = partner.with_user(self.pos_user)
+        partner_as_user.invalidate_cache(['last_sale_order_date'])
+        self.assertEqual(
+            partner_as_user.last_sale_order_date,
+            self._order_local_date(sale_order),
+        )
 
     def test_create_from_ui_sets_pos_company_from_payload(self):
         company = self.env.company
