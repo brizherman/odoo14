@@ -11,6 +11,10 @@
                 <input type="checkbox" class="o_partner_classifier_type mr-1" value="publico_general"/>
                 Público General
             </label>
+            <label class="o_partner_classifier_label mr-3 mb-0">
+                <input type="checkbox" class="o_partner_classifier_type mr-1" value="distribuidores"/>
+                Distribuidores
+            </label>
             <button type="button" class="btn btn-primary o_partner_classifier_update">
                 Update
             </button>

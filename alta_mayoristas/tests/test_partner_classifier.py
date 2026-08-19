@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=import-error,missing-function-docstring,protected-access,invalid-name
 """Tests for partner classifier list, sales totals, and bulk customer type update."""
+from odoo import fields
 from odoo.exceptions import AccessError, UserError
 from odoo.tests import tagged
 from odoo.tests.common import TransactionCase
@@ -72,7 +73,18 @@ class TestPartnerClassifier(TransactionCase):
 
     def _recompute_partner(self, partner):
         self.env['res.partner']._recompute_total_sales_amount_for_partners(partner.ids)
-        partner.invalidate_cache(['total_sales_amount'])
+        partner.invalidate_cache([
+            'total_sales_amount',
+            'last_pos_sale_date',
+            'last_sale_order_date',
+        ])
+
+    def _order_local_date(self, order):
+        dt_value = order.date_order
+        if isinstance(dt_value, str):
+            dt_value = fields.Datetime.from_string(dt_value)
+        local_dt = fields.Datetime.context_timestamp(order, dt_value)
+        return local_dt.date()
 
     def _second_company(self):
         company = self.env['res.company'].search(
@@ -90,6 +102,40 @@ class TestPartnerClassifier(TransactionCase):
         self._recompute_partner(partner)
         self.assertEqual(partner.total_sales_amount, 0.0)
         self.assertFalse(partner.primary_company_id)
+        self.assertFalse(partner.last_pos_sale_date)
+        self.assertFalse(partner.last_sale_order_date)
+
+    def test_last_sale_dates_by_channel_and_state(self):
+        pos_partner = self.env['res.partner'].create({'name': 'POS Date Partner'})
+        pos_order = self._create_pos_order(pos_partner, 80.0)
+        self.assertEqual(
+            pos_partner.last_pos_sale_date,
+            self._order_local_date(pos_order),
+        )
+        self.assertFalse(pos_partner.last_sale_order_date)
+
+        so_partner = self.env['res.partner'].create({'name': 'SO Date Partner'})
+        sale_order = self._create_sale_order(so_partner, 150.0)
+        self.assertFalse(so_partner.last_pos_sale_date)
+        self.assertEqual(
+            so_partner.last_sale_order_date,
+            self._order_local_date(sale_order),
+        )
+
+        draft_partner = self.env['res.partner'].create({'name': 'Draft Date Partner'})
+        self._create_pos_order(draft_partner, 10.0, state='draft')
+        self.env['sale.order'].create({
+            'partner_id': draft_partner.id,
+            'company_id': self.env.company.id,
+            'order_line': [(0, 0, {
+                'product_id': self.product.id,
+                'product_uom_qty': 1,
+                'price_unit': 40.0,
+                'tax_id': [(6, 0, [])],
+            })],
+        })
+        self.assertFalse(draft_partner.last_pos_sale_date)
+        self.assertFalse(draft_partner.last_sale_order_date)
 
     def test_create_from_ui_sets_pos_company_from_payload(self):
         company = self.env.company
@@ -201,6 +247,13 @@ class TestPartnerClassifier(TransactionCase):
         )
         self.assertEqual(partner.customer_type, 'publico_general')
 
+    def test_bulk_update_sets_distribuidores(self):
+        partner = self.env['res.partner'].create({'name': 'Bulk Distributor'})
+        self.env['res.partner'].with_user(self.pos_user).action_bulk_set_customer_type(
+            partner.ids, 'distribuidores',
+        )
+        self.assertEqual(partner.customer_type, 'distribuidores')
+
     def test_bulk_update_empty_partner_ids_raises(self):
         with self.assertRaises(UserError) as ctx:
             self.env['res.partner'].with_user(self.pos_user).action_bulk_set_customer_type(
@@ -214,7 +267,10 @@ class TestPartnerClassifier(TransactionCase):
             self.env['res.partner'].with_user(self.pos_user).action_bulk_set_customer_type(
                 partner.ids, False,
             )
-        self.assertEqual(str(ctx.exception), 'Seleccione Mayorista o Público General.')
+        self.assertEqual(
+            str(ctx.exception),
+            'Seleccione Mayorista, Público General o Distribuidores.',
+        )
 
     def test_bulk_update_access_denied_without_pos_group(self):
         partner = self.env['res.partner'].create({'name': 'Access Partner'})

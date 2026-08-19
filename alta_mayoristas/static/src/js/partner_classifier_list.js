@@ -49,7 +49,7 @@ odoo.define('alta_mayoristas.partner_classifier_list', function (require) {
                 return;
             }
             if (!this._selectedCustomerType) {
-                this.do_warn(_t('Warning'), _t('Seleccione Mayorista o Público General.'));
+                this.do_warn(_t('Warning'), _t('Seleccione Mayorista, Público General o Distribuidores.'));
                 return;
             }
             this._rpc({

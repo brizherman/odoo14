@@ -2,13 +2,14 @@
 # pylint: disable=import-error,too-few-public-methods
 """Extend res.partner with POS/backend customer type classification."""
 from collections import defaultdict
+from datetime import date, datetime
 
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
 
 SALE_ORDER_STATES = ('sale', 'done')
 POS_ORDER_STATES = ('paid', 'done', 'invoiced')
-VALID_CUSTOMER_TYPES = ('mayorista', 'publico_general')
+VALID_CUSTOMER_TYPES = ('mayorista', 'publico_general', 'distribuidores')
 
 
 class ResPartner(models.Model):
@@ -20,6 +21,7 @@ class ResPartner(models.Model):
         selection=[
             ('mayorista', _('Mayorista')),
             ('publico_general', _('Público General')),
+            ('distribuidores', _('Distribuidores')),
         ],
         default=False,
     )
@@ -39,6 +41,14 @@ class ResPartner(models.Model):
         string='Phone',
         compute='_compute_phone_display',
     )
+    last_pos_sale_date = fields.Date(
+        string='Last POS Sale',
+        compute='_compute_last_sale_dates',
+    )
+    last_sale_order_date = fields.Date(
+        string='Last Sales Order',
+        compute='_compute_last_sale_dates',
+    )
 
     @api.depends('phone', 'mobile')
     def _compute_phone_display(self):
@@ -50,6 +60,54 @@ class ResPartner(models.Model):
         totals = self._read_sales_totals_by_partner(self.ids)
         for partner in self:
             partner.total_sales_amount = totals.get(partner.id, 0.0)
+
+    @api.depends()
+    def _compute_last_sale_dates(self):
+        pos_dates = self._read_max_order_date_by_partner(
+            'pos.order', POS_ORDER_STATES, self.ids,
+        )
+        so_dates = self._read_max_order_date_by_partner(
+            'sale.order', SALE_ORDER_STATES, self.ids,
+        )
+        for partner in self:
+            partner.last_pos_sale_date = pos_dates.get(partner.id, False)
+            partner.last_sale_order_date = so_dates.get(partner.id, False)
+
+    def _max_datetime_to_date(self, value):
+        """Convert an order datetime (UTC) to a calendar date in user TZ."""
+        if not value:
+            return False
+        if isinstance(value, datetime):
+            dt_value = value
+        elif isinstance(value, date):
+            return value
+        else:
+            dt_value = fields.Datetime.from_string(value)
+            if not dt_value:
+                return False
+        local_dt = fields.Datetime.context_timestamp(self, dt_value)
+        return local_dt.date()
+
+    @api.model
+    def _read_max_order_date_by_partner(self, model_name, states, partner_ids):
+        """Return partner_id -> max date_order as Date for counted orders."""
+        if not partner_ids or model_name not in self.env:
+            return {}
+        groups = self.env[model_name].read_group(
+            [('partner_id', 'in', partner_ids), ('state', 'in', list(states))],
+            ['date_order:max'],
+            ['partner_id'],
+            lazy=False,
+        )
+        dates = {}
+        for group in groups:
+            partner_ref = group.get('partner_id')
+            if not partner_ref:
+                continue
+            dates[partner_ref[0]] = self._max_datetime_to_date(
+                group.get('date_order'),
+            )
+        return dates
 
     @api.model
     def _read_sales_totals_by_partner(self, partner_ids):
@@ -178,7 +236,7 @@ class ResPartner(models.Model):
         if not partner_ids:
             raise UserError(_('Seleccione al menos un contacto.'))
         if customer_type not in VALID_CUSTOMER_TYPES:
-            raise UserError(_('Seleccione Mayorista o Público General.'))
+            raise UserError(_('Seleccione Mayorista, Público General o Distribuidores.'))
         partners = self.browse(partner_ids).exists()
         partners.write({'customer_type': customer_type})
         count = len(partners)

@@ -47,7 +47,7 @@ odoo.define('alta_mayoristas.ClientDetailsEdit', function (require) {
                 const isNewCustomer = !this.props.partner.id;
                 if (isNewCustomer && !this.changes.customer_type) {
                     return this.showPopup('ErrorPopup', {
-                        title: _t('Select Mayorista or Público General'),
+                        title: _t('Select Mayorista, Público General or Distribuidores'),
                     });
                 }
                 if (isNewCustomer && this.env.pos.pricelists.length > 1) {

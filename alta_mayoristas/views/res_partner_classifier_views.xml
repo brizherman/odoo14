@@ -13,6 +13,8 @@
                 <field name="phone_display" string="Phone"/>
                 <field name="total_sales_amount" optional="show"
                        groups="point_of_sale.group_pos_manager"/>
+                <field name="last_pos_sale_date"/>
+                <field name="last_sale_order_date"/>
                 <field name="phone" invisible="1"/>
                 <field name="mobile" invisible="1"/>
             </tree>
@@ -35,6 +37,8 @@
                         domain="[('customer_type', '=', 'mayorista')]"/>
                 <filter string="Público General" name="publico_general"
                         domain="[('customer_type', '=', 'publico_general')]"/>
+                <filter string="Distribuidores" name="distribuidores"
+                        domain="[('customer_type', '=', 'distribuidores')]"/>
                 <separator/>
                 <filter string="Con ventas" name="with_sales"
                         domain="[('primary_company_id', '!=', False)]"/>
@@ -62,7 +66,7 @@
                 All contacts are classified
             </p>
             <p>
-                Select contacts, choose Mayorista or Público General, then click Update.
+                Select contacts, choose Mayorista, Público General or Distribuidores, then click Update.
             </p>
         </field>
     </record>

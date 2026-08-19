@@ -3,7 +3,7 @@
 {
     'name': 'Alta Mayoristas',
     'version': '14.0.1.3.1',
-    'summary': 'Classify POS new customers as Mayorista or Público General',
+    'summary': 'Classify POS customers as Mayorista, Público General or Distribuidores',
     'author': 'Custom',
     'category': 'Point of Sale',
     'depends': ['point_of_sale', 'sale', 'contacts'],

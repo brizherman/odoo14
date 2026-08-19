@@ -18,6 +18,13 @@
                            t-on-change="onCustomerTypeChange"/>
                     <span>Público General</span>
                 </label>
+                <label class="customer-type-option">
+                    <input type="checkbox"
+                           data-customer-type="distribuidores"
+                           t-att-checked="isCustomerTypeSelected('distribuidores') ? true : undefined"
+                           t-on-change="onCustomerTypeChange"/>
+                    <span>Distribuidores</span>
+                </label>
             </div>
         </xpath>
         <xpath expr="//select[@name='property_product_pricelist']/t[@t-foreach='env.pos.pricelists']" position="before">
