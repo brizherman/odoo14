@@ -32,6 +32,9 @@
                 <t t-esc="env._t('Select Pricelist')"/>
             </option>
         </xpath>
+        <xpath expr="//select[@name='property_product_pricelist']//option[@t-att-value='pricelist.id']" position="attributes">
+            <attribute name="t-att-selected">isPricelistSelected(pricelist.id) ? true : undefined</attribute>
+        </xpath>
     </t>
 
 </templates>

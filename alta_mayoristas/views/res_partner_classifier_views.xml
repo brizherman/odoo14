@@ -4,17 +4,20 @@
         <field name="name">res.partner.classifier.tree</field>
         <field name="model">res.partner</field>
         <field name="arch" type="xml">
-            <tree string="Classify Customers" default_order="total_sales_amount desc,name asc">
-                <field name="name"/>
-                <field name="primary_company_id"/>
-                <field name="customer_type"/>
-                <field name="property_product_pricelist"/>
-                <field name="vat"/>
-                <field name="phone_display" string="Phone"/>
+            <tree string="Classify Customers" create="false"
+                  default_order="total_sales_amount desc,name asc">
+                <field name="name" optional="show"/>
+                <field name="primary_company_id" optional="show"/>
+                <field name="customer_type" optional="show"/>
+                <field name="property_product_pricelist" optional="show"/>
+                <field name="vat" optional="show"/>
+                <field name="phone_display" string="Phone" optional="show"/>
                 <field name="total_sales_amount" optional="show"
                        groups="point_of_sale.group_pos_manager"/>
-                <field name="last_pos_sale_date"/>
-                <field name="last_sale_order_date"/>
+                <field name="sales_last_6_months" optional="show"/>
+                <field name="sales_last_6_months_avg" optional="show"/>
+                <field name="last_pos_sale_date" string="Última venta POS" optional="show"/>
+                <field name="last_sale_order_date" string="Última venta SO" optional="show"/>
                 <field name="phone" invisible="1"/>
                 <field name="mobile" invisible="1"/>
             </tree>
@@ -39,6 +42,8 @@
                         domain="[('customer_type', '=', 'publico_general')]"/>
                 <filter string="Distribuidores" name="distribuidores"
                         domain="[('customer_type', '=', 'distribuidores')]"/>
+                <filter string="Mayorista dormido" name="mayorista_dormido"
+                        domain="[('customer_type', '=', 'mayorista_dormido')]"/>
                 <separator/>
                 <filter string="Con ventas" name="with_sales"
                         domain="[('primary_company_id', '!=', False)]"/>
@@ -56,7 +61,7 @@
         <field name="name">Clasificar clientes</field>
         <field name="type">ir.actions.act_window</field>
         <field name="res_model">res.partner</field>
-        <field name="view_mode">tree</field>
+        <field name="view_mode">tree,form</field>
         <field name="search_view_id" ref="view_partner_classifier_search"/>
         <field name="domain">['|', ('primary_company_id', 'in', allowed_company_ids), ('primary_company_id', '=', False)]</field>
         <field name="context">{'search_default_unclassified': 1, 'search_default_with_sales': 1, 'partner_classifier_view': True}</field>
@@ -66,7 +71,7 @@
                 All contacts are classified
             </p>
             <p>
-                Select contacts, choose Mayorista, Público General or Distribuidores, then click Update.
+                Select contacts, choose a type (its matching pricelist is required), then click Update.
             </p>
         </field>
     </record>
@@ -75,6 +80,13 @@
         <field name="sequence" eval="1"/>
         <field name="view_mode">tree</field>
         <field name="view_id" ref="view_partner_classifier_tree"/>
+        <field name="act_window_id" ref="action_partner_classifier"/>
+    </record>
+
+    <record id="action_partner_classifier_view_form" model="ir.actions.act_window.view">
+        <field name="sequence" eval="2"/>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="base.view_partner_form"/>
         <field name="act_window_id" ref="action_partner_classifier"/>
     </record>
 

@@ -2,13 +2,14 @@
 # pylint: disable=missing-module-docstring,manifest-required-author,missing-readme
 {
     'name': 'Alta Mayoristas',
-    'version': '14.0.1.3.1',
-    'summary': 'Classify POS customers as Mayorista, Público General or Distribuidores',
+    'version': '14.0.1.7.0',
+    'summary': 'Classify POS customers and assign matching pricelists',
     'author': 'Custom',
     'category': 'Point of Sale',
     'depends': ['point_of_sale', 'sale', 'contacts'],
     'data': [
         'security/classifier_security.xml',
+        'data/ir_cron_sales_last_6_months.xml',
         'views/res_partner_views.xml',
         'views/res_partner_classifier_views.xml',
         'views/assets.xml',

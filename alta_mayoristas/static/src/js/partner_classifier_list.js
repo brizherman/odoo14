@@ -6,6 +6,38 @@ odoo.define('alta_mayoristas.partner_classifier_list', function (require) {
     const qweb = core.qweb;
     const _t = core._t;
 
+    const PRICELIST_NAME_PUBLICO = 'Lista de precios a Publico en General';
+    const CUSTOMER_TYPE_PRICELIST_NAME = {
+        mayorista: 'Lista de precios de Mayorista',
+        publico_general: PRICELIST_NAME_PUBLICO,
+        distribuidores: 'Super Precios a Distribuidores',
+        mayorista_dormido: PRICELIST_NAME_PUBLICO,
+    };
+
+    function stripAccents(text) {
+        return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+
+    function normalizePricelistName(name) {
+        let normalized = stripAccents((name || '').trim());
+        if (normalized.slice(-6) === ' (MXN)') {
+            normalized = normalized.slice(0, -6).trim();
+        }
+        return normalized.toLowerCase();
+    }
+
+    function pricelistNameMatches(actualName, requiredName) {
+        const actual = normalizePricelistName(actualName);
+        const required = normalizePricelistName(requiredName);
+        if (actual === required) {
+            return true;
+        }
+        if (required.split(/\s+/).indexOf('publico') !== -1) {
+            return actual.split(/\s+/).indexOf('publico') !== -1;
+        }
+        return false;
+    }
+
     ListController.include({
         renderButtons: function () {
             this._super.apply(this, arguments);
@@ -13,6 +45,7 @@ odoo.define('alta_mayoristas.partner_classifier_list', function (require) {
                 return;
             }
             this._selectedCustomerType = false;
+            this._classifierPricelists = [];
             const $controls = $(qweb.render('PartnerClassifierList.controls'));
             this.$buttons = this.$buttons || $();
             this.$buttons.append($controls);
@@ -20,6 +53,7 @@ odoo.define('alta_mayoristas.partner_classifier_list', function (require) {
                 .on('change', this._onClassifierTypeChange.bind(this));
             this.$buttons.find('.o_partner_classifier_update')
                 .on('click', this._onClassifierUpdate.bind(this));
+            this._loadClassifierPricelists();
         },
 
         _isPartnerClassifierView: function () {
@@ -31,14 +65,79 @@ odoo.define('alta_mayoristas.partner_classifier_list', function (require) {
             );
         },
 
+        _normalizePricelistName: normalizePricelistName,
+
+        _loadClassifierPricelists: function () {
+            const self = this;
+            return this._rpc({
+                model: 'product.pricelist',
+                method: 'search_read',
+                domain: [],
+                fields: ['id', 'name', 'company_id'],
+                orderBy: [{name: 'name', asc: true}],
+            }).then(function (pricelists) {
+                self._classifierPricelists = pricelists || [];
+                const $select = self.$buttons.find('.o_partner_classifier_pricelist');
+                self._classifierPricelists.forEach(function (pricelist) {
+                    $select.append($('<option/>', {
+                        value: pricelist.id,
+                        text: pricelist.name,
+                    }));
+                });
+                if (self._selectedCustomerType) {
+                    self._selectMatchingPricelist(self._selectedCustomerType);
+                }
+            });
+        },
+
+        _findMatchingPricelist: function (customerType) {
+            const required = CUSTOMER_TYPE_PRICELIST_NAME[customerType];
+            if (!required) {
+                return undefined;
+            }
+            const companyId = (
+                this.initialState.context.allowed_company_ids || []
+            )[0];
+            const matches = _.filter(this._classifierPricelists, function (pricelist) {
+                return pricelistNameMatches(pricelist.name, required);
+            });
+            const companyMatch = _.find(matches, function (pricelist) {
+                return pricelist.company_id && pricelist.company_id[0] === companyId;
+            });
+            return companyMatch || matches[0];
+        },
+
+        _selectMatchingPricelist: function (customerType) {
+            const match = this._findMatchingPricelist(customerType);
+            const $select = this.$buttons.find('.o_partner_classifier_pricelist');
+            $select.val(match ? String(match.id) : '');
+        },
+
         _onClassifierTypeChange: function (ev) {
             const $target = $(ev.target);
             if ($target.prop('checked')) {
                 this.$buttons.find('.o_partner_classifier_type').not($target).prop('checked', false);
                 this._selectedCustomerType = $target.val();
+                this._selectMatchingPricelist(this._selectedCustomerType);
             } else {
                 this._selectedCustomerType = false;
             }
+        },
+
+        _selectedPricelistId: function () {
+            const raw = this.$buttons.find('.o_partner_classifier_pricelist').val();
+            return raw ? parseInt(raw, 10) : false;
+        },
+
+        _pricelistMatchesCustomerType: function (pricelistId, customerType) {
+            const required = CUSTOMER_TYPE_PRICELIST_NAME[customerType];
+            if (!required || !pricelistId) {
+                return false;
+            }
+            const selected = _.find(this._classifierPricelists, function (pricelist) {
+                return pricelist.id === pricelistId;
+            });
+            return Boolean(selected && pricelistNameMatches(selected.name, required));
         },
 
         _onClassifierUpdate: function () {
@@ -48,14 +147,34 @@ odoo.define('alta_mayoristas.partner_classifier_list', function (require) {
                 this.do_warn(_t('Warning'), _t('Seleccione al menos un contacto.'));
                 return;
             }
-            if (!this._selectedCustomerType) {
-                this.do_warn(_t('Warning'), _t('Seleccione Mayorista, Público General o Distribuidores.'));
+            const pricelistId = this._selectedPricelistId();
+            if (!this._selectedCustomerType && !pricelistId) {
+                this.do_warn(
+                    _t('Warning'),
+                    _t('Seleccione un tipo de cliente o una lista de precios.')
+                );
                 return;
+            }
+            if (this._selectedCustomerType) {
+                if (!pricelistId) {
+                    this.do_warn(
+                        _t('Warning'),
+                        _t('Seleccione la lista de precios que corresponde al tipo de cliente.')
+                    );
+                    return;
+                }
+                if (!this._pricelistMatchesCustomerType(pricelistId, this._selectedCustomerType)) {
+                    this.do_warn(
+                        _t('Warning'),
+                        _t('La lista de precios no corresponde al tipo de cliente.')
+                    );
+                    return;
+                }
             }
             this._rpc({
                 model: 'res.partner',
                 method: 'action_bulk_set_customer_type',
-                args: [selectedIds, this._selectedCustomerType],
+                args: [selectedIds, this._selectedCustomerType, pricelistId],
             }).then(function (result) {
                 if (result && result.params) {
                     self.displayNotification({

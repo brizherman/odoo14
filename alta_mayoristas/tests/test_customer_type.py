@@ -34,6 +34,13 @@ class TestCustomerType(TransactionCase):
         })
         self.assertEqual(partner.customer_type, 'distribuidores')
 
+    def test_create_partner_mayorista_dormido(self):
+        partner = self.env['res.partner'].create({
+            'name': 'Dormant Wholesale Customer',
+            'customer_type': 'mayorista_dormido',
+        })
+        self.assertEqual(partner.customer_type, 'mayorista_dormido')
+
     def test_write_existing_partner_without_customer_type(self):
         partner = self.env['res.partner'].create({'name': 'Existing Customer'})
         partner.write({'phone': '5551234567'})

@@ -35,6 +35,12 @@ msgid "Distribuidores"
 msgstr "Distribuidores"
 
 #. module: alta_mayoristas
+#: model:ir.model.fields.selection,name:alta_mayoristas.selection__res_partner__customer_type__mayorista_dormido
+#: model_terms:ir.ui.view,arch_db:alta_mayoristas.view_partner_classifier_search
+msgid "Mayorista dormido"
+msgstr "Mayorista dormido"
+
+#. module: alta_mayoristas
 #: model_terms:ir.ui.view,arch_db:alta_mayoristas.view_partner_form_customer_type
 msgid "Customer Type"
 msgstr "Tipo de Cliente"
@@ -60,6 +66,16 @@ msgstr "Seleccione lista de precios"
 #: model:ir.model.fields,field_description:alta_mayoristas.field_res_partner__total_sales_amount
 msgid "Total Sales Amount"
 msgstr "Total de ventas"
+
+#. module: alta_mayoristas
+#: model:ir.model.fields,field_description:alta_mayoristas.field_res_partner__sales_last_6_months
+msgid "Last 6 Months Sales"
+msgstr "Ventas últimos 6 meses"
+
+#. module: alta_mayoristas
+#: model:ir.model.fields,field_description:alta_mayoristas.field_res_partner__sales_last_6_months_avg
+msgid "6-Month Monthly Average"
+msgstr "Promedio mensual 6 meses"
 
 #. module: alta_mayoristas
 #: model:ir.model.fields,field_description:alta_mayoristas.field_res_partner__last_pos_sale_date
@@ -135,6 +151,47 @@ msgstr "Seleccione Mayorista, Público General o Distribuidores."
 #. module: alta_mayoristas
 #: code:addons/alta_mayoristas/models/res_partner.py:0
 #, python-format
+msgid "Seleccione Mayorista, Público General, Distribuidores o Mayorista dormido."
+msgstr "Seleccione Mayorista, Público General, Distribuidores o Mayorista dormido."
+
+#. module: alta_mayoristas
+#: code:addons/alta_mayoristas/models/res_partner.py:0
+#: code:addons/alta_mayoristas/static/src/js/partner_classifier_list.js:0
+#, python-format
+msgid "Seleccione un tipo de cliente o una lista de precios."
+msgstr "Seleccione un tipo de cliente o una lista de precios."
+
+#. module: alta_mayoristas
+#: code:addons/alta_mayoristas/models/res_partner.py:0
+#, python-format
+msgid "Seleccione la lista de precios que corresponde al tipo de cliente."
+msgstr "Seleccione la lista de precios que corresponde al tipo de cliente."
+
+#. module: alta_mayoristas
+#: code:addons/alta_mayoristas/models/res_partner.py:0
+#: code:addons/alta_mayoristas/static/src/js/partner_classifier_list.js:0
+#: code:addons/alta_mayoristas/static/src/js/ClientDetailsEdit.js:0
+#, python-format
+msgid "La lista de precios no corresponde al tipo de cliente."
+msgstr "La lista de precios no corresponde al tipo de cliente."
+
+#. module: alta_mayoristas
+#: code:addons/alta_mayoristas/models/res_partner.py:0
+#: code:addons/alta_mayoristas/static/src/js/partner_classifier_list.js:0
+#: code:addons/alta_mayoristas/static/src/js/ClientDetailsEdit.js:0
+#, python-format
+msgid "No se encontró la lista de precios requerida."
+msgstr "No se encontró la lista de precios requerida."
+
+#. module: alta_mayoristas
+#: code:addons/alta_mayoristas/models/res_partner.py:0
+#, python-format
+msgid "Seleccione una lista de precios válida."
+msgstr "Seleccione una lista de precios válida."
+
+#. module: alta_mayoristas
+#: code:addons/alta_mayoristas/models/res_partner.py:0
+#, python-format
 msgid "Se actualizaron %s contacto(s)."
 msgstr "Se actualizaron %s contacto(s)."
 
@@ -147,3 +204,8 @@ msgstr "No tiene permiso para clasificar clientes."
 #: code:addons/alta_mayoristas/models/res_partner.py:0
 msgid "Success"
 msgstr "Éxito"
+
+#. module: alta_mayoristas
+#: code:addons/alta_mayoristas/static/src/xml/partner_classifier_list.xml:0
+msgid "Actualizar"
+msgstr "Actualizar"
