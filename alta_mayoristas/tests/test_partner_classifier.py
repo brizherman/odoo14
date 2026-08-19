@@ -72,12 +72,77 @@ class TestPartnerClassifier(TransactionCase):
 
     def _recompute_partner(self, partner):
         self.env['res.partner']._recompute_total_sales_amount_for_partners(partner.ids)
-        partner.invalidate_cache(['total_sales_amount'])
+        partner.invalidate_cache(['total_sales_amount', 'primary_company_id'])
+
+    def _second_company(self):
+        return self.env['res.company'].search(
+            [('id', '!=', self.env.company.id)],
+            limit=1,
+        )
 
     def test_total_sales_amount_no_orders(self):
         partner = self.env['res.partner'].create({'name': 'No Sales Partner'})
         self._recompute_partner(partner)
         self.assertEqual(partner.total_sales_amount, 0.0)
+        self.assertFalse(partner.primary_company_id)
+
+    def test_primary_company_follows_highest_amount(self):
+        company_b = self._second_company()
+        if not company_b:
+            self.skipTest('A second company is required')
+        partner = self.env['res.partner'].create({'name': 'Multi Sucursal Partner'})
+        order_low = self._create_pos_order(partner, 50.0)
+        order_high = self._create_pos_order(partner, 80.0)
+        order_high.write({'company_id': company_b.id})
+        self._recompute_partner(partner)
+        self.assertEqual(partner.primary_company_id, company_b)
+        self.assertEqual(order_low.company_id, self.env.company)
+
+    def test_primary_company_tie_uses_latest_sale(self):
+        company_b = self._second_company()
+        if not company_b:
+            self.skipTest('A second company is required')
+        partner = self.env['res.partner'].create({'name': 'Tie Partner'})
+        older = self._create_pos_order(partner, 100.0)
+        newer = self._create_pos_order(partner, 100.0)
+        older.write({
+            'date_order': '2026-01-01 10:00:00',
+            'company_id': self.env.company.id,
+        })
+        newer.write({
+            'date_order': '2026-06-01 10:00:00',
+            'company_id': company_b.id,
+        })
+        self._recompute_partner(partner)
+        self.assertEqual(partner.primary_company_id, company_b)
+
+    def test_select_primary_company_id_empty(self):
+        Partner = self.env['res.partner']
+        self.assertFalse(Partner._select_primary_company_id({}))
+
+    def test_classifier_domain_hides_other_company_and_allows_no_sales(self):
+        company_b = self._second_company()
+        if not company_b:
+            self.skipTest('A second company is required')
+        local_partner = self.env['res.partner'].create({'name': 'Local Sales'})
+        other_partner = self.env['res.partner'].create({'name': 'Other Sales'})
+        none_partner = self.env['res.partner'].create({'name': 'No Sales Filter'})
+        self._create_pos_order(local_partner, 40.0)
+        other_order = self._create_pos_order(other_partner, 40.0)
+        other_order.write({'company_id': company_b.id})
+        self._recompute_partner(local_partner | other_partner | none_partner)
+        allowed = [self.env.company.id]
+        visible = self.env['res.partner'].search([
+            '|',
+            ('primary_company_id', 'in', allowed),
+            ('primary_company_id', '=', False),
+            ('id', 'in', (local_partner | other_partner | none_partner).ids),
+        ])
+        self.assertIn(local_partner, visible)
+        self.assertIn(none_partner, visible)
+        self.assertNotIn(other_partner, visible)
+        with_sales = visible.filtered('primary_company_id')
+        self.assertEqual(with_sales, local_partner)
 
     def test_total_sales_amount_sale_orders_only(self):
         partner = self.env['res.partner'].create({'name': 'SO Partner'})
