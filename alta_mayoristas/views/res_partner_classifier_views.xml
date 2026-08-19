@@ -6,6 +6,7 @@
         <field name="arch" type="xml">
             <tree string="Classify Customers" default_order="total_sales_amount desc,name asc">
                 <field name="name"/>
+                <field name="primary_company_id"/>
                 <field name="customer_type"/>
                 <field name="property_product_pricelist"/>
                 <field name="vat"/>
@@ -34,6 +35,15 @@
                         domain="[('customer_type', '=', 'mayorista')]"/>
                 <filter string="Público General" name="publico_general"
                         domain="[('customer_type', '=', 'publico_general')]"/>
+                <separator/>
+                <filter string="Con ventas" name="with_sales"
+                        domain="[('primary_company_id', '!=', False)]"/>
+                <filter string="Sin ventas" name="no_sales"
+                        domain="[('primary_company_id', '=', False)]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Sucursal" name="group_sucursal"
+                            context="{'group_by': 'primary_company_id'}"/>
+                </group>
             </search>
         </field>
     </record>
@@ -44,7 +54,8 @@
         <field name="res_model">res.partner</field>
         <field name="view_mode">tree</field>
         <field name="search_view_id" ref="view_partner_classifier_search"/>
-        <field name="context">{'search_default_unclassified': 1, 'partner_classifier_view': True}</field>
+        <field name="domain">['|', ('primary_company_id', 'in', allowed_company_ids), ('primary_company_id', '=', False)]</field>
+        <field name="context">{'search_default_unclassified': 1, 'search_default_with_sales': 1, 'partner_classifier_view': True}</field>
         <field name="groups_id" eval="[(6, 0, [ref('point_of_sale.group_pos_user')])]"/>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
@@ -81,6 +92,4 @@
         action="action_partner_classifier"
         groups="point_of_sale.group_pos_user"
         sequence="3"/>
-
-    <function model="res.partner" name="_recompute_all_total_sales_amounts"/>
 </odoo>
