@@ -140,6 +140,42 @@ odoo.define('alta_mayoristas.partner_classifier_list', function (require) {
             return Boolean(selected && pricelistNameMatches(selected.name, required));
         },
 
+        _getSelectedPartnerCustomerTypes: function () {
+            const selectedIds = this.getSelectedIds();
+            const types = [];
+            const list = this.model.get(this.handle);
+            const localIds = list && list.data ? list.data : [];
+            const self = this;
+            _.each(localIds, function (localId) {
+                const record = typeof localId === 'string' ? self.model.get(localId) : localId;
+                if (!record) {
+                    return;
+                }
+                const resId = record.res_id || record.id;
+                if (selectedIds.indexOf(resId) === -1) {
+                    return;
+                }
+                const customerType = record.data && record.data.customer_type;
+                if (customerType) {
+                    types.push(customerType);
+                }
+            });
+            return types;
+        },
+
+        _pricelistMatchesSelectedPartners: function (pricelistId) {
+            const customerTypes = this._getSelectedPartnerCustomerTypes();
+            const self = this;
+            return _.every(customerTypes, function (customerType) {
+                return self._pricelistMatchesCustomerType(pricelistId, customerType);
+            });
+        },
+
+        _selectedPartnersMissingCustomerType: function () {
+            const selectedCount = this.getSelectedIds().length;
+            return this._getSelectedPartnerCustomerTypes().length < selectedCount;
+        },
+
         _onClassifierUpdate: function () {
             const self = this;
             const selectedIds = this.getSelectedIds();
@@ -170,6 +206,18 @@ odoo.define('alta_mayoristas.partner_classifier_list', function (require) {
                     );
                     return;
                 }
+            } else if (this._selectedPartnersMissingCustomerType()) {
+                this.do_warn(
+                    _t('Warning'),
+                    _t('El contacto no tiene tipo de cliente.')
+                );
+                return;
+            } else if (!this._pricelistMatchesSelectedPartners(pricelistId)) {
+                this.do_warn(
+                    _t('Warning'),
+                    _t('La lista de precios no corresponde al tipo de cliente.')
+                );
+                return;
             }
             this._rpc({
                 model: 'res.partner',

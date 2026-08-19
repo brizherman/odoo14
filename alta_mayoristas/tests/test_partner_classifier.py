@@ -432,13 +432,42 @@ class TestPartnerClassifier(TransactionCase):
             'customer_type': 'mayorista',
         })
         self.env['res.partner'].with_user(self.pos_user).action_bulk_set_customer_type(
-            partner.ids, False, self.pricelist_distribuidores.id,
+            partner.ids, False, self.pricelist_mayorista.id,
         )
         self.assertEqual(partner.customer_type, 'mayorista')
         self.assertEqual(
             partner.property_product_pricelist,
-            self.pricelist_distribuidores,
+            self.pricelist_mayorista,
         )
+
+    def test_bulk_update_pricelist_only_mismatch_raises(self):
+        partner = self.env['res.partner'].create({
+            'name': 'Pricelist Mismatch Partner',
+            'customer_type': 'mayorista',
+        })
+        with self.assertRaises(UserError) as ctx:
+            self.env['res.partner'].with_user(self.pos_user).action_bulk_set_customer_type(
+                partner.ids, False, self.pricelist_distribuidores.id,
+            )
+        self.assertEqual(
+            str(ctx.exception),
+            'La lista de precios no corresponde al tipo de cliente.',
+        )
+        self.assertEqual(partner.customer_type, 'mayorista')
+
+    def test_bulk_update_pricelist_only_untyped_partner(self):
+        partner = self.env['res.partner'].create({
+            'name': 'Untyped Pricelist Partner',
+        })
+        with self.assertRaises(UserError) as ctx:
+            self.env['res.partner'].with_user(self.pos_user).action_bulk_set_customer_type(
+                partner.ids, False, self.pricelist_distribuidores.id,
+            )
+        self.assertEqual(
+            str(ctx.exception),
+            'El contacto no tiene tipo de cliente.',
+        )
+        self.assertFalse(partner.customer_type)
 
     def test_bulk_update_empty_partner_ids_raises(self):
         with self.assertRaises(UserError) as ctx:

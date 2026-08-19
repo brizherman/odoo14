@@ -381,7 +381,9 @@ class ResPartner(models.Model):
                 'property_product_pricelist': pricelist.id,
             }
         elif pricelist_id:
-            pricelist = self.env['product.pricelist'].browse(pricelist_id).exists()
+            pricelist = self.env['product.pricelist'].sudo().browse(
+                pricelist_id
+            ).exists()
             if not pricelist:
                 raise UserError(_('Seleccione una lista de precios válida.'))
             vals = {'property_product_pricelist': pricelist.id}
@@ -390,6 +392,17 @@ class ResPartner(models.Model):
                 'Seleccione un tipo de cliente o una lista de precios.'
             ))
         partners = self.browse(partner_ids).exists()
+        if not customer_type:
+            for partner in partners:
+                if not partner.customer_type:
+                    raise UserError(_(
+                        'El contacto no tiene tipo de cliente.'
+                    ))
+                if not self._pricelist_matches_customer_type(
+                        pricelist, partner.customer_type):
+                    raise UserError(_(
+                        'La lista de precios no corresponde al tipo de cliente.'
+                    ))
         partners.write(vals)
         count = len(partners)
         return {
