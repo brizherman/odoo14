@@ -5,9 +5,7 @@ from odoo import api, models
 
 from .res_partner import POS_ORDER_STATES
 
-_SALES_RECOMPUTE_FIELDS = frozenset({
-    'state', 'amount_total', 'partner_id', 'company_id', 'date_order',
-})
+_SALES_RECOMPUTE_FIELDS = frozenset({'state', 'amount_total', 'partner_id'})
 _COUNTED_POS_STATES = frozenset(POS_ORDER_STATES)
 
 

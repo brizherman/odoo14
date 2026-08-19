@@ -56,28 +56,6 @@ msgid "Total Sales Amount"
 msgstr "Total de ventas"
 
 #. module: alta_mayoristas
-#: model:ir.model.fields,field_description:alta_mayoristas.field_res_partner__primary_company_id
-#: model_terms:ir.ui.view,arch_db:alta_mayoristas.view_partner_classifier_search
-#: model_terms:ir.ui.view,arch_db:alta_mayoristas.view_partner_classifier_tree
-msgid "Sucursal"
-msgstr "Sucursal"
-
-#. module: alta_mayoristas
-#: model_terms:ir.ui.view,arch_db:alta_mayoristas.view_partner_classifier_search
-msgid "Con ventas"
-msgstr "Con ventas"
-
-#. module: alta_mayoristas
-#: model_terms:ir.ui.view,arch_db:alta_mayoristas.view_partner_classifier_search
-msgid "Sin ventas"
-msgstr "Sin ventas"
-
-#. module: alta_mayoristas
-#: model_terms:ir.ui.view,arch_db:alta_mayoristas.view_partner_classifier_search
-msgid "Group By"
-msgstr "Agrupar por"
-
-#. module: alta_mayoristas
 #: model:ir.model.fields,field_description:alta_mayoristas.field_res_partner__phone_display
 #: model_terms:ir.ui.view,arch_db:alta_mayoristas.view_partner_classifier_tree
 msgid "Phone"
