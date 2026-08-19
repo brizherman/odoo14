@@ -28,6 +28,13 @@ class ResPartner(models.Model):
         store=True,
         digits='Product Price',
     )
+    primary_company_id = fields.Many2one(
+        'res.company',
+        string='Sucursal',
+        index=True,
+        readonly=True,
+        copy=False,
+    )
     phone_display = fields.Char(
         string='Phone',
         compute='_compute_phone_display',
@@ -77,16 +84,89 @@ class ResPartner(models.Model):
 
     @api.model
     def _recompute_all_total_sales_amounts(self):
-        """Batch recompute after module install or upgrade."""
+        """Optional batch recompute of sales totals (not called on upgrade)."""
         partner_ids = self.search([]).ids
         self._recompute_total_sales_amount_for_partners(partner_ids)
 
     @api.model
+    def _sql_backfill_primary_company(self):
+        """One-time fill for empty sucursal: highest POS+SO amount, latest sale on ties.
+
+        Does not overwrite an existing primary_company_id.
+        """
+        self.env.cr.execute("""
+            UPDATE res_partner AS partner
+            SET primary_company_id = ranked.company_id
+            FROM (
+                SELECT DISTINCT ON (agg.partner_id)
+                       agg.partner_id,
+                       agg.company_id
+                FROM (
+                    SELECT
+                        orders.partner_id,
+                        orders.company_id,
+                        SUM(orders.amount_total) AS amount,
+                        MAX(orders.date_order) AS latest
+                    FROM (
+                        SELECT
+                            partner_id,
+                            company_id,
+                            amount_total,
+                            date_order
+                        FROM pos_order
+                        WHERE state IN ('paid', 'done', 'invoiced')
+                          AND partner_id IS NOT NULL
+                          AND company_id IS NOT NULL
+                        UNION ALL
+                        SELECT
+                            partner_id,
+                            company_id,
+                            amount_total,
+                            date_order
+                        FROM sale_order
+                        WHERE state IN ('sale', 'done')
+                          AND partner_id IS NOT NULL
+                          AND company_id IS NOT NULL
+                    ) AS orders
+                    GROUP BY orders.partner_id, orders.company_id
+                ) AS agg
+                ORDER BY agg.partner_id, agg.amount DESC, agg.latest DESC
+            ) AS ranked
+            WHERE partner.id = ranked.partner_id
+              AND partner.primary_company_id IS NULL
+        """)
+
+    @api.model
     def create_from_ui(self, partner):
-        """Mark new POS customers so they appear in Customers (customer_rank > 0)."""
-        if not partner.get('id') and not partner.get('customer_rank'):
-            partner = dict(partner, customer_rank=1)
+        """Mark new POS customers as customers and assign sucursal once."""
+        partner = dict(partner)
+        partner_id = partner.get('id')
+        if not partner_id:
+            if not partner.get('customer_rank'):
+                partner['customer_rank'] = 1
+            company_id = partner.get('primary_company_id') or self.env.company.id
+            partner['primary_company_id'] = int(company_id)
+        else:
+            partner.pop('primary_company_id', None)
         return super().create_from_ui(partner)
+
+    def write(self, vals):
+        """Keep an already assigned sucursal (POS create or psql backfill)."""
+        if 'primary_company_id' not in vals:
+            return super().write(vals)
+        if self.env.context.get('alta_mayoristas_backfill'):
+            return super().write(vals)
+        locked = self.filtered('primary_company_id')
+        unlocked = self - locked
+        result = True
+        if locked:
+            locked_vals = dict(vals)
+            locked_vals.pop('primary_company_id')
+            if locked_vals:
+                result = super(ResPartner, locked).write(locked_vals)
+        if unlocked:
+            result = super(ResPartner, unlocked).write(vals)
+        return result
 
     @api.model
     def action_bulk_set_customer_type(self, partner_ids, customer_type):

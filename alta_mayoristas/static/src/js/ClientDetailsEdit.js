@@ -7,6 +7,12 @@ odoo.define('alta_mayoristas.ClientDetailsEdit', function (require) {
 
     const AltaMayoristasClientDetailsEdit = (ClientDetailsEdit) =>
         class extends ClientDetailsEdit {
+            constructor() {
+                super(...arguments);
+                if (!this.intFields.includes('primary_company_id')) {
+                    this.intFields.push('primary_company_id');
+                }
+            }
             isCustomerTypeSelected(value) {
                 const current = Object.prototype.hasOwnProperty.call(
                     this.changes,
@@ -51,6 +57,9 @@ odoo.define('alta_mayoristas.ClientDetailsEdit', function (require) {
                             title: _t('Select a Pricelist'),
                         });
                     }
+                }
+                if (isNewCustomer && this.env.pos.company) {
+                    this.changes.primary_company_id = this.env.pos.company.id;
                 }
                 return super.saveChanges();
             }

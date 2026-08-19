@@ -74,10 +74,90 @@ class TestPartnerClassifier(TransactionCase):
         self.env['res.partner']._recompute_total_sales_amount_for_partners(partner.ids)
         partner.invalidate_cache(['total_sales_amount'])
 
+    def _second_company(self):
+        company = self.env['res.company'].search(
+            [('id', '!=', self.env.company.id)],
+            limit=1,
+        )
+        if company:
+            return company
+        return self.env['res.company'].create({
+            'name': 'Alta Mayoristas Test Company',
+        })
+
     def test_total_sales_amount_no_orders(self):
         partner = self.env['res.partner'].create({'name': 'No Sales Partner'})
         self._recompute_partner(partner)
         self.assertEqual(partner.total_sales_amount, 0.0)
+        self.assertFalse(partner.primary_company_id)
+
+    def test_create_from_ui_sets_pos_company_from_payload(self):
+        company = self.env.company
+        partner_id = self.env['res.partner'].create_from_ui({
+            'name': 'POS Created Customer',
+            'customer_type': 'mayorista',
+            'primary_company_id': company.id,
+        })
+        partner = self.env['res.partner'].browse(partner_id)
+        self.assertEqual(partner.primary_company_id, company)
+
+    def test_create_from_ui_falls_back_to_env_company(self):
+        partner_id = self.env['res.partner'].create_from_ui({
+            'name': 'POS Created Fallback',
+            'customer_type': 'publico_general',
+        })
+        partner = self.env['res.partner'].browse(partner_id)
+        self.assertEqual(partner.primary_company_id, self.env.company)
+
+    def test_create_from_ui_does_not_change_existing_sucursal(self):
+        company_b = self._second_company()
+        partner = self.env['res.partner'].create({
+            'name': 'Frozen Sucursal',
+            'primary_company_id': company_b.id,
+        })
+        self.env['res.partner'].create_from_ui({
+            'id': partner.id,
+            'name': 'Frozen Sucursal',
+            'primary_company_id': self.env.company.id,
+        })
+        self.assertEqual(partner.primary_company_id, company_b)
+
+    def test_write_does_not_change_assigned_sucursal(self):
+        company_b = self._second_company()
+        partner = self.env['res.partner'].create({
+            'name': 'Write Frozen',
+            'primary_company_id': self.env.company.id,
+        })
+        partner.write({'primary_company_id': company_b.id, 'comment': 'keep sucursal'})
+        self.assertEqual(partner.primary_company_id, self.env.company)
+        self.assertEqual(partner.comment, 'keep sucursal')
+
+    def test_pos_orders_do_not_reassign_sucursal(self):
+        partner = self.env['res.partner'].create({
+            'name': 'Keep Sucursal',
+            'primary_company_id': self.env.company.id,
+        })
+        self._create_pos_order(partner, 50.0)
+        self._recompute_partner(partner)
+        self.assertEqual(partner.primary_company_id, self.env.company)
+
+    def test_sql_backfill_uses_highest_amount_and_skips_set_values(self):
+        company_b = self._second_company()
+        empty = self.env['res.partner'].create({'name': 'Backfill Empty'})
+        frozen = self.env['res.partner'].create({
+            'name': 'Backfill Frozen',
+            'primary_company_id': self.env.company.id,
+        })
+        high = self._create_pos_order(empty, 80.0)
+        high.write({'company_id': company_b.id})
+        self._create_pos_order(empty, 10.0)
+        other = self._create_pos_order(frozen, 999.0)
+        other.write({'company_id': company_b.id})
+        self.env['res.partner']._sql_backfill_primary_company()
+        empty.invalidate_cache(['primary_company_id'])
+        frozen.invalidate_cache(['primary_company_id'])
+        self.assertEqual(empty.primary_company_id, company_b)
+        self.assertEqual(frozen.primary_company_id, self.env.company)
 
     def test_total_sales_amount_sale_orders_only(self):
         partner = self.env['res.partner'].create({'name': 'SO Partner'})
