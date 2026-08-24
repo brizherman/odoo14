@@ -26,10 +26,25 @@ odoo.define('alta_mayoristas.ClientDetailsEdit', function (require) {
         return normalized.toLowerCase();
     }
 
+    function withoutTrailingBranchCode(normalized) {
+        const parts = normalized.split(/\s+/);
+        if (parts.length < 2) {
+            return normalized;
+        }
+        const suffix = parts[parts.length - 1];
+        if (/^[a-z]{2,4}$/.test(suffix)) {
+            return parts.slice(0, -1).join(' ');
+        }
+        return normalized;
+    }
+
     function pricelistNameMatches(actualName, requiredName) {
         const actual = normalizePricelistName(actualName);
         const required = normalizePricelistName(requiredName);
         if (actual === required) {
+            return true;
+        }
+        if (withoutTrailingBranchCode(actual) === required) {
             return true;
         }
         if (required.split(/\s+/).indexOf('publico') !== -1) {
@@ -86,12 +101,31 @@ odoo.define('alta_mayoristas.ClientDetailsEdit', function (require) {
                     return undefined;
                 }
                 const pricelists = this.env.pos.pricelists || [];
-                return _.find(pricelists, function (pricelist) {
+                const matches = _.filter(pricelists, function (pricelist) {
                     return pricelistNameMatches(pricelist.name, required);
                 });
+                if (!matches.length) {
+                    return undefined;
+                }
+                const selectedId = parseInt(this._getPricelistValue(), 10);
+                const selectedMatch = _.find(matches, function (pricelist) {
+                    return pricelist.id === selectedId;
+                });
+                return selectedMatch || matches[0];
             }
             isPricelistSelected(pricelistId) {
                 return parseInt(this._getPricelistValue(), 10) === pricelistId;
+            }
+            _selectedPricelistMatchesType(customerType) {
+                const required = CUSTOMER_TYPE_PRICELIST_NAME[customerType];
+                if (!required) {
+                    return false;
+                }
+                const pricelistId = parseInt(this._getPricelistValue(), 10) || false;
+                const selected = _.find(this.env.pos.pricelists || [], function (pricelist) {
+                    return pricelist.id === pricelistId;
+                });
+                return Boolean(selected && pricelistNameMatches(selected.name, required));
             }
             _validateTypePricelistPair() {
                 const customerType = this._getCustomerType();
@@ -104,15 +138,13 @@ odoo.define('alta_mayoristas.ClientDetailsEdit', function (require) {
                 ) {
                     return true;
                 }
-                const match = this._findMatchingPricelist(customerType);
-                if (!match) {
+                if (!this._findMatchingPricelist(customerType)) {
                     this.showPopup('ErrorPopup', {
                         title: _t('No se encontró la lista de precios requerida.'),
                     });
                     return false;
                 }
-                const pricelistId = parseInt(this._getPricelistValue(), 10) || false;
-                if (pricelistId !== match.id) {
+                if (!this._selectedPricelistMatchesType(customerType)) {
                     this.showPopup('ErrorPopup', {
                         title: _t('La lista de precios no corresponde al tipo de cliente.'),
                     });

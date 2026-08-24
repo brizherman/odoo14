@@ -505,6 +505,48 @@ class TestPartnerClassifier(TransactionCase):
         finally:
             partner_mod.CUSTOMER_TYPE_PRICELIST_NAME['mayorista'] = original
 
+    def test_pricelist_name_matches_branch_suffix(self):
+        Partner = self.env['res.partner']
+        self.assertTrue(Partner._pricelist_name_matches(
+            'Lista de precios de Mayorista ENS',
+            'Lista de precios de Mayorista',
+        ))
+        self.assertTrue(Partner._pricelist_name_matches(
+            'Lista de precios de Mayorista ENS (MXN)',
+            'Lista de precios de Mayorista',
+        ))
+        self.assertTrue(Partner._pricelist_name_matches(
+            'Super Precios a Distribuidores ENS',
+            'Super Precios a Distribuidores',
+        ))
+        self.assertTrue(Partner._pricelist_name_matches(
+            'Lista de precios a Publico en General ENS',
+            'Lista de precios a Publico en General',
+        ))
+        self.assertTrue(Partner._pricelist_name_matches(
+            'Lista de precios de Mayorista',
+            'Lista de precios de Mayorista',
+        ))
+        self.assertFalse(Partner._pricelist_name_matches(
+            'Super Precios a Distribuidores (-5%)',
+            'Super Precios a Distribuidores',
+        ))
+
+    def test_bulk_update_accepts_branch_suffix_pricelist(self):
+        partner = self.env['res.partner'].create({
+            'name': 'Ensenada Mayorista Partner',
+        })
+        ensenada = self.env['product.pricelist'].create({
+            'name': 'Lista de precios de Mayorista ENS',
+            'company_id': False,
+            'currency_id': self.env.company.currency_id.id,
+        })
+        self.env['res.partner'].with_user(self.pos_user).action_bulk_set_customer_type(
+            partner.ids, 'mayorista', ensenada.id,
+        )
+        self.assertEqual(partner.customer_type, 'mayorista')
+        self.assertEqual(partner.property_product_pricelist, ensenada)
+
     def test_bulk_update_accepts_alternate_publico_pricelist(self):
         partner = self.env['res.partner'].create({
             'name': 'Duplicate Publico Partner',

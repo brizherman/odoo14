@@ -326,11 +326,24 @@ class ResPartner(models.Model):
         return without_marks.casefold()
 
     @api.model
+    def _without_trailing_branch_code(self, normalized):
+        """Drop an optional 2-4 letter suffix such as ENS."""
+        parts = normalized.split()
+        if len(parts) < 2:
+            return normalized
+        suffix = parts[-1]
+        if suffix.isalpha() and 2 <= len(suffix) <= 4:
+            return ' '.join(parts[:-1])
+        return normalized
+
+    @api.model
     def _pricelist_name_matches(self, actual_name, required_name):
-        """Exact normalized match; público lists also match the word publico."""
+        """Match exact names, optional branch suffix, or público variants."""
         actual = self._normalize_pricelist_name(actual_name)
         required = self._normalize_pricelist_name(required_name)
         if actual == required:
+            return True
+        if self._without_trailing_branch_code(actual) == required:
             return True
         if 'publico' in required.split():
             return 'publico' in actual.split()

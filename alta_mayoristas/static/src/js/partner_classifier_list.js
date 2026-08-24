@@ -26,10 +26,25 @@ odoo.define('alta_mayoristas.partner_classifier_list', function (require) {
         return normalized.toLowerCase();
     }
 
+    function withoutTrailingBranchCode(normalized) {
+        const parts = normalized.split(/\s+/);
+        if (parts.length < 2) {
+            return normalized;
+        }
+        const suffix = parts[parts.length - 1];
+        if (/^[a-z]{2,4}$/.test(suffix)) {
+            return parts.slice(0, -1).join(' ');
+        }
+        return normalized;
+    }
+
     function pricelistNameMatches(actualName, requiredName) {
         const actual = normalizePricelistName(actualName);
         const required = normalizePricelistName(requiredName);
         if (actual === required) {
+            return true;
+        }
+        if (withoutTrailingBranchCode(actual) === required) {
             return true;
         }
         if (required.split(/\s+/).indexOf('publico') !== -1) {
