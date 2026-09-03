@@ -18,6 +18,7 @@
                 <field name="sales_last_6_months_avg" optional="show"/>
                 <field name="last_pos_sale_date" string="Última venta POS" optional="show"/>
                 <field name="last_sale_order_date" string="Última venta SO" optional="show"/>
+                <field name="expo_invitation_status" string="Expo invitation" optional="show"/>
                 <field name="phone" invisible="1"/>
                 <field name="mobile" invisible="1"/>
             </tree>
@@ -44,6 +45,17 @@
                         domain="[('customer_type', '=', 'distribuidores')]"/>
                 <filter string="Mayorista dormido" name="mayorista_dormido"
                         domain="[('customer_type', '=', 'mayorista_dormido')]"/>
+                <separator/>
+                <filter string="Expo: sin invitar" name="expo_not_invited"
+                        domain="[('expo_invitation_status', '=', False)]"/>
+                <filter string="Expo: Le envié invitación" name="expo_sent"
+                        domain="[('expo_invitation_status', '=', 'sent')]"/>
+                <filter string="Expo: No contestó" name="expo_no_answer"
+                        domain="[('expo_invitation_status', '=', 'no_answer')]"/>
+                <filter string="Expo: Lo va a pensar" name="expo_thinking"
+                        domain="[('expo_invitation_status', '=', 'thinking')]"/>
+                <filter string="Expo: No" name="expo_no"
+                        domain="[('expo_invitation_status', '=', 'no')]"/>
                 <separator/>
                 <filter string="Con ventas" name="with_sales"
                         domain="[('primary_company_id', '!=', False)]"/>

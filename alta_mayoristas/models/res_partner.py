@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=import-error,too-few-public-methods
 """Extend res.partner with POS/backend customer type classification."""
+import re
 from collections import defaultdict
 from datetime import date, datetime
 from unicodedata import category, normalize as unicode_normalize
+from urllib.parse import quote
 
 from dateutil.relativedelta import relativedelta
 
@@ -25,6 +27,19 @@ CUSTOMER_TYPE_PRICELIST_NAME = {
     'distribuidores': 'Super Precios a Distribuidores',
     'mayorista_dormido': PRICELIST_NAME_PUBLICO,
 }
+EXPO_WHATSAPP_TEMPLATE_KEY = 'alta_mayoristas.expo_whatsapp_template'
+EXPO_WHATSAPP_DEFAULT_TEMPLATE = (
+    'Hola {customer_name},\n\n'
+    'Te invitamos a Expo Factor Fiesta.\n\n'
+    'Nuestro WhatsApp: {company_whatsapp}\n'
+    'Tu número: {customer_mobile}'
+)
+EXPO_INVITATION_STATUS_SELECTION = [
+    ('sent', 'Le envié invitación'),
+    ('no_answer', 'No contestó'),
+    ('thinking', 'Lo va a pensar'),
+    ('no', 'No'),
+]
 
 
 class ResPartner(models.Model):
@@ -76,6 +91,28 @@ class ResPartner(models.Model):
         compute='_compute_sales_last_6_months',
         store=True,
         digits='Product Price',
+    )
+    expo_invitation_date = fields.Date(
+        string='Invitation Date',
+        copy=False,
+    )
+    expo_invitation_status = fields.Selection(
+        selection=EXPO_INVITATION_STATUS_SELECTION,
+        string='Invitation Status',
+        default=False,
+        copy=False,
+        index=True,
+    )
+    expo_company_whatsapp = fields.Char(
+        string='Company WhatsApp',
+        compute='_compute_expo_company_whatsapp',
+    )
+    expo_whatsapp_template = fields.Text(
+        string='WhatsApp Message Template',
+        compute='_compute_expo_whatsapp_template',
+        inverse='_inverse_expo_whatsapp_template',
+        help='Shared template for all contacts. Placeholders: '
+             '{customer_name}, {customer_mobile}, {company_whatsapp}.',
     )
 
     @api.depends('phone', 'mobile')
@@ -281,6 +318,79 @@ class ResPartner(models.Model):
               AND partner.primary_company_id IS NULL
         """)
 
+    def _compute_expo_company_whatsapp(self):
+        number = self.env.company.expo_whatsapp_number or ''
+        for partner in self:
+            partner.expo_company_whatsapp = number
+
+    def _compute_expo_whatsapp_template(self):
+        template = self.env['ir.config_parameter'].sudo().get_param(
+            EXPO_WHATSAPP_TEMPLATE_KEY,
+            EXPO_WHATSAPP_DEFAULT_TEMPLATE,
+        )
+        for partner in self:
+            partner.expo_whatsapp_template = template
+
+    def _inverse_expo_whatsapp_template(self):
+        template = self[:1].expo_whatsapp_template or ''
+        self.env['ir.config_parameter'].sudo().set_param(
+            EXPO_WHATSAPP_TEMPLATE_KEY,
+            template,
+        )
+
+    @api.onchange('expo_invitation_status')
+    def _onchange_expo_invitation_status(self):
+        if self.expo_invitation_status == 'sent':
+            self.expo_invitation_date = fields.Date.context_today(self)
+
+    @api.model
+    def _prepare_expo_invitation_vals(self, vals):
+        """Auto-set invitation date when status becomes Le envié invitación."""
+        prepared = dict(vals)
+        if (
+            prepared.get('expo_invitation_status') == 'sent'
+            and 'expo_invitation_date' not in prepared
+        ):
+            prepared['expo_invitation_date'] = fields.Date.context_today(self)
+        return prepared
+
+    @api.model
+    def _expo_whatsapp_digits(self, number):
+        """Keep digits only for wa.me links."""
+        return re.sub(r'\D', '', number or '')
+
+    def _build_expo_whatsapp_message(self):
+        self.ensure_one()
+        recipient = self.mobile or self.phone or ''
+        template = self.expo_whatsapp_template or EXPO_WHATSAPP_DEFAULT_TEMPLATE
+        return (
+            template
+            .replace('{customer_name}', self.name or '')
+            .replace('{customer_mobile}', recipient)
+            .replace('{company_whatsapp}', self.env.company.expo_whatsapp_number or '')
+        )
+
+    def action_open_expo_whatsapp(self):
+        """Open WhatsApp Web/app with the Expo invitation text in a new tab."""
+        self.ensure_one()
+        recipient = self.mobile or self.phone
+        if not recipient:
+            raise UserError(_(
+                'This contact has no mobile or phone number.'
+            ))
+        digits = self._expo_whatsapp_digits(recipient)
+        if not digits:
+            raise UserError(_(
+                'This contact has no valid phone number for WhatsApp.'
+            ))
+        message = self._build_expo_whatsapp_message()
+        url = 'https://wa.me/%s?text=%s' % (digits, quote(message))
+        return {
+            'type': 'ir.actions.act_url',
+            'url': url,
+            'target': 'new',
+        }
+
     @api.model
     def create_from_ui(self, partner):
         """Mark new POS customers as customers and assign sucursal once."""
@@ -295,8 +405,16 @@ class ResPartner(models.Model):
             partner.pop('primary_company_id', None)
         return super().create_from_ui(partner)
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        prepared_list = [
+            self._prepare_expo_invitation_vals(vals) for vals in vals_list
+        ]
+        return super().create(prepared_list)
+
     def write(self, vals):
         """Keep an already assigned sucursal (POS create or psql backfill)."""
+        vals = self._prepare_expo_invitation_vals(vals)
         if 'primary_company_id' not in vals:
             return super().write(vals)
         if self.env.context.get('alta_mayoristas_backfill'):
