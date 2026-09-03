@@ -11,6 +11,7 @@ class ResCompany(models.Model):
 
     expo_whatsapp_number = fields.Char(
         string='Expo WhatsApp Number',
-        help='WhatsApp number for this company used in Expo Factor Fiesta '
-             'invitation messages (placeholder {company_whatsapp}).',
+        help='Local MX number is fine (e.g. 6641231234). '
+             'WhatsApp links add +52 automatically; if it already starts '
+             'with 52, only + is added in the message text.',
     )

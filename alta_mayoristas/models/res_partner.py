@@ -356,8 +356,29 @@ class ResPartner(models.Model):
 
     @api.model
     def _expo_whatsapp_digits(self, number):
-        """Keep digits only for wa.me links."""
-        return re.sub(r'\D', '', number or '')
+        """Normalize MX numbers to country-code digits for wa.me (no +).
+
+        Examples:
+        - 6641231234 -> 526641231234
+        - 526641231234 -> 526641231234
+        - +52 664 123 1234 -> 526641231234
+        """
+        digits = re.sub(r'\D', '', number or '')
+        if not digits:
+            return ''
+        if digits.startswith('52') and len(digits) >= 12:
+            return digits
+        if digits.startswith('52'):
+            return digits
+        if len(digits) == 10:
+            return '52' + digits
+        return '52' + digits
+
+    @api.model
+    def _expo_whatsapp_display(self, number):
+        """Return +52... form for message placeholders."""
+        digits = self._expo_whatsapp_digits(number)
+        return ('+' + digits) if digits else ''
 
     def _build_expo_whatsapp_message(self):
         self.ensure_one()
@@ -366,8 +387,13 @@ class ResPartner(models.Model):
         return (
             template
             .replace('{customer_name}', self.name or '')
-            .replace('{customer_mobile}', recipient)
-            .replace('{company_whatsapp}', self.env.company.expo_whatsapp_number or '')
+            .replace('{customer_mobile}', self._expo_whatsapp_display(recipient))
+            .replace(
+                '{company_whatsapp}',
+                self._expo_whatsapp_display(
+                    self.env.company.expo_whatsapp_number or '',
+                ),
+            )
         )
 
     def action_open_expo_whatsapp(self):

@@ -7,7 +7,7 @@
         <field name="arch" type="xml">
             <xpath expr="//field[@name='phone']" position="after">
                 <field name="expo_whatsapp_number"
-                         placeholder="5216641234567"/>
+                         placeholder="6641231234"/>
             </xpath>
         </field>
     </record>
