@@ -15,18 +15,20 @@
                             <field name="expo_invitation_date"/>
                             <field name="expo_invitation_status"/>
                         </group>
-                        <group>
-                            <field name="expo_company_whatsapp" readonly="1"/>
-                        </group>
                     </group>
                     <group string="WhatsApp Message Template">
                         <div class="text-muted" colspan="2">
                             Shared for all contacts. Placeholders:
-                            {customer_name}, {customer_mobile}, {company_whatsapp}
+                            {customer_name}, {customer_mobile}, {company_whatsapp}.
+                            Only Administration / Settings can edit this template.
                         </div>
                         <field name="expo_whatsapp_template" nolabel="1"
+                                 colspan="2" readonly="1"
+                                 groups="!base.group_system"/>
+                        <field name="expo_whatsapp_template" nolabel="1"
                                  colspan="2"
-                                 placeholder="Hola {customer_name}..."/>
+                                 placeholder="Hola {customer_name}..."
+                                 groups="base.group_system"/>
                     </group>
                     <div>
                         <button name="action_open_expo_whatsapp"

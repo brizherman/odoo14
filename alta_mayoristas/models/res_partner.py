@@ -103,16 +103,13 @@ class ResPartner(models.Model):
         copy=False,
         index=True,
     )
-    expo_company_whatsapp = fields.Char(
-        string='Company WhatsApp',
-        compute='_compute_expo_company_whatsapp',
-    )
     expo_whatsapp_template = fields.Text(
         string='WhatsApp Message Template',
         compute='_compute_expo_whatsapp_template',
         inverse='_inverse_expo_whatsapp_template',
         help='Shared template for all contacts. Placeholders: '
-             '{customer_name}, {customer_mobile}, {company_whatsapp}.',
+             '{customer_name}, {customer_mobile}, {company_whatsapp}. '
+             'Only Administration / Settings users can edit it.',
     )
 
     @api.depends('phone', 'mobile')
@@ -318,11 +315,6 @@ class ResPartner(models.Model):
               AND partner.primary_company_id IS NULL
         """)
 
-    def _compute_expo_company_whatsapp(self):
-        number = self.env.company.expo_whatsapp_number or ''
-        for partner in self:
-            partner.expo_company_whatsapp = number
-
     def _compute_expo_whatsapp_template(self):
         template = self.env['ir.config_parameter'].sudo().get_param(
             EXPO_WHATSAPP_TEMPLATE_KEY,
@@ -332,6 +324,11 @@ class ResPartner(models.Model):
             partner.expo_whatsapp_template = template
 
     def _inverse_expo_whatsapp_template(self):
+        if not self.env.user.has_group('base.group_system'):
+            raise AccessError(_(
+                'Only Administration / Settings users can edit the '
+                'Expo WhatsApp message template.'
+            ))
         template = self[:1].expo_whatsapp_template or ''
         self.env['ir.config_parameter'].sudo().set_param(
             EXPO_WHATSAPP_TEMPLATE_KEY,

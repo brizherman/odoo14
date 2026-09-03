@@ -2,7 +2,7 @@
 # pylint: disable=missing-module-docstring,manifest-required-author,missing-readme
 {
     'name': 'Alta Mayoristas',
-    'version': '14.0.1.8.1',
+    'version': '14.0.1.8.2',
     'summary': 'Classify POS customers and assign matching pricelists',
     'author': 'Custom',
     'category': 'Point of Sale',
