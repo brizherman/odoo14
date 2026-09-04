@@ -20,11 +20,11 @@
                             <field name="expo_invitation_status"/>
                         </group>
                     </group>
-                    <group string="WhatsApp Message Template">
+                    <group string="Plantilla de mensaje de WhatsApp">
                         <div class="text-muted" colspan="2">
-                            Shared for all contacts. Placeholders:
+                            Compartida para todos los contactos. Marcadores:
                             {customer_name}, {customer_mobile}, {company_whatsapp}.
-                            Only Administration / Settings can edit this template.
+                            Solo Administración / Ajustes puede editar esta plantilla.
                         </div>
                         <field name="expo_whatsapp_template" nolabel="1"
                                  colspan="2" readonly="1"
@@ -37,7 +37,7 @@
                     <div>
                         <button name="action_open_expo_whatsapp"
                                 type="object"
-                                string="Send WhatsApp invitation"
+                                string="Enviar invitación por WhatsApp"
                                 class="btn-primary"
                                 icon="fa-whatsapp"/>
                     </div>

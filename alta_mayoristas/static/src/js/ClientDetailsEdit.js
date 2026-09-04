@@ -166,7 +166,7 @@ odoo.define('alta_mayoristas.ClientDetailsEdit', function (require) {
                 ).toString().trim();
                 if (!mobile) {
                     return this.showPopup('ErrorPopup', {
-                        title: _t('Movil (Whatsapp) is required.'),
+                        title: _t('Movil (Whatsapp) es obligatorio.'),
                     });
                 }
                 if (!this._validateTypePricelistPair()) {

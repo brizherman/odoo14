@@ -19,7 +19,7 @@
                 <field name="sales_last_6_months_avg" optional="show"/>
                 <field name="last_pos_sale_date" string="Última venta POS" optional="show"/>
                 <field name="last_sale_order_date" string="Última venta SO" optional="show"/>
-                <field name="expo_invitation_status" string="Expo invitation" optional="show"/>
+                <field name="expo_invitation_status" string="Invitación Expo" optional="show"/>
                 <field name="phone" invisible="1"/>
             </tree>
         </field>
@@ -63,9 +63,11 @@
                         domain="[('primary_company_id', '!=', False)]"/>
                 <filter string="Sin ventas" name="no_sales"
                         domain="[('primary_company_id', '=', False)]"/>
-                <group expand="0" string="Group By">
+                <group expand="0" string="Agrupar por">
                     <filter string="Sucursal" name="group_sucursal"
                             context="{'group_by': 'primary_company_id'}"/>
+                    <filter string="Fecha de invitación" name="group_expo_invitation_date"
+                            context="{'group_by': 'expo_invitation_date'}"/>
                 </group>
             </search>
         </field>

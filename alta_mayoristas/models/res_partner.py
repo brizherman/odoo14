@@ -98,23 +98,23 @@ class ResPartner(models.Model):
         digits='Product Price',
     )
     expo_invitation_date = fields.Date(
-        string='Invitation Date',
+        string='Fecha de invitación',
         copy=False,
     )
     expo_invitation_status = fields.Selection(
         selection=EXPO_INVITATION_STATUS_SELECTION,
-        string='Invitation Status',
+        string='Estado de invitación',
         default=False,
         copy=False,
         index=True,
     )
     expo_whatsapp_template = fields.Text(
-        string='WhatsApp Message Template',
+        string='Plantilla de mensaje de WhatsApp',
         compute='_compute_expo_whatsapp_template',
         inverse='_inverse_expo_whatsapp_template',
-        help='Shared template for all contacts. Placeholders: '
+        help='Plantilla compartida para todos los contactos. Marcadores: '
              '{customer_name}, {customer_mobile}, {company_whatsapp}. '
-             'Only Administration / Settings users can edit it.',
+             'Solo usuarios de Administración / Ajustes pueden editarla.',
     )
 
     @api.depends('phone', 'mobile')
@@ -129,7 +129,7 @@ class ResPartner(models.Model):
             return
         if (vals.get('mobile') or '').strip():
             return
-        raise UserError(_('Movil (Whatsapp) is required.'))
+        raise UserError(_('Movil (Whatsapp) es obligatorio.'))
 
     @api.depends()
     def _compute_total_sales_amount(self):
@@ -340,8 +340,8 @@ class ResPartner(models.Model):
     def _inverse_expo_whatsapp_template(self):
         if not self.env.user.has_group('base.group_system'):
             raise AccessError(_(
-                'Only Administration / Settings users can edit the '
-                'Expo WhatsApp message template.'
+                'Solo usuarios de Administración / Ajustes pueden editar '
+                'la plantilla de mensaje de WhatsApp de Expo.'
             ))
         template = self[:1].expo_whatsapp_template or ''
         self.env['ir.config_parameter'].sudo().set_param(
@@ -413,12 +413,12 @@ class ResPartner(models.Model):
         recipient = self.mobile or self.phone
         if not recipient:
             raise UserError(_(
-                'This contact has no mobile or phone number.'
+                'Este contacto no tiene número de móvil ni teléfono.'
             ))
         digits = self._expo_whatsapp_digits(recipient)
         if not digits:
             raise UserError(_(
-                'This contact has no valid phone number for WhatsApp.'
+                'Este contacto no tiene un número válido para WhatsApp.'
             ))
         message = self._build_expo_whatsapp_message()
         url = 'https://wa.me/%s?text=%s' % (digits, quote(message))
@@ -434,7 +434,7 @@ class ResPartner(models.Model):
         partner = dict(partner)
         partner_id = partner.get('id')
         if not (partner.get('mobile') or '').strip():
-            raise UserError(_('Movil (Whatsapp) is required.'))
+            raise UserError(_('Movil (Whatsapp) es obligatorio.'))
         if not partner_id:
             if not partner.get('customer_rank'):
                 partner['customer_rank'] = 1

@@ -10,8 +10,8 @@ class ResCompany(models.Model):
     _inherit = 'res.company'
 
     expo_whatsapp_number = fields.Char(
-        string='Expo WhatsApp Number',
-        help='Local MX number is fine (e.g. 6641231234). '
-             'WhatsApp links add +52 automatically; if it already starts '
-             'with 52, only + is added in the message text.',
+        string='Número de WhatsApp Expo',
+        help='Puede ser un número local MX (ej. 6641231234). '
+             'Los enlaces de WhatsApp agregan +52 automáticamente; si ya '
+             'empieza con 52, en el texto del mensaje solo se agrega el +.',
     )
