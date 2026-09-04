@@ -114,7 +114,7 @@ class ResPartner(models.Model):
         inverse='_inverse_expo_whatsapp_template',
         help='Plantilla compartida para todos los contactos. Marcadores: '
              '{customer_name}, {customer_mobile}, {company_whatsapp}. '
-             'Solo usuarios de Administración / Ajustes pueden editarla.',
+             'Solo usuarios de Punto de Venta pueden editarla.',
     )
 
     @api.depends('phone', 'mobile')
@@ -338,9 +338,9 @@ class ResPartner(models.Model):
             partner.expo_whatsapp_template = template
 
     def _inverse_expo_whatsapp_template(self):
-        if not self.env.user.has_group('base.group_system'):
+        if not self.env.user.has_group('point_of_sale.group_pos_user'):
             raise AccessError(_(
-                'Solo usuarios de Administración / Ajustes pueden editar '
+                'Solo usuarios de Punto de Venta pueden editar '
                 'la plantilla de mensaje de WhatsApp de Expo.'
             ))
         template = self[:1].expo_whatsapp_template or ''

@@ -24,15 +24,15 @@
                         <div class="text-muted" colspan="2">
                             Compartida para todos los contactos. Marcadores:
                             {customer_name}, {customer_mobile}, {company_whatsapp}.
-                            Solo Administración / Ajustes puede editar esta plantilla.
+                            Solo usuarios de Punto de Venta pueden editar esta plantilla.
                         </div>
                         <field name="expo_whatsapp_template" nolabel="1"
                                  colspan="2" readonly="1"
-                                 groups="!base.group_system"/>
+                                 groups="!point_of_sale.group_pos_user"/>
                         <field name="expo_whatsapp_template" nolabel="1"
                                  colspan="2"
                                  placeholder="Hola {customer_name}..."
-                                 groups="base.group_system"/>
+                                 groups="point_of_sale.group_pos_user"/>
                     </group>
                     <div>
                         <button name="action_open_expo_whatsapp"
