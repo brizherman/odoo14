@@ -48,10 +48,6 @@ class ResPartner(models.Model):
 
     _inherit = 'res.partner'
 
-    mobile = fields.Char(
-        string='Movil (Whatsapp)',
-    )
-
     customer_type = fields.Selection(
         selection=[
             ('mayorista', _('Mayorista')),
