@@ -159,6 +159,16 @@ odoo.define('alta_mayoristas.ClientDetailsEdit', function (require) {
                         title: _t('Select Mayorista, Público General or Distribuidores'),
                     });
                 }
+                const mobile = (
+                    this.changes.mobile !== undefined
+                        ? this.changes.mobile
+                        : this.props.partner.mobile || ''
+                ).toString().trim();
+                if (!mobile) {
+                    return this.showPopup('ErrorPopup', {
+                        title: _t('Movil (Whatsapp) is required.'),
+                    });
+                }
                 if (!this._validateTypePricelistPair()) {
                     return;
                 }

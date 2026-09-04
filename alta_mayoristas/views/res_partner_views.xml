@@ -8,6 +8,10 @@
             <xpath expr="//div[hasclass('oe_title')]/h1" position="after">
                 <field name="customer_type" widget="customer_type_checkboxes" nolabel="1"/>
             </xpath>
+            <xpath expr="//field[@name='mobile']" position="attributes">
+                <attribute name="string">Movil (Whatsapp)</attribute>
+                <attribute name="required">1</attribute>
+            </xpath>
             <xpath expr="//notebook" position="inside">
                 <page string="Expo Factor Fiesta" name="expo_factor_fiesta">
                     <group>

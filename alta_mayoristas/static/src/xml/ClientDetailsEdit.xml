@@ -27,6 +27,14 @@
                 </label>
             </div>
         </xpath>
+        <xpath expr="//input[hasclass('client-phone')]/.." position="after">
+            <div class="client-detail">
+                <span class="label">Movil (Whatsapp)</span>
+                <input class="detail client-mobile" name="mobile" type="tel"
+                       t-on-change="captureChange"
+                       t-att-value="props.partner.mobile || ''"/>
+            </div>
+        </xpath>
         <xpath expr="//select[@name='property_product_pricelist']/t[@t-foreach='env.pos.pricelists']" position="before">
             <option value="" t-if="!props.partner.id">
                 <t t-esc="env._t('Select Pricelist')"/>

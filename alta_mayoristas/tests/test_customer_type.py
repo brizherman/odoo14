@@ -49,6 +49,7 @@ class TestCustomerType(TransactionCase):
     def test_create_from_ui_with_customer_type(self):
         partner_id = self.env['res.partner'].create_from_ui({
             'name': 'POS Customer',
+            'mobile': '5550000004',
             'customer_type': 'mayorista',
         })
         partner = self.env['res.partner'].browse(partner_id)
@@ -58,6 +59,7 @@ class TestCustomerType(TransactionCase):
     def test_create_from_ui_sets_customer_rank(self):
         partner_id = self.env['res.partner'].create_from_ui({
             'name': 'POS Rank Customer',
+            'mobile': '5550000005',
         })
         partner = self.env['res.partner'].browse(partner_id)
         self.assertEqual(partner.customer_rank, 1)

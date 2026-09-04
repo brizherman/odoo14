@@ -39,6 +39,7 @@ EXPO_INVITATION_STATUS_SELECTION = [
     ('no_answer', 'No contestó'),
     ('thinking', 'Lo va a pensar'),
     ('no', 'No'),
+    ('added_to_expo_group', 'Lo Agregue al Grupo Expo'),
 ]
 
 
@@ -46,6 +47,10 @@ class ResPartner(models.Model):
     """Add mayorista / público general customer type and sales totals."""
 
     _inherit = 'res.partner'
+
+    mobile = fields.Char(
+        string='Movil (Whatsapp)',
+    )
 
     customer_type = fields.Selection(
         selection=[
@@ -116,6 +121,15 @@ class ResPartner(models.Model):
     def _compute_phone_display(self):
         for partner in self:
             partner.phone_display = partner.phone or partner.mobile or ''
+
+    @api.model
+    def _check_mobile_required_vals(self, vals):
+        """Reject empty Movil (Whatsapp) when the field is being set."""
+        if 'mobile' not in vals:
+            return
+        if (vals.get('mobile') or '').strip():
+            return
+        raise UserError(_('Movil (Whatsapp) is required.'))
 
     @api.depends()
     def _compute_total_sales_amount(self):
@@ -419,6 +433,8 @@ class ResPartner(models.Model):
         """Mark new POS customers as customers and assign sucursal once."""
         partner = dict(partner)
         partner_id = partner.get('id')
+        if not (partner.get('mobile') or '').strip():
+            raise UserError(_('Movil (Whatsapp) is required.'))
         if not partner_id:
             if not partner.get('customer_rank'):
                 partner['customer_rank'] = 1
@@ -433,11 +449,14 @@ class ResPartner(models.Model):
         prepared_list = [
             self._prepare_expo_invitation_vals(vals) for vals in vals_list
         ]
+        for vals in prepared_list:
+            self._check_mobile_required_vals(vals)
         return super().create(prepared_list)
 
     def write(self, vals):
         """Keep an already assigned sucursal (POS create or psql backfill)."""
         vals = self._prepare_expo_invitation_vals(vals)
+        self._check_mobile_required_vals(vals)
         if 'primary_company_id' not in vals:
             return super().write(vals)
         if self.env.context.get('alta_mayoristas_backfill'):

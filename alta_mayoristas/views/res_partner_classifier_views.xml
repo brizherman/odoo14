@@ -12,6 +12,7 @@
                 <field name="property_product_pricelist" optional="show"/>
                 <field name="vat" optional="show"/>
                 <field name="phone_display" string="Phone" optional="show"/>
+                <field name="mobile" string="Movil (Whatsapp)" optional="show"/>
                 <field name="total_sales_amount" optional="show"
                        groups="point_of_sale.group_pos_manager"/>
                 <field name="sales_last_6_months" optional="show"/>
@@ -20,7 +21,6 @@
                 <field name="last_sale_order_date" string="Última venta SO" optional="show"/>
                 <field name="expo_invitation_status" string="Expo invitation" optional="show"/>
                 <field name="phone" invisible="1"/>
-                <field name="mobile" invisible="1"/>
             </tree>
         </field>
     </record>
@@ -33,7 +33,7 @@
                 <field name="name"/>
                 <field name="vat"/>
                 <field name="phone"/>
-                <field name="mobile"/>
+                <field name="mobile" string="Movil (Whatsapp)"/>
                 <separator/>
                 <filter string="Sin clasificar" name="unclassified"
                         domain="[('customer_type', '=', False)]"/>
@@ -56,6 +56,8 @@
                         domain="[('expo_invitation_status', '=', 'thinking')]"/>
                 <filter string="Expo: No" name="expo_no"
                         domain="[('expo_invitation_status', '=', 'no')]"/>
+                <filter string="Expo: Lo Agregue al Grupo Expo" name="expo_added_to_group"
+                        domain="[('expo_invitation_status', '=', 'added_to_expo_group')]"/>
                 <separator/>
                 <filter string="Con ventas" name="with_sales"
                         domain="[('primary_company_id', '!=', False)]"/>

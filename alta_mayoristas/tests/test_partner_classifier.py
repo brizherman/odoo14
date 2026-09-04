@@ -273,6 +273,7 @@ class TestPartnerClassifier(TransactionCase):
         company = self.env.company
         partner_id = self.env['res.partner'].create_from_ui({
             'name': 'POS Created Customer',
+            'mobile': '5550000001',
             'customer_type': 'mayorista',
             'primary_company_id': company.id,
         })
@@ -282,6 +283,7 @@ class TestPartnerClassifier(TransactionCase):
     def test_create_from_ui_falls_back_to_env_company(self):
         partner_id = self.env['res.partner'].create_from_ui({
             'name': 'POS Created Fallback',
+            'mobile': '5550000002',
             'customer_type': 'publico_general',
         })
         partner = self.env['res.partner'].browse(partner_id)
@@ -296,6 +298,7 @@ class TestPartnerClassifier(TransactionCase):
         self.env['res.partner'].create_from_ui({
             'id': partner.id,
             'name': 'Frozen Sucursal',
+            'mobile': '5550000003',
             'primary_company_id': self.env.company.id,
         })
         self.assertEqual(partner.primary_company_id, company_b)
