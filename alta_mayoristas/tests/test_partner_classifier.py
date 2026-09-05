@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=import-error,missing-function-docstring,protected-access,invalid-name
 """Tests for partner classifier list, sales totals, and bulk customer type update."""
+from datetime import datetime
+
+import pytz
 from dateutil.relativedelta import relativedelta
 
 from odoo import fields
@@ -120,6 +123,8 @@ class TestPartnerClassifier(TransactionCase):
 
     def _recompute_partner(self, partner):
         self.env['res.partner']._recompute_total_sales_amount_for_partners(partner.ids)
+        partner.recompute()
+        partner.flush()
         partner.invalidate_cache([
             'total_sales_amount',
             'last_pos_sale_date',
@@ -144,11 +149,7 @@ class TestPartnerClassifier(TransactionCase):
         order.invalidate_cache(['date_order'])
 
     def _order_local_date(self, order):
-        dt_value = order.date_order
-        if isinstance(dt_value, str):
-            dt_value = fields.Datetime.from_string(dt_value)
-        local_dt = fields.Datetime.context_timestamp(order, dt_value)
-        return local_dt.date()
+        return self.env['res.partner']._max_datetime_to_date(order.date_order)
 
     def _second_company(self):
         company = self.env['res.company'].search(
@@ -174,6 +175,7 @@ class TestPartnerClassifier(TransactionCase):
     def test_last_sale_dates_by_channel_and_state(self):
         pos_partner = self.env['res.partner'].create({'name': 'POS Date Partner'})
         pos_order = self._create_pos_order(pos_partner, 80.0)
+        self._recompute_partner(pos_partner)
         self.assertEqual(
             pos_partner.last_pos_sale_date,
             self._order_local_date(pos_order),
@@ -182,6 +184,7 @@ class TestPartnerClassifier(TransactionCase):
 
         so_partner = self.env['res.partner'].create({'name': 'SO Date Partner'})
         sale_order = self._create_sale_order(so_partner, 150.0)
+        self._recompute_partner(so_partner)
         self.assertFalse(so_partner.last_pos_sale_date)
         self.assertEqual(
             so_partner.last_sale_order_date,
@@ -191,6 +194,7 @@ class TestPartnerClassifier(TransactionCase):
         draft_partner = self.env['res.partner'].create({'name': 'Draft Date Partner'})
         self._create_pos_order(draft_partner, 10.0, state='draft')
         self._create_sale_order(draft_partner, 40.0, confirm=False)
+        self._recompute_partner(draft_partner)
         self.assertFalse(draft_partner.last_pos_sale_date)
         self.assertFalse(draft_partner.last_sale_order_date)
 
@@ -200,6 +204,7 @@ class TestPartnerClassifier(TransactionCase):
             'name': 'Cross Company SO Partner',
         })
         sale_order = self._create_sale_order(partner, 150.0, company=company_b)
+        self._recompute_partner(partner)
         self.pos_user.write({
             'company_id': self.env.company.id,
             'company_ids': [(6, 0, [self.env.company.id])],
@@ -210,6 +215,30 @@ class TestPartnerClassifier(TransactionCase):
             partner_as_user.last_sale_order_date,
             self._order_local_date(sale_order),
         )
+
+    def test_pos_order_does_not_auto_recompute_sales(self):
+        partner = self.env['res.partner'].create({'name': 'No Auto POS'})
+        self._create_pos_order(partner, 80.0)
+        self.assertEqual(partner.total_sales_amount, 0.0)
+        self.assertFalse(partner.last_pos_sale_date)
+        self._recompute_partner(partner)
+        self.assertEqual(partner.total_sales_amount, 80.0)
+        self.assertTrue(partner.last_pos_sale_date)
+
+    def test_sale_order_does_not_auto_recompute_sales(self):
+        partner = self.env['res.partner'].create({'name': 'No Auto SO'})
+        self._create_sale_order(partner, 150.0)
+        self.assertEqual(partner.total_sales_amount, 0.0)
+        self.assertFalse(partner.last_sale_order_date)
+        self._recompute_partner(partner)
+        self.assertEqual(partner.total_sales_amount, 150.0)
+        self.assertTrue(partner.last_sale_order_date)
+
+    def test_next_tijuana_midnight_is_local_midnight(self):
+        next_utc = self.env['res.partner']._next_tijuana_midnight_utc()
+        self.assertGreater(next_utc, datetime.utcnow())
+        local = next_utc.replace(tzinfo=pytz.UTC).astimezone(partner_mod.TIJUANA_TZ)
+        self.assertEqual((local.hour, local.minute, local.second), (0, 0, 0))
 
     def test_sales_last_6_months_old_orders_excluded(self):
         partner = self.env['res.partner'].create({'name': 'Old Sales Partner'})

@@ -3,14 +3,18 @@
 """Extend res.partner with POS/backend customer type classification."""
 import re
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from unicodedata import category, normalize as unicode_normalize
 from urllib.parse import quote
 
+import pytz
 from dateutil.relativedelta import relativedelta
+from pytz import timezone as pytz_timezone
 
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
+
+TIJUANA_TZ = pytz_timezone('America/Tijuana')
 
 SALE_ORDER_STATES = ('sale', 'done')
 POS_ORDER_STATES = ('paid', 'done', 'invoiced')
@@ -76,10 +80,12 @@ class ResPartner(models.Model):
     last_pos_sale_date = fields.Date(
         string='Last POS Sale',
         compute='_compute_last_sale_dates',
+        store=True,
     )
     last_sale_order_date = fields.Date(
         string='Last Sales Order',
         compute='_compute_last_sale_dates',
+        store=True,
     )
     sales_last_6_months = fields.Float(
         string='Last 6 Months Sales',
@@ -155,7 +161,7 @@ class ResPartner(models.Model):
             partner.sales_last_6_months_avg = amount / 6.0
 
     def _max_datetime_to_date(self, value):
-        """Convert an order datetime (UTC) to a calendar date in user TZ."""
+        """Convert an order datetime (UTC) to a calendar date in Tijuana."""
         if not value:
             return False
         if isinstance(value, datetime):
@@ -166,8 +172,17 @@ class ResPartner(models.Model):
             dt_value = fields.Datetime.from_string(value)
             if not dt_value:
                 return False
-        local_dt = fields.Datetime.context_timestamp(self, dt_value)
-        return local_dt.date()
+        if dt_value.tzinfo is None:
+            dt_value = dt_value.replace(tzinfo=pytz.UTC)
+        return dt_value.astimezone(TIJUANA_TZ).date()
+
+    @api.model
+    def _next_tijuana_midnight_utc(self):
+        """Naive UTC datetime of the next 12:00 AM in America/Tijuana."""
+        now_local = datetime.now(TIJUANA_TZ)
+        tomorrow = now_local.date() + timedelta(days=1)
+        next_local = TIJUANA_TZ.localize(datetime.combine(tomorrow, time(0, 0)))
+        return next_local.astimezone(pytz.UTC).replace(tzinfo=None)
 
     @api.model
     def _read_max_order_date_by_partner(self, model_name, states, partner_ids):
@@ -260,16 +275,20 @@ class ResPartner(models.Model):
             self.env.add_to_compute(self._fields['total_sales_amount'], partners)
             self.env.add_to_compute(self._fields['sales_last_6_months'], partners)
             self.env.add_to_compute(self._fields['sales_last_6_months_avg'], partners)
+            self.env.add_to_compute(self._fields['last_pos_sale_date'], partners)
+            self.env.add_to_compute(self._fields['last_sale_order_date'], partners)
 
     @api.model
     def _cron_recompute_sales_last_6_months(self):
-        """Daily refresh of rolling 6-month totals (not called on upgrade)."""
+        """Daily refresh of stored sales fields (not called on upgrade)."""
         batch_size = 500
         partner_ids = self.search([('primary_company_id', '!=', False)]).ids
         for index in range(0, len(partner_ids), batch_size):
             self._recompute_total_sales_amount_for_partners(
                 partner_ids[index:index + batch_size],
             )
+            self.recompute()
+            self.flush()
 
     @api.model
     def _recompute_all_total_sales_amounts(self):
