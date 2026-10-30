@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="assets" inherit_id="point_of_sale.assets">
+        <xpath expr="." position="inside">
+            <script type="text/javascript" src="/pos_wholesale_control/static/src/js/models.js"/>
+            <script type="text/javascript" src="/pos_wholesale_control/static/src/js/wholesale_eligibility.js"/>
+            <script type="text/javascript" src="/pos_wholesale_control/static/src/js/ProductScreen.js"/>
+            <script type="text/javascript" src="/pos_wholesale_control/static/src/js/SetPricelistButton.js"/>
+            <script type="text/javascript" src="/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js"/>
+            <script type="text/javascript" src="/pos_wholesale_control/static/src/js/ManagerOverridePopup.js"/>
+            <script type="text/javascript" src="/pos_wholesale_control/static/src/js/PaymentScreen.js"/>
+        </xpath>
+        <xpath expr="//link[@id='pos-stylesheet']" position="after">
+            <link rel="stylesheet" type="text/scss" href="/pos_wholesale_control/static/src/scss/wholesale_control.scss"/>
+        </xpath>
+    </template>
+
+    <template id="qunit_suite_tests" inherit_id="point_of_sale.qunit_suite_tests">
+        <xpath expr="." position="inside">
+            <script type="text/javascript" src="/pos_wholesale_control/static/tests/wholesale_eligibility_tests.js"/>
+            <script type="text/javascript" src="/pos_wholesale_control/static/tests/wholesale_ui_tests.js"/>
+        </xpath>
+    </template>
+</odoo>

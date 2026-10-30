@@ -1,0 +1,1509 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* pos_wholesale_control
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 14.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-29 17:56+0000\n"
+"PO-Revision-Date: 2026-10-29 10:56-0700\n"
+"Last-Translator: \n"
+"Language-Team: Spanish (Mexico)\n"
+"Language: es_MX\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_partner.py:0
+#, python-format
+msgid " REFUND"
+msgstr " REEMBOLSO"
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_company.py:0
+#, python-format
+msgid "%(label)s \"%(pricelist)s\" está archivada."
+msgstr "%(label)s \"%(pricelist)s\" está archivada."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_company.py:0
+#, python-format
+msgid "%(label)s \"%(pricelist)s\" no está disponible en %(configs)s."
+msgstr "%(label)s \"%(pricelist)s\" no está disponible en %(configs)s."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_company.py:0
+#, python-format
+msgid "%(label)s \"%(pricelist)s\" pertenece a otra sucursal."
+msgstr "%(label)s \"%(pricelist)s\" pertenece a otra sucursal."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_company.py:0
+#, python-format
+msgid ""
+"%(label)s \"%(pricelist)s\" usa %(pricelist_currency)s. Esta sucursal usa "
+"%(company_currency)s."
+msgstr ""
+"%(label)s \"%(pricelist)s\" usa %(pricelist_currency)s. Esta sucursal usa "
+"%(company_currency)s."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_company.py:0
+#, python-format
+msgid "%(label)s debe ser mayor que cero."
+msgstr "%(label)s debe ser mayor que cero."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_company.py:0
+#, python-format
+msgid "%(label)s es obligatorio antes de activar el control de mayoreo."
+msgstr "%(label)s es obligatorio antes de activar el control de mayoreo."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_company.py:0
+#, python-format
+msgid "%(label)s no puede ser negativo."
+msgstr "%(label)s no puede ser negativo."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_company.py:0
+#, python-format
+msgid "%(pricelist)s (%(customer_type)s) no está disponible en %(configs)s."
+msgstr "%(pricelist)s (%(customer_type)s) no está disponible en %(configs)s."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_order.py:0
+#, python-format
+msgid ""
+"%(reason)s Para cobrar en mayoreo se necesita una excepción de gerente."
+msgstr ""
+"%(reason)s Para cobrar en mayoreo se necesita una excepción de gerente."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_company.py:0
+#, python-format
+msgid "%(timezone)s no es una zona horaria válida."
+msgstr "%(timezone)s no es una zona horaria válida."
+
+#. module: pos_wholesale_control
+#: model_terms:ir.ui.view,arch_db:pos_wholesale_control.res_config_settings_view_form_wholesale
+msgid ""
+"<span class=\"fa fa-lg fa-building-o\" title=\"Los valores definidos aquí "
+"son específicos de la sucursal.\" aria-label=\"Los valores definidos aquí "
+"son específicos de la sucursal.\" groups=\"base.group_multi_company\" "
+"role=\"img\"/>"
+msgstr ""
+"<span class=\"fa fa-lg fa-building-o\" title=\"Los valores definidos aquí "
+"son específicos de la sucursal.\" aria-label=\"Los valores definidos aquí "
+"son específicos de la sucursal.\" groups=\"base.group_multi_company\" "
+"role=\"img\"/>"
+
+#. module: pos_wholesale_control
+#: model_terms:ir.ui.view,arch_db:pos_wholesale_control.res_config_settings_view_form_wholesale
+msgid "<span class=\"o_form_label\">Asignaciones por tipo de cliente</span>"
+msgstr "<span class=\"o_form_label\">Asignaciones por tipo de cliente</span>"
+
+#. module: pos_wholesale_control
+#: model_terms:ir.ui.view,arch_db:pos_wholesale_control.res_config_settings_view_form_wholesale
+msgid "<span class=\"o_form_label\">Listas de precios</span>"
+msgstr "<span class=\"o_form_label\">Listas de precios</span>"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/ManagerOverridePopup.js:0
+#, python-format
+msgid "A non-empty reason is required."
+msgstr "El motivo es obligatorio."
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_company__wholesale_control_active
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_config_settings__wholesale_control_active
+msgid "Activar control de mayoreo"
+msgstr "Activar control de mayoreo"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_pricelist_mapping__active
+msgid "Activo"
+msgstr "Activo"
+
+#. module: pos_wholesale_control
+#: model:res.groups,name:pos_wholesale_control.group_wholesale_admin
+msgid "Administrador de mayoreo en POS"
+msgstr "Administrador de mayoreo en POS"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_company__wholesale_mapping_warning
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_config_settings__wholesale_mapping_warning
+msgid "Advertencia de configuración de mayoreo"
+msgstr "Advertencia de configuración de mayoreo"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,help:pos_wholesale_control.field_res_company__wholesale_control_active
+#: model:ir.model.fields,help:pos_wholesale_control.field_res_config_settings__wholesale_control_active
+msgid ""
+"Al activarlo, el punto de venta elige la lista de menudeo o de mayoreo con "
+"estas reglas. Los pedidos ya cobrados conservan la decisión que ya tienen "
+"guardada."
+msgstr ""
+"Al activarlo, el punto de venta elige la lista de menudeo o de mayoreo con "
+"estas reglas. Los pedidos ya cobrados conservan la decisión que ya tienen "
+"guardada."
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_company__wholesale_mapping_ids
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_config_settings__wholesale_mapping_ids
+msgid "Asignaciones por tipo de cliente"
+msgstr "Asignaciones por tipo de cliente"
+
+#. module: pos_wholesale_control
+#: model:ir.model,name:pos_wholesale_control.model_pos_wholesale_pricelist_mapping
+msgid "Asignación de lista de precios de mayoreo"
+msgstr "Asignación de lista de precios de mayoreo"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid "Authorize"
+msgstr "Autorizar"
+
+#. module: pos_wholesale_control
+#: model_terms:ir.ui.view,arch_db:pos_wholesale_control.view_pos_wholesale_override_form
+msgid "Autorización"
+msgstr "Autorización"
+
+#. module: pos_wholesale_control
+#: model_terms:ir.actions.act_window,help:pos_wholesale_control.action_pos_wholesale_override
+msgid ""
+"Cada excepción la autoriza un gerente para un solo ticket.\n"
+"                No cambia el tipo de cliente ni los pedidos siguientes."
+msgstr ""
+"Cada excepción la autoriza un gerente para un solo ticket.\n"
+"                No cambia el tipo de cliente ni los pedidos siguientes."
+
+#. module: pos_wholesale_control
+#: model:ir.model.constraint,message:pos_wholesale_control.constraint_pos_wholesale_pricelist_mapping_company_customer_type_uniq
+msgid ""
+"Cada tipo de cliente solo puede tener una asignación de lista de precios por"
+" sucursal."
+msgstr ""
+"Cada tipo de cliente solo puede tener una asignación de lista de precios por"
+" sucursal."
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__cashier_employee_id
+msgid "Cajero"
+msgstr "Cajero"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid "Cancel"
+msgstr "Cancelar"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/PaymentScreen.js:0
+#, python-format
+msgid "Cannot complete payment"
+msgstr "No se puede cobrar"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__partner_id
+msgid "Cliente"
+msgstr "Cliente"
+
+#. module: pos_wholesale_control
+#: model:ir.model,name:pos_wholesale_control.model_res_company
+msgid "Companies"
+msgstr "Compañías"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_order__wholesale_previous_month_amount
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__previous_month_amount
+msgid "Compras del mes anterior"
+msgstr "Compras del mes anterior"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,help:pos_wholesale_control.field_res_company__wholesale_previous_month_min
+#: model:ir.model.fields,help:pos_wholesale_control.field_res_config_settings__wholesale_previous_month_min
+msgid ""
+"Compras netas requeridas durante el mes calendario anterior. El total "
+"incluye todas las sucursales."
+msgstr ""
+"Compras netas requeridas durante el mes calendario anterior. El total "
+"incluye todas las sucursales."
+
+#. module: pos_wholesale_control
+#: model:ir.model,name:pos_wholesale_control.model_res_config_settings
+msgid "Config Settings"
+msgstr "Ajustes"
+
+#. module: pos_wholesale_control
+#: model:ir.model,name:pos_wholesale_control.model_res_partner
+msgid "Contact"
+msgstr "Contacto"
+
+#. module: pos_wholesale_control
+#: model_terms:ir.ui.view,arch_db:pos_wholesale_control.res_config_settings_view_form_wholesale
+msgid "Control de clientes mayoristas"
+msgstr "Control de clientes mayoristas"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/PaymentScreen.js:0
+#, python-format
+msgid ""
+"Could not refresh purchase history before payment. The order stays on "
+"retail."
+msgstr ""
+"No se pudo actualizar el historial de compras antes de cobrar. El pedido "
+"permanece en menudeo."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/PaymentScreen.js:0
+#, python-format
+msgid ""
+"Could not validate wholesale eligibility before payment. Check the "
+"connection and try again."
+msgstr ""
+"No se pudo validar la elegibilidad de mayoreo antes de cobrar. Revise la "
+"conexión e intente de nuevo."
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__create_uid
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_pricelist_mapping__create_uid
+msgid "Created by"
+msgstr "Creado por"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__create_date
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_pricelist_mapping__create_date
+msgid "Created on"
+msgstr "Creado el"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__currency_id
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_pricelist_mapping__currency_id
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_config_settings__wholesale_currency_id
+msgid "Currency"
+msgstr "Moneda"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_order__wholesale_reason_code
+msgid "Código del motivo"
+msgstr "Código del motivo"
+
+#. module: pos_wholesale_control
+#: model_terms:ir.ui.view,arch_db:pos_wholesale_control.view_pos_order_form_wholesale
+msgid "Datos usados"
+msgstr "Datos usados"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields.selection,name:pos_wholesale_control.selection__pos_order__wholesale_reason_code__below_threshold
+#: model:ir.model.fields.selection,name:pos_wholesale_control.selection__pos_wholesale_override__reason_code__below_threshold
+msgid "Debajo del mínimo"
+msgstr "Debajo del mínimo"
+
+#. module: pos_wholesale_control
+#: model_terms:ir.ui.view,arch_db:pos_wholesale_control.view_pos_order_form_wholesale
+msgid "Decisión"
+msgstr "Decisión"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_order__wholesale_automatic_decision
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__automatic_decision
+msgid "Decisión automática"
+msgstr "Decisión automática"
+
+#. module: pos_wholesale_control
+#: model_terms:ir.ui.view,arch_db:pos_wholesale_control.view_pos_wholesale_override_form
+msgid "Decisión automática al autorizar"
+msgstr "Decisión automática al autorizar"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__final_decision
+msgid "Decisión autorizada"
+msgstr "Decisión autorizada"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_order__wholesale_final_decision
+msgid "Decisión final"
+msgstr "Decisión final"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_order__display_name
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__display_name
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_pricelist_mapping__display_name
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_company__display_name
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_config_settings__display_name
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_partner__display_name
+msgid "Display Name"
+msgstr "Nombre mostrado"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields.selection,name:pos_wholesale_control.selection__pos_wholesale_pricelist_mapping__customer_type__distribuidores
+msgid "Distribuidores"
+msgstr "Distribuidores"
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_wholesale_override.py:0
+#, python-format
+msgid "El NIP del gerente no es correcto."
+msgstr "El NIP del gerente no es correcto."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_wholesale_override.py:0
+#: code:addons/pos_wholesale_control/models/res_partner.py:0
+#, python-format
+msgid "El control de mayoreo no está activo en esta sucursal."
+msgstr "El control de mayoreo no está activo en esta sucursal."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_wholesale_override.py:0
+#, python-format
+msgid "El empleado no puede autorizar en esta sucursal."
+msgstr "El empleado no puede autorizar en esta sucursal."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_order.py:0
+#, python-format
+msgid "El folio de este ticket ya tiene una excepción en otra sucursal."
+msgstr "El folio de este ticket ya tiene una excepción en otra sucursal."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_order.py:0
+#, python-format
+msgid "El gerente que autorizó esta excepción ya no puede usarse."
+msgstr "El gerente que autorizó esta excepción ya no puede usarse."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_order.py:0
+#, python-format
+msgid "El gerente que autorizó esta excepción ya no tiene ese permiso."
+msgstr "El gerente que autorizó esta excepción ya no tiene ese permiso."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/models/res_partner.py:0
+#: code:addons/pos_wholesale_control/static/src/js/wholesale_eligibility.js:0
+#, python-format
+msgid "El mes anterior alcanza el mínimo de mayoreo."
+msgstr "El mes anterior alcanza el mínimo de mayoreo."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/models/res_partner.py:0
+#: code:addons/pos_wholesale_control/static/src/js/wholesale_eligibility.js:0
+#, python-format
+msgid "El pedido actual, a precio de menudeo, alcanza el mínimo de mayoreo."
+msgstr "El pedido actual, a precio de menudeo, alcanza el mínimo de mayoreo."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_order.py:0
+#: code:addons/pos_wholesale_control/models/pos_wholesale_override.py:0
+#, python-format
+msgid "El pedido enviado por la caja no es válido."
+msgstr "El pedido enviado por la caja no es válido."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_wholesale_override.py:0
+#, python-format
+msgid "El registro de excepción no se puede borrar."
+msgstr "El registro de excepción no se puede borrar."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_wholesale_override.py:0
+#, python-format
+msgid "El registro de excepción no se puede duplicar."
+msgstr "El registro de excepción no se puede duplicar."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_wholesale_override.py:0
+#, python-format
+msgid "El registro de excepción no se puede modificar."
+msgstr "El registro de excepción no se puede modificar."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_order.py:0
+#, python-format
+msgid "El ticket no tiene folio."
+msgstr "El ticket no tiene folio."
+
+#. module: pos_wholesale_control
+#: model_terms:ir.ui.view,arch_db:pos_wholesale_control.res_config_settings_view_form_wholesale
+msgid ""
+"Elija el registro de lista de precios disponible en las cajas de esta "
+"sucursal. El mismo nombre puede existir en más de un registro."
+msgstr ""
+"Elija el registro de lista de precios disponible en las cajas de esta "
+"sucursal. El mismo nombre puede existir en más de un registro."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/ManagerOverridePopup.js:0
+#, python-format
+msgid "Enter the manager PIN."
+msgstr "Escriba el NIP del gerente."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/SetPricelistButton.js:0
+#: code:addons/pos_wholesale_control/static/src/js/wholesale_eligibility.js:0
+#, python-format
+msgid "Esta caja elige la lista de precios. No se puede cambiar manualmente."
+msgstr "Esta caja elige la lista de precios. No se puede cambiar manualmente."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_wholesale_override.py:0
+#, python-format
+msgid ""
+"Esta caja no pide NIP de empleado, así que no puede autorizar una excepción."
+msgstr ""
+"Esta caja no pide NIP de empleado, así que no puede autorizar una excepción."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_wholesale_override.py:0
+#, python-format
+msgid "Esta excepción ya está ligada a otro pedido."
+msgstr "Esta excepción ya está ligada a otro pedido."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_wholesale_override.py:0
+#, python-format
+msgid "Esta excepción ya está ligada a un pedido."
+msgstr "Esta excepción ya está ligada a un pedido."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_order.py:0
+#, python-format
+msgid "Esta excepción ya se usó en el pedido %(order)s."
+msgstr "Esta excepción ya se usó en el pedido %(order)s."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_company.py:0
+#, python-format
+msgid ""
+"Esta sucursal no tiene punto de venta, así que el control de mayoreo no se "
+"puede activar."
+msgstr ""
+"Esta sucursal no tiene punto de venta, así que el control de mayoreo no se "
+"puede activar."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_wholesale_override.py:0
+#, python-format
+msgid "Este empleado no es gerente de punto de venta."
+msgstr "Este empleado no es gerente de punto de venta."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_wholesale_override.py:0
+#, python-format
+msgid "Este empleado no tiene NIP."
+msgstr "Este empleado no tiene NIP."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_wholesale_override.py:0
+#, python-format
+msgid "Este empleado no tiene acceso a esta caja."
+msgstr "Este empleado no tiene acceso a esta caja."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_wholesale_override.py:0
+#, python-format
+msgid "Este empleado no tiene un usuario de gerente en esta sucursal."
+msgstr "Este empleado no tiene un usuario de gerente en esta sucursal."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_order.py:0
+#, python-format
+msgid ""
+"Este ticket tiene una excepción para la lista \"%(pricelist)s\". Use esa "
+"lista o abra un ticket nuevo."
+msgstr ""
+"Este ticket tiene una excepción para la lista \"%(pricelist)s\". Use esa "
+"lista o abra un ticket nuevo."
+
+#. module: pos_wholesale_control
+#: model:ir.model.constraint,message:pos_wholesale_control.constraint_pos_wholesale_override_pos_uid_uniq
+msgid "Este ticket ya tiene una excepción de mayoreo."
+msgstr "Este ticket ya tiene una excepción de mayoreo."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_wholesale_override.py:0
+#, python-format
+msgid "Este ticket ya tiene una excepción distinta. Abra un ticket nuevo."
+msgstr "Este ticket ya tiene una excepción distinta. Abra un ticket nuevo."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_company.py:0
+#, python-format
+msgid ""
+"Estos tipos de cliente no tienen una asignación de lista de precios activa: "
+"%(types)s."
+msgstr ""
+"Estos tipos de cliente no tienen una asignación de lista de precios activa: "
+"%(types)s."
+
+#. module: pos_wholesale_control
+#: model:ir.actions.act_window,name:pos_wholesale_control.action_pos_wholesale_override
+#: model:ir.ui.menu,name:pos_wholesale_control.menu_pos_wholesale_override
+#: model_terms:ir.ui.view,arch_db:pos_wholesale_control.view_pos_wholesale_override_tree
+msgid "Excepciones de mayoreo"
+msgstr "Excepciones de mayoreo"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_order__wholesale_has_override
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_order__wholesale_override_id
+msgid "Excepción de gerente"
+msgstr "Excepción de gerente"
+
+#. module: pos_wholesale_control
+#: model_terms:ir.ui.view,arch_db:pos_wholesale_control.view_pos_wholesale_override_form
+msgid "Excepción de mayoreo"
+msgstr "Excepción de mayoreo"
+
+#. module: pos_wholesale_control
+#: model:ir.model,name:pos_wholesale_control.model_pos_wholesale_override
+msgid "Excepción de mayoreo en POS"
+msgstr "Excepción de mayoreo en POS"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__reason_text
+msgid "Explicación automática"
+msgstr "Explicación automática"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__override_datetime
+msgid "Fecha de autorización"
+msgstr "Fecha de autorización"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__pos_uid
+msgid "Folio del ticket"
+msgstr "Folio del ticket"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,help:pos_wholesale_control.field_pos_wholesale_override__pos_uid
+msgid ""
+"Folio que la caja envía como nombre del pedido. Una repetición del mismo "
+"cobro usa este mismo folio."
+msgstr ""
+"Folio que la caja envía como nombre del pedido. Una repetición del mismo "
+"cobro usa este mismo folio."
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__manager_employee_id
+msgid "Gerente"
+msgstr "Gerente"
+
+#. module: pos_wholesale_control
+#: model:res.groups,name:pos_wholesale_control.group_wholesale_manager
+msgid "Gerente de mayoreo en POS"
+msgstr "Gerente de mayoreo en POS"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields.selection,name:pos_wholesale_control.selection__pos_order__wholesale_reason_code__history_unavailable
+#: model:ir.model.fields.selection,name:pos_wholesale_control.selection__pos_wholesale_override__reason_code__history_unavailable
+msgid "Historial no disponible"
+msgstr "Historial no disponible"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_order__id
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__id
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_pricelist_mapping__id
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_company__id
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_config_settings__id
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_partner__id
+msgid "ID"
+msgstr "ID"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid "Incorrect Password"
+msgstr "NIP incorrecto"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,help:pos_wholesale_control.field_pos_order__wholesale_has_override
+msgid ""
+"Indica que un gerente autorizó la lista de este ticket. No cambia el tipo de"
+" cliente ni las compras de los meses siguientes."
+msgstr ""
+"Indica que un gerente autorizó la lista de este ticket. No cambia el tipo de"
+" cliente ni las compras de los meses siguientes."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_partner.py:0
+#, python-format
+msgid "La caja del punto de venta no es válida."
+msgstr "La caja del punto de venta no es válida."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_partner.py:0
+#, python-format
+msgid "La caja no pertenece a esta sucursal."
+msgstr "La caja no pertenece a esta sucursal."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_wholesale_override.py:0
+#, python-format
+msgid "La decisión de la excepción no es válida."
+msgstr "La decisión de la excepción no es válida."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_order.py:0
+#, python-format
+msgid "La decisión de mayoreo de un pedido cobrado no se puede modificar."
+msgstr "La decisión de mayoreo de un pedido cobrado no se puede modificar."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_order.py:0
+#, python-format
+msgid "La decisión de mayoreo solo la registra el punto de venta al cobrar."
+msgstr "La decisión de mayoreo solo la registra el punto de venta al cobrar."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_order.py:0
+#, python-format
+msgid ""
+"La excepción de mayoreo es para otro cliente. Seleccione de nuevo al cliente"
+" o abra un ticket nuevo."
+msgstr ""
+"La excepción de mayoreo es para otro cliente. Seleccione de nuevo al cliente"
+" o abra un ticket nuevo."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_wholesale_override.py:0
+#, python-format
+msgid "La excepción necesita un motivo."
+msgstr "La excepción necesita un motivo."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_partner.py:0
+#, python-format
+msgid "La lista \"%(pricelist)s\" está archivada. El pedido queda en menudeo."
+msgstr "La lista \"%(pricelist)s\" está archivada. El pedido queda en menudeo."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/wholesale_pricelist_mapping.py:0
+#, python-format
+msgid "La lista \"%(pricelist)s\" está archivada. Elija una lista activa."
+msgstr "La lista \"%(pricelist)s\" está archivada. Elija una lista activa."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_partner.py:0
+#, python-format
+msgid ""
+"La lista \"%(pricelist)s\" no está disponible en esta caja. El pedido queda "
+"en menudeo."
+msgstr ""
+"La lista \"%(pricelist)s\" no está disponible en esta caja. El pedido queda "
+"en menudeo."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/wholesale_pricelist_mapping.py:0
+#, python-format
+msgid ""
+"La lista \"%(pricelist)s\" pertenece a %(owner)s y no se puede usar para "
+"%(company)s."
+msgstr ""
+"La lista \"%(pricelist)s\" pertenece a %(owner)s y no se puede usar para "
+"%(company)s."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/wholesale_pricelist_mapping.py:0
+#, python-format
+msgid ""
+"La lista \"%(pricelist)s\" usa %(pricelist_currency)s. %(company)s requiere "
+"%(company_currency)s."
+msgstr ""
+"La lista \"%(pricelist)s\" usa %(pricelist_currency)s. %(company)s requiere "
+"%(company_currency)s."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/wholesale_eligibility.js:0
+#, python-format
+msgid ""
+"La lista de mayoreo no está disponible en esta caja. El pedido queda en "
+"menudeo."
+msgstr ""
+"La lista de mayoreo no está disponible en esta caja. El pedido queda en "
+"menudeo."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_order.py:0
+#, python-format
+msgid "La lista de menudeo \"%(pricelist)s\" no usa la moneda de la sucursal."
+msgstr "La lista de menudeo \"%(pricelist)s\" no usa la moneda de la sucursal."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_company.py:0
+#, python-format
+msgid "La lista de menudeo y la lista de mayoreo son la misma."
+msgstr "La lista de menudeo y la lista de mayoreo son la misma."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_order.py:0
+#, python-format
+msgid "La posición fiscal no pertenece a esta sucursal."
+msgstr "La posición fiscal no pertenece a esta sucursal."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_order.py:0
+#: code:addons/pos_wholesale_control/models/pos_order.py:0
+#, python-format
+msgid "La sesión de punto de venta no es válida."
+msgstr "La sesión de punto de venta no es válida."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_wholesale_override.py:0
+#, python-format
+msgid "Las excepciones de mayoreo solo se registran desde el punto de venta."
+msgstr "Las excepciones de mayoreo solo se registran desde el punto de venta."
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_order____last_update
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override____last_update
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_pricelist_mapping____last_update
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_company____last_update
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_config_settings____last_update
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_partner____last_update
+msgid "Last Modified on"
+msgstr "Última modificación el"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__write_uid
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_pricelist_mapping__write_uid
+msgid "Last Updated by"
+msgstr "Última actualización por"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__write_date
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_pricelist_mapping__write_date
+msgid "Last Updated on"
+msgstr "Última actualización el"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_order__wholesale_applied_pricelist_id
+msgid "Lista aplicada"
+msgstr "Lista aplicada"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__applied_pricelist_id
+msgid "Lista autorizada"
+msgstr "Lista autorizada"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,help:pos_wholesale_control.field_res_company__wholesale_pricelist_id
+#: model:ir.model.fields,help:pos_wholesale_control.field_res_config_settings__wholesale_pricelist_id
+msgid ""
+"Lista de mayoreo que debe estar disponible en todas las cajas de esta "
+"sucursal. En Factor Fiesta es Club Mayorista. Distribuidores puede usar otra"
+" lista en la asignación por tipo."
+msgstr ""
+"Lista de mayoreo que debe estar disponible en todas las cajas de esta "
+"sucursal. En Factor Fiesta es Club Mayorista. Distribuidores puede usar otra"
+" lista en la asignación por tipo."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/SetPricelistButton.js:0
+#, python-format
+msgid "Lista de precios bloqueada"
+msgstr "Lista de precios bloqueada"
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_company.py:0
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_pricelist_mapping__pricelist_id
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_company__wholesale_pricelist_id
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_config_settings__wholesale_pricelist_id
+#, python-format
+msgid "Lista de precios de mayoreo"
+msgstr "Lista de precios de mayoreo"
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_company.py:0
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_company__wholesale_retail_pricelist_id
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_config_settings__wholesale_retail_pricelist_id
+#, python-format
+msgid "Lista de precios de menudeo"
+msgstr "Lista de precios de menudeo"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,help:pos_wholesale_control.field_pos_wholesale_pricelist_mapping__pricelist_id
+msgid ""
+"Lista que se aplica cuando este tipo de cliente califica para mayoreo. "
+"Público General y Mayorista dormido la usan solo cuando el pedido actual, a "
+"precio de menudeo, alcanza el mínimo. Si no, el pedido permanece en la lista"
+" de menudeo."
+msgstr ""
+"Lista que se aplica cuando este tipo de cliente califica para mayoreo. "
+"Público General y Mayorista dormido la usan solo cuando el pedido actual, a "
+"precio de menudeo, alcanza el mínimo. Si no, el pedido permanece en la lista"
+" de menudeo."
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,help:pos_wholesale_control.field_res_company__wholesale_timezone
+#: model:ir.model.fields,help:pos_wholesale_control.field_res_config_settings__wholesale_timezone
+msgid "Los meses calendario de la elegibilidad usan esta zona horaria."
+msgstr "Los meses calendario de la elegibilidad usan esta zona horaria."
+
+#. module: pos_wholesale_control
+#: model_terms:ir.ui.view,arch_db:pos_wholesale_control.res_config_settings_view_form_wholesale
+msgid ""
+"Los totales mensuales incluyen pedidos de punto de venta pagados y pedidos "
+"de venta confirmados de todas las sucursales. Una devolución reduce el mes "
+"de la venta original."
+msgstr ""
+"Los totales mensuales incluyen pedidos de punto de venta pagados y pedidos "
+"de venta confirmados de todas las sucursales. Una devolución reduce el mes "
+"de la venta original."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/ManagerOverridePopup.js:0
+#: code:addons/pos_wholesale_control/static/src/js/ManagerOverridePopup.js:0
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid "Manager override"
+msgstr "Excepción de gerente"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid "Manager override denied"
+msgstr "Excepción de gerente denegada"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields.selection,name:pos_wholesale_control.selection__pos_order__wholesale_automatic_decision__wholesale
+#: model:ir.model.fields.selection,name:pos_wholesale_control.selection__pos_order__wholesale_final_decision__wholesale
+#: model:ir.model.fields.selection,name:pos_wholesale_control.selection__pos_wholesale_override__automatic_decision__wholesale
+#: model:ir.model.fields.selection,name:pos_wholesale_control.selection__pos_wholesale_override__final_decision__wholesale
+#: model_terms:ir.ui.view,arch_db:pos_wholesale_control.view_pos_order_form_wholesale
+msgid "Mayoreo"
+msgstr "Mayoreo"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields.selection,name:pos_wholesale_control.selection__pos_wholesale_pricelist_mapping__customer_type__mayorista
+msgid "Mayorista"
+msgstr "Mayorista"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields.selection,name:pos_wholesale_control.selection__pos_wholesale_pricelist_mapping__customer_type__mayorista_dormido
+msgid "Mayorista dormido"
+msgstr "Mayorista dormido"
+
+#. module: pos_wholesale_control
+#: model_terms:ir.ui.view,arch_db:pos_wholesale_control.res_config_settings_view_form_wholesale
+msgid ""
+"Mayorista usa Club Mayorista cuando califica. Distribuidores usa Super "
+"Precios a Distribuidores. Público General y Mayorista dormido permanecen en "
+"la lista de menudeo hasta que el pedido actual califica; entonces usan Club "
+"Mayorista."
+msgstr ""
+"Mayorista usa Club Mayorista cuando califica. Distribuidores usa Super "
+"Precios a Distribuidores. Público General y Mayorista dormido permanecen en "
+"la lista de menudeo hasta que el pedido actual califica; entonces usan Club "
+"Mayorista."
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields.selection,name:pos_wholesale_control.selection__pos_order__wholesale_automatic_decision__retail
+#: model:ir.model.fields.selection,name:pos_wholesale_control.selection__pos_order__wholesale_final_decision__retail
+#: model:ir.model.fields.selection,name:pos_wholesale_control.selection__pos_wholesale_override__automatic_decision__retail
+#: model:ir.model.fields.selection,name:pos_wholesale_control.selection__pos_wholesale_override__final_decision__retail
+msgid "Menudeo"
+msgstr "Menudeo"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields.selection,name:pos_wholesale_control.selection__pos_order__wholesale_reason_code__previous_month
+#: model:ir.model.fields.selection,name:pos_wholesale_control.selection__pos_wholesale_override__reason_code__previous_month
+msgid "Mes anterior"
+msgstr "Mes anterior"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/PaymentScreen.js:0
+#, python-format
+msgid ""
+"Missing retail pricelist configuration. An administrator must set the "
+"wholesale-control pricelists for this company."
+msgstr ""
+"Falta la lista de menudeo. Un administrador debe configurar las listas del "
+"control de mayoreo en esta sucursal."
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_order__wholesale_reason_text
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__reason
+msgid "Motivo"
+msgstr "Motivo"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__reason_code
+msgid "Motivo automático"
+msgstr "Motivo automático"
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_company.py:0
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_order__wholesale_previous_month_min
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__previous_month_min
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_company__wholesale_previous_month_min
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_config_settings__wholesale_previous_month_min
+#, python-format
+msgid "Mínimo del mes anterior"
+msgstr "Mínimo del mes anterior"
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_company.py:0
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_order__wholesale_current_order_min
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__current_order_min
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_company__wholesale_current_order_min
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_config_settings__wholesale_current_order_min
+#, python-format
+msgid "Mínimo del pedido actual"
+msgstr "Mínimo del pedido actual"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/models/res_partner.py:0
+#: code:addons/pos_wholesale_control/static/src/js/wholesale_eligibility.js:0
+#, python-format
+msgid "Ni el mes anterior ni este pedido alcanzan el mínimo de mayoreo."
+msgstr "Ni el mes anterior ni este pedido alcanzan el mínimo de mayoreo."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid ""
+"No POS employees are available to authorize an override on this register."
+msgstr ""
+"No hay empleados del punto de venta para autorizar una excepción en esta "
+"caja."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid "No decision yet."
+msgstr "Todavía no hay una decisión."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_partner.py:0
+#, python-format
+msgid "No hay lista de mayoreo para este cliente. El pedido queda en menudeo."
+msgstr ""
+"No hay lista de mayoreo para este cliente. El pedido queda en menudeo."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_partner.py:0
+#, python-format
+msgid "No hay lista de menudeo configurada para esta sucursal."
+msgstr "No hay lista de menudeo configurada para esta sucursal."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/wholesale_eligibility.js:0
+#, python-format
+msgid "No hay lista de menudeo disponible en esta caja."
+msgstr "No hay lista de menudeo disponible en esta caja."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_order.py:0
+#, python-format
+msgid "No hay una lista de precios válida para cobrar este pedido."
+msgstr "No hay una lista de precios válida para cobrar este pedido."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_partner.py:0
+#, python-format
+msgid "No puede consultar la elegibilidad de esta sucursal."
+msgstr "No puede consultar la elegibilidad de esta sucursal."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/models/res_partner.py:0
+#: code:addons/pos_wholesale_control/static/src/js/wholesale_eligibility.js:0
+#, python-format
+msgid ""
+"No se pudo consultar el historial de compras. El pedido queda en menudeo."
+msgstr ""
+"No se pudo consultar el historial de compras. El pedido queda en menudeo."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_order.py:0
+#, python-format
+msgid "No se puede borrar un pedido cobrado que ya tiene decisión de mayoreo."
+msgstr ""
+"No se puede borrar un pedido cobrado que ya tiene decisión de mayoreo."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_order.py:0
+#, python-format
+msgid ""
+"No se puede cobrar con la lista seleccionada. La lista que corresponde es "
+"\"%(pricelist)s\". %(reason)s"
+msgstr ""
+"No se puede cobrar con la lista seleccionada. La lista que corresponde es "
+"\"%(pricelist)s\". %(reason)s"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/PaymentScreen.js:0
+#, python-format
+msgid "Payment blocked by wholesale control"
+msgstr "El control de mayoreo impide el cobro"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__pos_order_id
+msgid "Pedido"
+msgstr "Pedido"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields.selection,name:pos_wholesale_control.selection__pos_order__wholesale_reason_code__current_order
+#: model:ir.model.fields.selection,name:pos_wholesale_control.selection__pos_wholesale_override__reason_code__current_order
+msgid "Pedido actual"
+msgstr "Pedido actual"
+
+#. module: pos_wholesale_control
+#: model:ir.model,name:pos_wholesale_control.model_pos_order
+msgid "Point of Sale Orders"
+msgstr "Pedidos del punto de venta"
+
+#. module: pos_wholesale_control
+#: model:res.groups,comment:pos_wholesale_control.group_wholesale_manager
+msgid ""
+"Puede autorizar una excepción de mayoreo o menudeo para una sola venta con "
+"el NIP del empleado del punto de venta. No puede cambiar mínimos ni "
+"asignaciones."
+msgstr ""
+"Puede autorizar una excepción de mayoreo o menudeo para una sola venta con "
+"el NIP del empleado del punto de venta. No puede cambiar mínimos ni "
+"asignaciones."
+
+#. module: pos_wholesale_control
+#: model:res.groups,comment:pos_wholesale_control.group_wholesale_admin
+msgid ""
+"Puede configurar mínimos, listas de precios y asignaciones por tipo de "
+"cliente."
+msgstr ""
+"Puede configurar mínimos, listas de precios y asignaciones por tipo de "
+"cliente."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/PaymentScreen.js:0
+#, python-format
+msgid ""
+"Purchase history is unavailable. Keep retail pricing, or ask a manager for "
+"an audited override before charging wholesale."
+msgstr ""
+"No se pudo consultar el historial de compras. Mantenga el precio de menudeo,"
+" o pida a un gerente una excepción auditada antes de cobrar en mayoreo."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/PaymentScreen.js:0
+#, python-format
+msgid ""
+"Purchase history is unavailable. Only retail pricing or a manager override "
+"is allowed."
+msgstr ""
+"No se pudo consultar el historial de compras. Solo se permite menudeo o una "
+"excepción de gerente."
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields.selection,name:pos_wholesale_control.selection__pos_wholesale_pricelist_mapping__customer_type__publico_general
+msgid "Público General"
+msgstr "Público General"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid "Retail / General Public"
+msgstr "Menudeo / Público general"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,help:pos_wholesale_control.field_pos_wholesale_override__pos_order_id
+msgid ""
+"Se llena al cobrar. Antes de eso la excepción pertenece solo al ticket."
+msgstr ""
+"Se llena al cobrar. Antes de eso la excepción pertenece solo al ticket."
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,help:pos_wholesale_control.field_res_company__wholesale_retail_pricelist_id
+#: model:ir.model.fields,help:pos_wholesale_control.field_res_config_settings__wholesale_retail_pricelist_id
+msgid ""
+"Se usa cuando el cliente no está identificado o no califica. En Factor "
+"Fiesta es la Public Pricelist de la sucursal."
+msgstr ""
+"Se usa cuando el cliente no está identificado o no califica. En Factor "
+"Fiesta es la Public Pricelist de la sucursal."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_wholesale_override.py:0
+#, python-format
+msgid "Seleccione un cliente antes de autorizar una excepción."
+msgstr "Seleccione un cliente antes de autorizar una excepción."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/models/res_partner.py:0
+#: code:addons/pos_wholesale_control/static/src/js/wholesale_eligibility.js:0
+#, python-format
+msgid "Seleccione un cliente para evaluar el precio de mayoreo."
+msgstr "Seleccione un cliente para evaluar el precio de mayoreo."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid "Select manager"
+msgstr "Seleccione al gerente"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields.selection,name:pos_wholesale_control.selection__pos_order__wholesale_reason_code__no_identified_customer
+#: model:ir.model.fields.selection,name:pos_wholesale_control.selection__pos_wholesale_override__reason_code__no_identified_customer
+msgid "Sin cliente"
+msgstr "Sin cliente"
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/res_partner.py:0
+#, python-format
+msgid ""
+"Solo usuarios de Punto de Venta pueden consultar la elegibilidad de mayoreo."
+msgstr ""
+"Solo usuarios de Punto de Venta pueden consultar la elegibilidad de mayoreo."
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_order.py:0
+#, python-format
+msgid "Solo usuarios de Punto de Venta pueden registrar un pedido."
+msgstr "Solo usuarios de Punto de Venta pueden registrar un pedido."
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_pricelist_mapping__company_id
+msgid "Sucursal"
+msgstr "Sucursal"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__company_id
+msgid "Sucursal de la caja"
+msgstr "Sucursal de la caja"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,help:pos_wholesale_control.field_pos_wholesale_override__company_id
+msgid "Sucursal donde se autorizó la excepción."
+msgstr "Sucursal donde se autorizó la excepción."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/PaymentScreen.js:0
+#, python-format
+msgid ""
+"The eligibility check returned an empty response. Keep retail pricing or "
+"retry when the connection is stable."
+msgstr ""
+"La consulta de elegibilidad no devolvió datos. Mantenga el menudeo o "
+"reintente cuando la conexión sea estable."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid "The manager PIN is incorrect."
+msgstr "El NIP del gerente no es correcto."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid ""
+"The manager override could not be authorized. Check the PIN, permissions, "
+"and connection."
+msgstr ""
+"No se pudo autorizar la excepción de gerente. Revise el NIP, los permisos y "
+"la conexión."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/PaymentScreen.js:0
+#, python-format
+msgid "The order pricelist does not match the trusted decision. Expected"
+msgstr ""
+"La lista del pedido no coincide con la decisión confirmada. Se esperaba"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/PaymentScreen.js:0
+#, python-format
+msgid ""
+"The order still has an unauthorized pricelist. Return to the product screen "
+"and let wholesale control apply the correct list."
+msgstr ""
+"El pedido sigue con una lista no autorizada. Regrese a los productos para "
+"que el control de mayoreo aplique la lista correcta."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid "The server did not return an authorized pricelist."
+msgstr "El servidor no devolvió una lista de precios autorizada."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid ""
+"This register does not use employee PINs, so it cannot authorize an "
+"override."
+msgstr ""
+"Esta caja no pide NIP de empleado, así que no puede autorizar una excepción."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/PaymentScreen.js:0
+#, python-format
+msgid ""
+"This ticket has a manager override, but the applied pricelist does not match"
+" the authorized list."
+msgstr ""
+"Este ticket tiene una excepción de gerente, pero la lista aplicada no es la "
+"lista autorizada."
+
+#. module: pos_wholesale_control
+#: model_terms:ir.ui.view,arch_db:pos_wholesale_control.view_pos_wholesale_override_form
+msgid "Ticket"
+msgstr "Ticket"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_pricelist_mapping__customer_type
+msgid "Tipo de cliente"
+msgstr "Tipo de cliente"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,help:pos_wholesale_control.field_pos_wholesale_pricelist_mapping__customer_type
+msgid ""
+"Tipo de cliente definido por Alta Mayoristas. Esta asignación no cambia esa "
+"clasificación."
+msgstr ""
+"Tipo de cliente definido por Alta Mayoristas. Esta asignación no cambia esa "
+"clasificación."
+
+#. module: pos_wholesale_control
+#: model_terms:ir.actions.act_window,help:pos_wholesale_control.action_pos_wholesale_override
+msgid "Todavía no hay excepciones de mayoreo."
+msgstr "Todavía no hay excepciones de mayoreo."
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_order__wholesale_retail_amount
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__retail_order_amount
+msgid "Total a precio de menudeo"
+msgstr "Total a precio de menudeo"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,help:pos_wholesale_control.field_res_company__wholesale_current_order_min
+#: model:ir.model.fields,help:pos_wholesale_control.field_res_config_settings__wholesale_current_order_min
+msgid ""
+"Total a precio de menudeo que califica el pedido actual para mayoreo cuando "
+"el mes anterior no alcanza su mínimo."
+msgstr ""
+"Total a precio de menudeo que califica el pedido actual para mayoreo cuando "
+"el mes anterior no alcanza su mínimo."
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__cashier_user_id
+msgid "Usuario cajero"
+msgstr "Usuario cajero"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__manager_user_id
+msgid "Usuario gerente"
+msgstr "Usuario gerente"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid "Validating…"
+msgstr "Validando…"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid "Wholesale"
+msgstr "Mayoreo"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/PaymentScreen.js:0
+#, python-format
+msgid ""
+"Wholesale control could not read the register company. Reload the point of "
+"sale."
+msgstr ""
+"El control de mayoreo no pudo leer la sucursal de la caja. Vuelva a abrir el"
+" punto de venta."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid "Wholesale control — error"
+msgstr "Control de mayoreo — error"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid "Wholesale control — override"
+msgstr "Control de mayoreo — excepción"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid "Wholesale control — retail"
+msgstr "Control de mayoreo — menudeo"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid "Wholesale control — wholesale"
+msgstr "Control de mayoreo — mayoreo"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/PaymentScreen.js:0
+#, python-format
+msgid ""
+"Wholesale eligibility is still loading. Wait for the check to finish before "
+"paying."
+msgstr ""
+"La elegibilidad de mayoreo todavía se está consultando. Espere a que termine"
+" antes de cobrar."
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_order__wholesale_timezone
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_pos_wholesale_override__timezone
+msgid "Zona horaria"
+msgstr "Zona horaria"
+
+#. module: pos_wholesale_control
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_company__wholesale_timezone
+#: model:ir.model.fields,field_description:pos_wholesale_control.field_res_config_settings__wholesale_timezone
+msgid "Zona horaria del negocio"
+msgstr "Zona horaria del negocio"
+
+#. module: pos_wholesale_control
+#: code:addons/pos_wholesale_control/models/pos_order.py:0
+#, python-format
+msgid "sin lista"
+msgstr "sin lista"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/xml/wholesale_status_panel.xml:0
+#, python-format
+msgid "No customer selected"
+msgstr "Ningún cliente seleccionado"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/xml/wholesale_status_panel.xml:0
+#, python-format
+msgid "Pricing"
+msgstr "Precio"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/xml/wholesale_status_panel.xml:0
+#, python-format
+msgid "Pricelist"
+msgstr "Lista de precios"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/xml/wholesale_status_panel.xml:0
+#, python-format
+msgid "Reason"
+msgstr "Motivo"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/xml/wholesale_status_panel.xml:0
+#, python-format
+msgid "Automatic"
+msgstr "Automática"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/xml/wholesale_status_panel.xml:0
+#, python-format
+msgid "Checking purchase history…"
+msgstr "Consultando el historial de compras…"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/xml/wholesale_status_panel.xml:0
+#, python-format
+msgid "MTD"
+msgstr "del mes"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/xml/wholesale_status_panel.xml:0
+#, python-format
+msgid "Identify a customer to see monthly purchase totals."
+msgstr "Identifique un cliente para ver las compras de cada mes."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/xml/manager_override_popup.xml:0
+#, python-format
+msgid "Automatic decision"
+msgstr "Decisión automática"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/xml/manager_override_popup.xml:0
+#, python-format
+msgid "Manager PIN"
+msgstr "NIP del gerente"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/xml/manager_override_popup.xml:0
+#, python-format
+msgid "Reason (required)"
+msgstr "Motivo (obligatorio)"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/xml/manager_override_popup.xml:0
+#, python-format
+msgid ""
+"This exception applies only to the current ticket. It does not change the "
+"customer type or permanent pricelist."
+msgstr ""
+"Esta excepción aplica solo al ticket actual. No cambia el tipo de cliente ni"
+" la lista de precios permanente."

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_pos_order_form_wholesale" model="ir.ui.view">
+        <field name="name">pos.order.form.wholesale.control</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_pos_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='extra']" position="before">
+                <field name="wholesale_final_decision" invisible="1"/>
+                <page string="Mayoreo" name="wholesale_decision"
+                      attrs="{'invisible': [('wholesale_final_decision', '=', False)]}">
+                    <group>
+                        <group string="Decisión">
+                            <field name="wholesale_final_decision" readonly="1"/>
+                            <field name="wholesale_automatic_decision" readonly="1"/>
+                            <field name="wholesale_has_override" readonly="1"/>
+                            <field name="wholesale_override_id" readonly="1"
+                                   groups="pos_wholesale_control.group_wholesale_manager"/>
+                            <field name="wholesale_applied_pricelist_id" readonly="1"/>
+                            <field name="wholesale_reason_code" readonly="1"/>
+                            <field name="wholesale_reason_text" readonly="1"/>
+                        </group>
+                        <group string="Datos usados">
+                            <field name="currency_id" invisible="1"/>
+                            <field name="wholesale_retail_amount" readonly="1"/>
+                            <field name="wholesale_previous_month_amount" readonly="1"/>
+                            <field name="wholesale_previous_month_min" readonly="1"/>
+                            <field name="wholesale_current_order_min" readonly="1"/>
+                            <field name="wholesale_timezone" readonly="1"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_pos_order_tree_wholesale" model="ir.ui.view">
+        <field name="name">pos.order.tree.wholesale.control</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_order_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='state']" position="before">
+                <field name="wholesale_final_decision" optional="hide"/>
+                <field name="wholesale_has_override" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

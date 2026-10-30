@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_pos_wholesale_override_tree" model="ir.ui.view">
+        <field name="name">pos.wholesale.override.tree</field>
+        <field name="model">pos.wholesale.override</field>
+        <field name="arch" type="xml">
+            <tree string="Excepciones de mayoreo" create="0" delete="0">
+                <field name="currency_id" invisible="1"/>
+                <field name="override_datetime"/>
+                <field name="pos_uid"/>
+                <field name="pos_order_id"/>
+                <field name="partner_id"/>
+                <field name="manager_employee_id"/>
+                <field name="cashier_employee_id"/>
+                <field name="automatic_decision"/>
+                <field name="final_decision"/>
+                <field name="applied_pricelist_id"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_pos_wholesale_override_form" model="ir.ui.view">
+        <field name="name">pos.wholesale.override.form</field>
+        <field name="model">pos.wholesale.override</field>
+        <field name="arch" type="xml">
+            <form string="Excepción de mayoreo" create="0" edit="0" delete="0">
+                <sheet>
+                    <group>
+                        <group string="Autorización">
+                            <field name="override_datetime"/>
+                            <field name="manager_employee_id"/>
+                            <field name="manager_user_id"/>
+                            <field name="cashier_employee_id"/>
+                            <field name="cashier_user_id"/>
+                            <field name="reason"/>
+                        </group>
+                        <group string="Ticket">
+                            <field name="pos_uid"/>
+                            <field name="pos_order_id"/>
+                            <field name="partner_id"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="applied_pricelist_id"/>
+                            <field name="final_decision"/>
+                        </group>
+                    </group>
+                    <group string="Decisión automática al autorizar">
+                        <group>
+                            <field name="automatic_decision"/>
+                            <field name="reason_code"/>
+                            <field name="reason_text"/>
+                            <field name="timezone"/>
+                        </group>
+                        <group>
+                            <field name="currency_id" invisible="1"/>
+                            <field name="retail_order_amount"/>
+                            <field name="previous_month_amount"/>
+                            <field name="previous_month_min"/>
+                            <field name="current_order_min"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_pos_wholesale_override" model="ir.actions.act_window">
+        <field name="name">Excepciones de mayoreo</field>
+        <field name="res_model">pos.wholesale.override</field>
+        <field name="view_mode">tree,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Todavía no hay excepciones de mayoreo.
+            </p>
+            <p>
+                Cada excepción la autoriza un gerente para un solo ticket.
+                No cambia el tipo de cliente ni los pedidos siguientes.
+            </p>
+        </field>
+    </record>
+
+    <menuitem id="menu_pos_wholesale_override"
+              name="Excepciones de mayoreo"
+              parent="point_of_sale.menu_point_of_sale"
+              action="action_pos_wholesale_override"
+              sequence="4"
+              groups="pos_wholesale_control.group_wholesale_manager"/>
+</odoo>

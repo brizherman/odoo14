@@ -1,0 +1,7 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_pos_wholesale_mapping_pos_user,pos.wholesale.pricelist.mapping.pos.user,model_pos_wholesale_pricelist_mapping,point_of_sale.group_pos_user,1,0,0,0
+access_pos_wholesale_mapping_manager,pos.wholesale.pricelist.mapping.manager,model_pos_wholesale_pricelist_mapping,group_wholesale_manager,1,0,0,0
+access_pos_wholesale_mapping_admin,pos.wholesale.pricelist.mapping.admin,model_pos_wholesale_pricelist_mapping,group_wholesale_admin,1,1,1,1
+access_pos_wholesale_override_pos_user,pos.wholesale.override.pos.user,model_pos_wholesale_override,point_of_sale.group_pos_user,1,0,0,0
+access_pos_wholesale_override_manager,pos.wholesale.override.manager,model_pos_wholesale_override,group_wholesale_manager,1,0,0,0
+access_pos_wholesale_override_admin,pos.wholesale.override.admin,model_pos_wholesale_override,group_wholesale_admin,1,0,0,0

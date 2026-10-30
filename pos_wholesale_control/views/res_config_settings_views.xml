@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_wholesale" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.wholesale.pos</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="point_of_sale.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@data-key='point_of_sale']" position="inside">
+                <h2 groups="pos_wholesale_control.group_wholesale_admin">Control de clientes mayoristas</h2>
+                <div class="row mt16 o_settings_container" name="wholesale_control_setting_container" groups="pos_wholesale_control.group_wholesale_admin">
+                    <div class="col-12 col-lg-6 o_setting_box" id="wholesale_control_activation">
+                        <div class="o_setting_left_pane">
+                            <field name="wholesale_control_active"/>
+                        </div>
+                        <div class="o_setting_right_pane">
+                            <label for="wholesale_control_active"/>
+                            <span class="fa fa-lg fa-building-o" title="Los valores definidos aquí son específicos de la sucursal." aria-label="Los valores definidos aquí son específicos de la sucursal." groups="base.group_multi_company" role="img"/>
+                            <div class="text-muted">
+                                Los totales mensuales incluyen pedidos de punto de venta pagados y pedidos de venta confirmados de todas las sucursales. Una devolución reduce el mes de la venta original.
+                            </div>
+                            <div class="content-group mt16">
+                                <div class="row">
+                                    <label for="wholesale_previous_month_min" class="col-lg-5 o_light_label"/>
+                                    <field name="wholesale_previous_month_min"/>
+                                </div>
+                                <div class="row">
+                                    <label for="wholesale_current_order_min" class="col-lg-5 o_light_label"/>
+                                    <field name="wholesale_current_order_min"/>
+                                </div>
+                                <div class="row">
+                                    <label for="wholesale_timezone" class="col-lg-5 o_light_label"/>
+                                    <field name="wholesale_timezone"/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-6 o_setting_box" id="wholesale_control_pricelists">
+                        <div class="o_setting_right_pane">
+                            <span class="o_form_label">Listas de precios</span>
+                            <div class="text-muted">
+                                Elija el registro de lista de precios disponible en las cajas de esta sucursal. El mismo nombre puede existir en más de un registro.
+                            </div>
+                            <div class="content-group mt16">
+                                <field name="wholesale_currency_id" invisible="1"/>
+                                <div class="row">
+                                    <label for="wholesale_retail_pricelist_id" class="col-lg-5 o_light_label"/>
+                                    <field name="wholesale_retail_pricelist_id" domain="['&amp;', '|', ('company_id', '=', False), ('company_id', '=', company_id), ('currency_id', '=', wholesale_currency_id)]"/>
+                                </div>
+                                <div class="row">
+                                    <label for="wholesale_pricelist_id" class="col-lg-5 o_light_label"/>
+                                    <field name="wholesale_pricelist_id" domain="['&amp;', '|', ('company_id', '=', False), ('company_id', '=', company_id), ('currency_id', '=', wholesale_currency_id)]"/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 o_setting_box" id="wholesale_control_mappings">
+                        <div class="o_setting_right_pane">
+                            <span class="o_form_label">Asignaciones por tipo de cliente</span>
+                            <div class="text-muted">
+                                Mayorista usa Club Mayorista cuando califica. Distribuidores usa Super Precios a Distribuidores. Público General y Mayorista dormido permanecen en la lista de menudeo hasta que el pedido actual califica; entonces usan Club Mayorista.
+                            </div>
+                            <div class="alert alert-warning mt16" role="alert" attrs="{'invisible': [('wholesale_mapping_warning', '=', False)]}">
+                                <field name="wholesale_mapping_warning" nolabel="1" readonly="1"/>
+                            </div>
+                            <field name="wholesale_mapping_ids">
+                                <tree editable="bottom">
+                                    <field name="company_id" invisible="1"/>
+                                    <field name="currency_id" invisible="1"/>
+                                    <field name="customer_type"/>
+                                    <field name="pricelist_id" domain="['&amp;', '|', ('company_id', '=', False), ('company_id', '=', company_id), ('currency_id', '=', currency_id)]"/>
+                                    <field name="active"/>
+                                </tree>
+                            </field>
+                        </div>
+                    </div>
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>

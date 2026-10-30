@@ -1,0 +1,211 @@
+.pos .wholesale-status-panel {
+    margin: 0.4em 0.6em 0.6em;
+    padding: 0.55em 0.7em;
+    border: 2px solid #555;
+    border-radius: 4px;
+    background: #f7f7f7;
+    color: #222;
+    font-size: 13px;
+    line-height: 1.35;
+    max-height: 42vh;
+    overflow: auto;
+}
+
+.pos .wholesale-status-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55em;
+    margin-bottom: 0.35em;
+}
+
+.pos .wholesale-status-icon {
+    flex: 0 0 auto;
+    width: 1.6em;
+    text-align: center;
+    font-size: 1.35em;
+    line-height: 1.2;
+}
+
+.pos .wholesale-status-title {
+    font-weight: 700;
+}
+
+.pos .wholesale-status-customer {
+    opacity: 0.9;
+}
+
+.pos .wholesale-status-row {
+    display: flex;
+    gap: 0.5em;
+    margin: 0.15em 0;
+}
+
+.pos .wholesale-status-label {
+    flex: 0 0 5.5em;
+    font-weight: 600;
+}
+
+.pos .wholesale-status-value {
+    flex: 1 1 auto;
+    word-break: break-word;
+}
+
+.pos .wholesale-status-error,
+.pos .wholesale-status-loading,
+.pos .wholesale-identify-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4em;
+    margin-top: 0.35em;
+}
+
+.pos .wholesale-status-months {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.35em;
+    margin-top: 0.45em;
+}
+
+.pos .wholesale-month {
+    border: 1px solid #bbb;
+    border-radius: 3px;
+    padding: 0.3em 0.4em;
+    background: #fff;
+}
+
+.pos .wholesale-month-label {
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.pos .wholesale-month-amount {
+    font-size: 12px;
+}
+
+.pos .wholesale-status-actions {
+    margin-top: 0.5em;
+}
+
+.pos .wholesale-override-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4em;
+    border: 2px solid #333;
+    border-radius: 3px;
+    background: #fff;
+    color: #111;
+    padding: 0.35em 0.7em;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.pos .wholesale-override-button:focus {
+    outline: 3px solid #1a73e8;
+    outline-offset: 1px;
+}
+
+.pos .wholesale-override-button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.pos .wholesale-state-retail {
+    border-color: #555;
+    background: #f3f3f3;
+}
+
+.pos .wholesale-state-wholesale {
+    border-color: #0b5;
+    border-style: solid;
+    background: #eafff3;
+}
+
+.pos .wholesale-state-wholesale .wholesale-status-icon {
+    color: #087a3d;
+}
+
+.pos .wholesale-state-error {
+    border-color: #b33;
+    border-style: dashed;
+    background: #fff5f5;
+}
+
+.pos .wholesale-state-error .wholesale-status-icon {
+    color: #a11;
+}
+
+.pos .wholesale-state-override {
+    border-color: #c60;
+    border-style: double;
+    background: #fff8ef;
+}
+
+.pos .wholesale-state-override .wholesale-status-icon {
+    color: #a50;
+}
+
+.pos .wholesale-state-loading {
+    border-style: dotted;
+    opacity: 0.92;
+}
+
+.pos .popup.wholesale-override-popup {
+    max-width: 420px;
+}
+
+.pos .popup.wholesale-override-popup .body {
+    padding: 0.75em 1em;
+    text-align: left;
+}
+
+.pos .wholesale-override-summary {
+    margin-bottom: 0.65em;
+    padding: 0.45em 0.55em;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    background: #fafafa;
+}
+
+.pos .wholesale-override-auto-reason {
+    margin-top: 0.25em;
+    opacity: 0.9;
+}
+
+.pos .wholesale-override-popup .label {
+    display: block;
+    margin: 0.45em 0 0.2em;
+    font-weight: 700;
+}
+
+.pos .wholesale-override-pin,
+.pos .wholesale-override-reason {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #888;
+    border-radius: 3px;
+    padding: 0.4em 0.5em;
+    font-size: 14px;
+}
+
+.pos .wholesale-override-pin:focus,
+.pos .wholesale-override-reason:focus {
+    outline: 3px solid #1a73e8;
+    outline-offset: 1px;
+}
+
+.pos .wholesale-override-hint {
+    margin-top: 0.55em;
+    font-size: 12px;
+    opacity: 0.9;
+}
+
+@media screen and (max-width: 768px) {
+    .pos .wholesale-status-panel {
+        max-height: 28vh;
+        font-size: 12px;
+    }
+
+    .pos .wholesale-status-months {
+        grid-template-columns: 1fr;
+    }
+}
