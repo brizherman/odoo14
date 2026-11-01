@@ -1,151 +1,310 @@
 .pos .wholesale-status-panel {
-    margin: 0.4em 0.6em 0.6em;
-    padding: 0.55em 0.7em;
-    border: 2px solid #555;
-    border-radius: 4px;
-    background: #f7f7f7;
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-top: 4px solid #5b6570;
+    border-radius: 0;
+    background: #f6faf7;
     color: #222;
     font-size: 13px;
     line-height: 1.35;
-    max-height: 42vh;
-    overflow: auto;
+    overflow: visible;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.14);
+    position: relative;
+    z-index: 1;
 }
 
-.pos .wholesale-status-header {
+.pos .wholesale-status-panel + .products-widget {
+    border-top: 10px solid #d3d3d3;
+}
+
+.pos .wholesale-status-primary {
     display: flex;
-    align-items: flex-start;
-    gap: 0.55em;
-    margin-bottom: 0.35em;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.55em 0.85em;
+    min-width: 0;
+    padding: 0.55em 0.9em;
+    border-bottom: 1px solid #dfe8e1;
+    background: transparent;
 }
 
 .pos .wholesale-status-icon {
     flex: 0 0 auto;
-    width: 1.6em;
+    width: 1.7em;
+    height: 1.7em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     text-align: center;
-    font-size: 1.35em;
-    line-height: 1.2;
+    border-radius: 999px;
+    background: #edf0f2;
+    font-size: 1em;
+    line-height: 1;
 }
 
 .pos .wholesale-status-title {
+    flex: 0 1 auto;
+    min-width: 9em;
+    color: #2b3035;
+    font-size: 15px;
     font-weight: 700;
+    letter-spacing: -0.01em;
+    overflow-wrap: anywhere;
 }
 
-.pos .wholesale-status-customer {
-    opacity: 0.9;
+.pos .wholesale-pricing-badge {
+    flex: 0 0 auto;
+    padding: 0.28em 0.65em;
+    border-radius: 999px;
+    background: #e8edef;
+    color: #3d464d;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.pos .wholesale-customer-button,
+.pos .wholesale-override-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4em;
+    border: 1px solid #b9bec3;
+    border-radius: 6px;
+    background: #fafbfb;
+    color: #111;
+    padding: 0.48em 0.75em;
+    font-weight: 700;
+    cursor: pointer;
+    text-align: left;
+    transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.pos .wholesale-customer-button {
+    flex: 2 1 25em;
+    min-width: 20em;
+    max-width: 46em;
+    min-height: 44px;
+    box-sizing: border-box;
+    border-color: #7c8389;
+    box-shadow: none;
+}
+
+.pos .wholesale-customer-button-text {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.pos .wholesale-status-actions {
+    flex: 0 1 auto;
+    margin: 0;
+}
+
+.pos .wholesale-override-button {
+    background: transparent;
+    border-color: transparent;
+    color: #4d555c;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.pos .wholesale-customer-button:hover,
+.pos .wholesale-override-button:hover {
+    border-color: #5f676e;
+    background: #f1f4f5;
+    box-shadow: none;
+}
+
+.pos .wholesale-customer-button:active,
+.pos .wholesale-override-button:active {
+    background: #d9e4f7;
+}
+
+.pos .wholesale-customer-button:focus,
+.pos .wholesale-override-button:focus {
+    outline: 3px solid #1a73e8;
+    outline-offset: 1px;
+}
+
+.pos .wholesale-override-button:disabled,
+.pos .wholesale-customer-button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.pos .wholesale-status-secondary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 0;
+    margin: 0;
+    padding: 0.3em 0.85em 0.45em;
+    min-width: 0;
 }
 
 .pos .wholesale-status-row {
     display: flex;
-    gap: 0.5em;
-    margin: 0.15em 0;
+    flex: 1 1 14em;
+    flex-direction: column;
+    gap: 0.08em;
+    min-width: 10em;
+    margin: 0;
+    padding: 0.12em 0.85em;
+    border: 0;
+    border-right: 1px solid #e1e1e1;
+    background: transparent;
+    box-shadow: none;
+}
+
+.pos .wholesale-status-pricing {
+    flex-grow: 0.75;
+}
+
+.pos .wholesale-status-pricelist {
+    flex-grow: 1.25;
+}
+
+.pos .wholesale-status-reason {
+    flex-grow: 2;
+    border-right: 0;
+}
+
+.pos .wholesale-status-automatic {
+    flex-basis: 100%;
 }
 
 .pos .wholesale-status-label {
-    flex: 0 0 5.5em;
+    flex: 0 0 auto;
+    color: #7a8085;
+    font-size: 10px;
     font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
 }
 
 .pos .wholesale-status-value {
     flex: 1 1 auto;
-    word-break: break-word;
+    min-width: 0;
+    color: #292d30;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
 }
 
 .pos .wholesale-status-error,
 .pos .wholesale-status-loading,
 .pos .wholesale-identify-hint {
     display: flex;
+    flex: 1 1 100%;
     align-items: flex-start;
     gap: 0.4em;
-    margin-top: 0.35em;
+    min-width: 0;
+    margin: 0.45em 0.8em 0;
+    padding: 0.35em 0;
+    border: 0;
+    background: transparent;
+    overflow-wrap: anywhere;
 }
 
 .pos .wholesale-status-months {
     display: grid;
+    flex: 1 1 100%;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.35em;
-    margin-top: 0.45em;
+    gap: 0;
+    margin-top: 0.35em;
+    min-width: 0;
+    padding: 0.5em 0;
+    border-top: 1px solid #e1e1e1;
+    border-bottom: 1px solid #ededed;
+    background: rgba(255, 255, 255, 0.55);
 }
 
 .pos .wholesale-month {
-    border: 1px solid #bbb;
-    border-radius: 3px;
-    padding: 0.3em 0.4em;
-    background: #fff;
+    min-width: 0;
+    border: 0;
+    border-right: 1px solid #dfdfdf;
+    border-radius: 0;
+    padding: 0.28em 0.55em;
+    background: transparent;
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+
+.pos .wholesale-month:last-child {
+    border-right: 0;
+}
+
+.pos .wholesale-month-current {
+    background: #eef6f1;
+    box-shadow: inset 0 -3px 0 #6ec89b;
 }
 
 .pos .wholesale-month-label {
+    color: #656b70;
     font-size: 11px;
     font-weight: 600;
 }
 
 .pos .wholesale-month-amount {
-    font-size: 12px;
-}
-
-.pos .wholesale-status-actions {
-    margin-top: 0.5em;
-}
-
-.pos .wholesale-override-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4em;
-    border: 2px solid #333;
-    border-radius: 3px;
-    background: #fff;
-    color: #111;
-    padding: 0.35em 0.7em;
+    margin-top: 0.1em;
+    font-size: 13px;
     font-weight: 700;
-    cursor: pointer;
-}
-
-.pos .wholesale-override-button:focus {
-    outline: 3px solid #1a73e8;
-    outline-offset: 1px;
-}
-
-.pos .wholesale-override-button:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
 }
 
 .pos .wholesale-state-retail {
-    border-color: #555;
-    background: #f3f3f3;
+    border-top-color: #5b6570;
 }
 
 .pos .wholesale-state-wholesale {
-    border-color: #0b5;
-    border-style: solid;
-    background: #eafff3;
+    border-top-color: #15905b;
 }
 
 .pos .wholesale-state-wholesale .wholesale-status-icon {
+    background: #e8f6ee;
+    color: #087a3d;
+}
+
+.pos .wholesale-state-wholesale .wholesale-pricing-badge {
+    background: #dff3e7;
     color: #087a3d;
 }
 
 .pos .wholesale-state-error {
-    border-color: #b33;
-    border-style: dashed;
-    background: #fff5f5;
+    border-top-color: #b33;
+}
+
+.pos .wholesale-state-error .wholesale-pricing-badge {
+    background: #fbe6e6;
+    color: #971f1f;
 }
 
 .pos .wholesale-state-error .wholesale-status-icon {
+    background: #fde8e8;
     color: #a11;
 }
 
 .pos .wholesale-state-override {
-    border-color: #c60;
-    border-style: double;
-    background: #fff8ef;
+    border-top-color: #c47618;
+}
+
+.pos .wholesale-state-override .wholesale-pricing-badge {
+    background: #fff0d9;
+    color: #8a4a00;
 }
 
 .pos .wholesale-state-override .wholesale-status-icon {
+    background: #fff0d9;
     color: #a50;
 }
 
 .pos .wholesale-state-loading {
-    border-style: dotted;
+    border-top-color: #48708f;
     opacity: 0.92;
 }
 
@@ -168,7 +327,7 @@
 
 .pos .wholesale-override-auto-reason {
     margin-top: 0.25em;
-    opacity: 0.9;
+    overflow-wrap: anywhere;
 }
 
 .pos .wholesale-override-popup .label {
@@ -196,12 +355,27 @@
 .pos .wholesale-override-hint {
     margin-top: 0.55em;
     font-size: 12px;
-    opacity: 0.9;
+}
+
+/* 1024×576 is the desktop baseline. The bar lives in the right pane,
+   which shares the screen with an order pane capped at 500px.
+   Under 1024px the bar may grow, then scroll inside a capped height
+   so category controls and products stay on screen. */
+@media screen and (max-width: 1023px) {
+    .pos .wholesale-status-panel {
+        max-height: 40vh;
+        overflow: auto;
+    }
+
+    .pos .wholesale-customer-button,
+    .pos .wholesale-status-actions,
+    .pos .wholesale-override-button {
+        flex-basis: 100%;
+    }
 }
 
 @media screen and (max-width: 768px) {
     .pos .wholesale-status-panel {
-        max-height: 28vh;
         font-size: 12px;
     }
 

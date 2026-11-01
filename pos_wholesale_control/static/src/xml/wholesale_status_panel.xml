@@ -2,45 +2,53 @@
 <templates id="template" xml:space="preserve">
 
     <t t-name="WholesaleStatusPanel" owl="1">
-        <div class="wholesale-status-panel"
-             t-att-class="panelClass"
-             role="status"
-             aria-live="polite">
-            <div class="wholesale-status-header">
+        <div class="wholesale-status-panel" t-att-class="panelClass">
+            <div class="wholesale-status-primary">
                 <span class="wholesale-status-icon" aria-hidden="true">
                     <i t-att-class="statusIconClass"/>
                 </span>
-                <div class="wholesale-status-title-block">
-                    <div class="wholesale-status-title">
-                        <t t-esc="statusTitle"/>
-                    </div>
-                    <div class="wholesale-status-customer" t-if="customerName">
-                        <t t-esc="customerName"/>
-                        <t t-if="customerTypeLabel"> — <t t-esc="customerTypeLabel"/></t>
-                    </div>
-                    <div class="wholesale-status-customer" t-else="">
-                        <t t-esc="env._t('No customer selected')"/>
-                    </div>
+                <div class="wholesale-status-title" role="status" aria-live="polite">
+                    <t t-esc="statusTitle"/>
+                </div>
+                <div class="wholesale-pricing-badge" role="status">
+                    <t t-esc="pricingLabel"/>
+                </div>
+                <button type="button"
+                        class="wholesale-customer-button"
+                        t-on-click="onChooseCustomer"
+                        t-att-aria-label="customerButtonLabel">
+                    <i class="fa fa-user" aria-hidden="true"/>
+                    <span class="wholesale-customer-button-text">
+                        <t t-if="customerName">
+                            <t t-esc="customerName"/>
+                            <t t-if="customerTypeLabel"> — <t t-esc="customerTypeLabel"/></t>
+                        </t>
+                        <t t-else="">
+                            <t t-esc="env._t('Choose customer')"/>
+                        </t>
+                    </span>
+                </button>
+                <div class="wholesale-status-actions" t-if="canRequestOverride">
+                    <button type="button"
+                            class="wholesale-override-button"
+                            t-on-click="onOverrideClick"
+                            t-att-disabled="isLoading ? true : undefined">
+                        <i class="fa fa-key" aria-hidden="true"/>
+                        <span><t t-esc="env._t('Manager override')"/></span>
+                    </button>
                 </div>
             </div>
 
-            <div class="wholesale-status-body">
-                <div class="wholesale-status-row">
-                    <span class="wholesale-status-label"><t t-esc="env._t('Pricing')"/></span>
-                    <span class="wholesale-status-value">
-                        <t t-esc="pricingLabel"/>
-                        <t t-if="hasOverride"> (<t t-esc="env._t('Manager override')"/>)</t>
-                    </span>
-                </div>
-                <div class="wholesale-status-row" t-if="pricelistName">
+            <div class="wholesale-status-secondary" role="status" aria-live="polite">
+                <div class="wholesale-status-row wholesale-status-pricelist" t-if="pricelistName">
                     <span class="wholesale-status-label"><t t-esc="env._t('Pricelist')"/></span>
                     <span class="wholesale-status-value"><t t-esc="pricelistName"/></span>
                 </div>
-                <div class="wholesale-status-row">
+                <div class="wholesale-status-row wholesale-status-reason">
                     <span class="wholesale-status-label"><t t-esc="env._t('Reason')"/></span>
                     <span class="wholesale-status-value"><t t-esc="reasonText"/></span>
                 </div>
-                <div class="wholesale-status-row" t-if="hasOverride">
+                <div class="wholesale-status-row wholesale-status-automatic" t-if="hasOverride">
                     <span class="wholesale-status-label"><t t-esc="env._t('Automatic')"/></span>
                     <span class="wholesale-status-value"><t t-esc="automaticDecisionLabel"/></span>
                 </div>
@@ -52,42 +60,38 @@
                     <i class="fa fa-spinner fa-spin" aria-hidden="true"/>
                     <span><t t-esc="env._t('Checking purchase history…')"/></span>
                 </div>
-            </div>
-
-            <div class="wholesale-status-months" t-if="showMonths">
-                <div class="wholesale-month"
-                     t-foreach="months" t-as="month" t-key="month_index">
-                    <div class="wholesale-month-label">
-                        <t t-esc="month.label"/>
-                        <t t-if="month.is_current"> (<t t-esc="env._t('MTD')"/>)</t>
-                    </div>
-                    <div class="wholesale-month-amount">
-                        <t t-esc="formatAmount(month.amount)"/>
+                <div class="wholesale-status-months" t-if="showMonths">
+                    <div class="wholesale-month"
+                         t-att-class="{'wholesale-month-current': month.is_current}"
+                         t-foreach="months" t-as="month" t-key="month_index">
+                        <div class="wholesale-month-label">
+                            <t t-esc="month.label"/>
+                            <t t-if="month.is_current"> (<t t-esc="env._t('MTD')"/>)</t>
+                        </div>
+                        <div class="wholesale-month-amount">
+                            <t t-esc="formatAmount(month.amount)"/>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="wholesale-status-months wholesale-status-months-empty" t-if="needsIdentification">
-                <div class="wholesale-identify-hint">
-                    <i class="fa fa-user" aria-hidden="true"/>
-                    <span><t t-esc="env._t('Identify a customer to see monthly purchase totals.')"/></span>
+                <div class="wholesale-status-months wholesale-status-months-empty" t-if="needsIdentification">
+                    <div class="wholesale-identify-hint">
+                        <i class="fa fa-user" aria-hidden="true"/>
+                        <span><t t-esc="env._t('Identify a customer to see monthly purchase totals.')"/></span>
+                    </div>
                 </div>
-            </div>
-
-            <div class="wholesale-status-actions" t-if="canRequestOverride">
-                <button type="button"
-                        class="wholesale-override-button"
-                        t-on-click="onOverrideClick"
-                        t-att-disabled="isLoading ? true : undefined">
-                    <i class="fa fa-key" aria-hidden="true"/>
-                    <span><t t-esc="env._t('Manager override')"/></span>
-                </button>
             </div>
         </div>
     </t>
 
     <t t-name="ProductScreen" t-inherit="point_of_sale.ProductScreen" t-inherit-mode="extension" owl="1">
-        <xpath expr="//OrderWidget" position="after">
-            <WholesaleStatusPanel t-if="env.pos.wholesaleControlActive()"/>
+        <xpath expr="//div[hasclass('rightpane')]/ProductsWidget" position="before">
+            <WholesaleStatusPanel t-if="env.pos.wholesaleControlActive() and !state.cashControl"/>
+        </xpath>
+    </t>
+
+    <t t-name="ActionpadWidget" t-inherit="point_of_sale.ActionpadWidget" t-inherit-mode="extension" owl="1">
+        <xpath expr="//button[hasclass('set-customer')]" position="attributes">
+            <attribute name="t-if">!env.pos.wholesaleControlActive() or env.isMobile</attribute>
         </xpath>
     </t>
 

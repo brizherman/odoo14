@@ -12,6 +12,7 @@ DECISION_SELECTION = [
 ]
 REASON_SELECTION = [
     ('previous_month', 'Mes anterior'),
+    ('current_month', 'Mes actual'),
     ('current_order', 'Pedido actual'),
     ('below_threshold', 'Debajo del mínimo'),
     ('no_identified_customer', 'Sin cliente'),

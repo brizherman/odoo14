@@ -68,6 +68,7 @@ class ResPartner(models.Model):
         facts['decision'], facts['reason_code'] = self._wholesale_price_decision(
             company,
             self._wholesale_previous_month_amount(facts['months']),
+            self._wholesale_current_month_amount(facts['months']),
             retail_amount,
         )
         return self._wholesale_eligibility_response(facts)
@@ -408,16 +409,26 @@ class ResPartner(models.Model):
                 return months[index - 1].get('amount') or 0.0
         return 0.0
 
-    def _wholesale_price_decision(self, company, previous_amount, retail_amount):
-        """Previous month wins. The current order is checked only when it does not."""
+    def _wholesale_current_month_amount(self, months):
+        """Completed sales of the current month. The open ticket is not included."""
+        for month in months:
+            if month.get('is_current'):
+                return month.get('amount') or 0.0
+        return 0.0
+
+    def _wholesale_price_decision(self, company, previous_amount, current_month_amount, retail_amount):
+        """Previous month wins. Month-to-date is checked before the open ticket."""
         currency = company.currency_id
         rounding = currency.rounding or 0.01
         previous_amount = self._wholesale_rounded(currency, previous_amount)
+        current_month_amount = self._wholesale_rounded(currency, current_month_amount)
         retail_amount = self._wholesale_rounded(currency, retail_amount)
         previous_min = self._wholesale_rounded(currency, company.wholesale_previous_month_min)
         current_min = self._wholesale_rounded(currency, company.wholesale_current_order_min)
         if float_compare(previous_amount, previous_min, precision_rounding=rounding) >= 0:
             return 'wholesale', 'previous_month'
+        if float_compare(current_month_amount, current_min, precision_rounding=rounding) >= 0:
+            return 'wholesale', 'current_month'
         if float_compare(retail_amount, current_min, precision_rounding=rounding) >= 0:
             return 'wholesale', 'current_order'
         return 'retail', 'below_threshold'
@@ -497,11 +508,12 @@ class ResPartner(models.Model):
     def _wholesale_reason_text(self, reason_code):
         texts = {
             'previous_month': _('El mes anterior alcanza el mínimo de mayoreo.'),
+            'current_month': _('El mes actual alcanza el mínimo de mayoreo.'),
             'current_order': _(
                 'El pedido actual, a precio de menudeo, alcanza el mínimo de mayoreo.'
             ),
             'below_threshold': _(
-                'Ni el mes anterior ni este pedido alcanzan el mínimo de mayoreo.'
+                'Ni el mes anterior, ni el mes actual, ni este pedido alcanzan el mínimo de mayoreo.'
             ),
             'no_identified_customer': _(
                 'Seleccione un cliente para evaluar el precio de mayoreo.'

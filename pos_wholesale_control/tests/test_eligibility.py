@@ -592,12 +592,41 @@ class TestWholesaleThresholds(WholesaleControlCommon):
         assigned = partner.with_company(self.company).property_product_pricelist
         self.assertEqual(assigned, pricelist)
 
-    def test_current_order_qualification_does_not_change_future_eligibility(self):
-        """A MXN 1,500 ticket qualifies only itself. The next ticket stays retail.
+    def test_current_month_one_cent_below_stays_retail(self):
+        """MXN 1,499.99 already paid this month does not qualify a small ticket."""
+        self.create_pos_order(
+            self.partner_mayorista,
+            amount_total=1499.99,
+            date_order=self._current_month_noon(),
+        )
+        result = self._eligibility(retail_order_amount=100.0)
+        self.assertTrue(self._same_amount(result['months'][2]['amount'], 1499.99))
+        self._assert_retail(result)
 
-        The completed sale lands in the current month. It does not raise the
-        previous-month total, and it does not change the customer type or the
-        customer's own pricelist.
+    def test_current_month_exact_threshold_keeps_wholesale(self):
+        """MXN 1,500.00 already paid this month qualifies later tickets."""
+        partner = self.partner_mayorista
+        self.create_pos_order(
+            partner,
+            amount_total=1500.0,
+            date_order=self._current_month_noon(),
+        )
+        result = self._eligibility(retail_order_amount=100.0)
+        self.assertTrue(self._same_amount(result['previous_month_amount'], 0.0))
+        self.assertTrue(self._same_amount(result['months'][2]['amount'], 1500.0))
+        self._assert_wholesale(result, 'current_month')
+        self._expect_payment(
+            partner,
+            self.retail_pricelist,
+            [self._retail_line(1, price_unit=100.0)],
+            self.club_pricelist,
+        )
+
+    def test_current_order_qualification_keeps_wholesale_for_the_month(self):
+        """A paid MXN 1,500 ticket this month qualifies the next small ticket.
+
+        The previous month stays at zero. The customer type and the customer's
+        own pricelist do not change.
         """
         partner = self.partner_mayorista
         customer_type = partner.customer_type
@@ -614,7 +643,7 @@ class TestWholesaleThresholds(WholesaleControlCommon):
             date_order=self._current_month_noon(),
         )
         later = self._eligibility(retail_order_amount=0.0)
-        self._assert_retail(later)
+        self._assert_wholesale(later, 'current_month')
         self.assertTrue(self._same_amount(later['previous_month_amount'], 0.0))
         self._assert_month_amounts(0.0, 1500.0)
         self._assert_customer_unchanged(partner, customer_type, pricelist)
@@ -622,5 +651,5 @@ class TestWholesaleThresholds(WholesaleControlCommon):
             partner,
             self.club_pricelist,
             [self._retail_line(1, price_unit=100.0)],
-            self.retail_pricelist,
+            self.club_pricelist,
         )

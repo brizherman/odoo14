@@ -401,6 +401,14 @@ msgstr "El mes anterior alcanza el mínimo de mayoreo."
 #: code:addons/pos_wholesale_control/models/res_partner.py:0
 #: code:addons/pos_wholesale_control/static/src/js/wholesale_eligibility.js:0
 #, python-format
+msgid "El mes actual alcanza el mínimo de mayoreo."
+msgstr "El mes actual alcanza el mínimo de mayoreo."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/models/res_partner.py:0
+#: code:addons/pos_wholesale_control/static/src/js/wholesale_eligibility.js:0
+#, python-format
 msgid "El pedido actual, a precio de menudeo, alcanza el mínimo de mayoreo."
 msgstr "El pedido actual, a precio de menudeo, alcanza el mínimo de mayoreo."
 
@@ -979,8 +987,8 @@ msgstr "Mínimo del pedido actual"
 #: code:addons/pos_wholesale_control/models/res_partner.py:0
 #: code:addons/pos_wholesale_control/static/src/js/wholesale_eligibility.js:0
 #, python-format
-msgid "Ni el mes anterior ni este pedido alcanzan el mínimo de mayoreo."
-msgstr "Ni el mes anterior ni este pedido alcanzan el mínimo de mayoreo."
+msgid "Ni el mes anterior, ni el mes actual, ni este pedido alcanzan el mínimo de mayoreo."
+msgstr "Ni el mes anterior, ni el mes actual, ni este pedido alcanzan el mínimo de mayoreo."
 
 #. module: pos_wholesale_control
 #. openerp-web
@@ -1426,6 +1434,20 @@ msgstr "sin lista"
 #, python-format
 msgid "No customer selected"
 msgstr "Ningún cliente seleccionado"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/xml/wholesale_status_panel.xml:0
+#, python-format
+msgid "Choose customer"
+msgstr "Elegir cliente"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid "Customer"
+msgstr "Cliente"
 
 #. module: pos_wholesale_control
 #. openerp-web

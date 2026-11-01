@@ -62,15 +62,24 @@
                             <div class="alert alert-warning mt16" role="alert" attrs="{'invisible': [('wholesale_mapping_warning', '=', False)]}">
                                 <field name="wholesale_mapping_warning" nolabel="1" readonly="1"/>
                             </div>
-                            <field name="wholesale_mapping_ids">
-                                <tree editable="bottom">
-                                    <field name="company_id" invisible="1"/>
-                                    <field name="currency_id" invisible="1"/>
-                                    <field name="customer_type"/>
-                                    <field name="pricelist_id" domain="['&amp;', '|', ('company_id', '=', False), ('company_id', '=', company_id), ('currency_id', '=', currency_id)]"/>
-                                    <field name="active"/>
-                                </tree>
-                            </field>
+                            <div class="content-group mt16">
+                                <div class="row">
+                                    <label for="wholesale_mayorista_pricelist_id" class="col-lg-3 o_light_label"/>
+                                    <field name="wholesale_mayorista_pricelist_id" domain="['&amp;', '|', ('company_id', '=', False), ('company_id', '=', company_id), ('currency_id', '=', wholesale_currency_id)]"/>
+                                </div>
+                                <div class="row">
+                                    <label for="wholesale_publico_general_pricelist_id" class="col-lg-3 o_light_label"/>
+                                    <field name="wholesale_publico_general_pricelist_id" domain="['&amp;', '|', ('company_id', '=', False), ('company_id', '=', company_id), ('currency_id', '=', wholesale_currency_id)]"/>
+                                </div>
+                                <div class="row">
+                                    <label for="wholesale_distribuidores_pricelist_id" class="col-lg-3 o_light_label"/>
+                                    <field name="wholesale_distribuidores_pricelist_id" domain="['&amp;', '|', ('company_id', '=', False), ('company_id', '=', company_id), ('currency_id', '=', wholesale_currency_id)]"/>
+                                </div>
+                                <div class="row">
+                                    <label for="wholesale_mayorista_dormido_pricelist_id" class="col-lg-3 o_light_label"/>
+                                    <field name="wholesale_mayorista_dormido_pricelist_id" domain="['&amp;', '|', ('company_id', '=', False), ('company_id', '=', company_id), ('currency_id', '=', wholesale_currency_id)]"/>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

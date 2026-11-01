@@ -192,8 +192,9 @@ odoo.define('pos_wholesale_control.wholesale_eligibility', function (require) {
         _wholesaleReasonText: function (reasonCode) {
             var texts = {
                 previous_month: _t('El mes anterior alcanza el mínimo de mayoreo.'),
+                current_month: _t('El mes actual alcanza el mínimo de mayoreo.'),
                 current_order: _t('El pedido actual, a precio de menudeo, alcanza el mínimo de mayoreo.'),
-                below_threshold: _t('Ni el mes anterior ni este pedido alcanzan el mínimo de mayoreo.'),
+                below_threshold: _t('Ni el mes anterior, ni el mes actual, ni este pedido alcanzan el mínimo de mayoreo.'),
                 no_identified_customer: _t('Seleccione un cliente para evaluar el precio de mayoreo.'),
                 history_unavailable: _t('No se pudo consultar el historial de compras. El pedido queda en menudeo.'),
             };
@@ -244,14 +245,27 @@ odoo.define('pos_wholesale_control.wholesale_eligibility', function (require) {
             }
             return roundAmount(total, currencyRounding(this));
         },
+        _wholesaleCurrentMonthAmount: function () {
+            var months = this.wholesale.months || [];
+            for (var index = 0; index < months.length; index++) {
+                if (months[index].is_current) {
+                    return months[index].amount || 0;
+                }
+            }
+            return 0;
+        },
         _wholesaleDecide: function (previousAmount, retailAmount) {
             var rounding = currencyRounding(this);
             var previous = roundAmount(previousAmount, rounding);
+            var currentMonth = roundAmount(this._wholesaleCurrentMonthAmount(), rounding);
             var retail = roundAmount(retailAmount, rounding);
             var previousMin = roundAmount(this.wholesale.previousMonthMin, rounding);
             var currentMin = roundAmount(this.wholesale.currentOrderMin, rounding);
             if (floatCompare(previous, previousMin, rounding) >= 0) {
                 return {decision: 'wholesale', reason: 'previous_month'};
+            }
+            if (floatCompare(currentMonth, currentMin, rounding) >= 0) {
+                return {decision: 'wholesale', reason: 'current_month'};
             }
             if (floatCompare(retail, currentMin, rounding) >= 0) {
                 return {decision: 'wholesale', reason: 'current_order'};

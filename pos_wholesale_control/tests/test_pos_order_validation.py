@@ -497,7 +497,9 @@ class TestWholesaleOrderValidation(WholesaleControlCommon):
             self.assertIn(order.wholesale_final_decision, ('retail', 'wholesale'))
             if order.wholesale_final_decision != 'wholesale':
                 continue
-            qualified_rule = order.wholesale_reason_code in ('previous_month', 'current_order')
+            qualified_rule = order.wholesale_reason_code in (
+                'previous_month', 'current_month', 'current_order',
+            )
             valid_override = (
                 order.wholesale_override_id
                 and order.wholesale_override_id.reason

@@ -30,6 +30,15 @@ odoo.define('pos_wholesale_control.WholesaleStatusPanel', function (require) {
         get customerName() {
             return this.client ? this.client.name : '';
         }
+        get customerButtonLabel() {
+            if (!this.customerName) {
+                return this.env._t('Choose customer');
+            }
+            if (this.customerTypeLabel) {
+                return this.env._t('Customer') + ': ' + this.customerName + ' — ' + this.customerTypeLabel;
+            }
+            return this.env._t('Customer') + ': ' + this.customerName;
+        }
         get customerTypeLabel() {
             const type = this.wholesale.customerType || (this.client && this.client.customer_type);
             if (!type) {
@@ -85,16 +94,7 @@ odoo.define('pos_wholesale_control.WholesaleStatusPanel', function (require) {
                 : this.env._t('Retail / General Public');
         }
         get statusTitle() {
-            if (this.errorText) {
-                return this.env._t('Wholesale control — error');
-            }
-            if (this.hasOverride) {
-                return this.env._t('Wholesale control — override');
-            }
-            if (this.wholesale.automaticDecision === 'wholesale' && !this.wholesale.error) {
-                return this.env._t('Wholesale control — wholesale');
-            }
-            return this.env._t('Wholesale control — retail');
+            return this.env._t('Wholesale control — retail').split(' — ')[0];
         }
         get statusIconClass() {
             if (this.isLoading) {
@@ -154,6 +154,9 @@ odoo.define('pos_wholesale_control.WholesaleStatusPanel', function (require) {
             if (order) {
                 order.off('change', null, this);
             }
+        }
+        onChooseCustomer() {
+            this.trigger('click-customer');
         }
         async onOverrideClick() {
             const order = this.order;
