@@ -2,7 +2,7 @@
 # pylint: disable=missing-module-docstring,manifest-required-author,missing-readme,manifest-deprecated-key
 {
     'name': 'Consulta de precios',
-    'version': '14.0.1.0.0',
+    'version': '14.0.1.1.0',
     'summary': 'Consulta el precio con impuesto de un producto en tres listas',
     'description': """
 Muestra el precio unitario con impuesto de un producto para Público General,
@@ -10,7 +10,7 @@ Mayorista y Distribuidores. La misma consulta está en el backend y en el
 punto de venta. No elige un cliente y no modifica el ticket abierto.
 """,
     'author': 'Custom',
-    'category': 'Point of Sale',
+    'category': 'Sales',
     'depends': [
         'point_of_sale',
         'alta_mayoristas',
@@ -26,7 +26,7 @@ punto de venta. No elige un cliente y no modifica el ticket abierto.
         'static/src/xml/PriceLookupPopup.xml',
     ],
     'installable': True,
-    'application': False,
+    'application': True,
     'auto_install': False,
     'license': 'LGPL-3',
 }

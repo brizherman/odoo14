@@ -8,8 +8,8 @@
 
     <menuitem id="menu_product_price_lookup"
               name="Consulta de precios"
-              parent="point_of_sale.menu_point_root"
               action="action_product_price_lookup"
               groups="base.group_user"
-              sequence="25"/>
+              web_icon="product_price_lookup,static/description/icon.png"
+              sequence="46"/>
 </odoo>
