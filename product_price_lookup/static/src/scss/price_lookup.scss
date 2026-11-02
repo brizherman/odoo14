@@ -1,0 +1,600 @@
+@font-face {
+    font-family: "PriceLookup Geist";
+    src: url("/product_price_lookup/static/src/fonts/geist-sans-400.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "PriceLookup Geist";
+    src: url("/product_price_lookup/static/src/fonts/geist-sans-500.woff2") format("woff2");
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "PriceLookup Geist";
+    src: url("/product_price_lookup/static/src/fonts/geist-sans-600.woff2") format("woff2");
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "PriceLookup Geist Mono";
+    src: url("/product_price_lookup/static/src/fonts/geist-mono-400.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "PriceLookup Geist Mono";
+    src: url("/product_price_lookup/static/src/fonts/geist-mono-500.woff2") format("woff2");
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+// Backend. A quiet page: one field, then the price.
+.o_price_lookup_backend {
+    --pl-ink: #171717;
+    --pl-muted: #666;
+    --pl-line: #ebebeb;
+    --pl-canvas: #fafafa;
+    --pl-paper: #fff;
+
+    box-sizing: border-box;
+    min-height: 100%;
+    padding: 32px 40px 64px;
+    background: var(--pl-canvas);
+    color: var(--pl-ink);
+    font-family: "PriceLookup Geist", sans-serif;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+}
+
+.o_action > .o_content:has(> .o_price_lookup_backend) {
+    background: #fafafa;
+}
+
+.o_plb_mast {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 32px;
+    max-width: 960px;
+    animation: o_pl_in 0.28s ease both;
+}
+
+.o_plb_kicker,
+.o_plb_field_label,
+.o_plp_field_label {
+    margin: 0 0 8px;
+    color: #171717;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+}
+
+.o_plb_title {
+    margin: 0;
+    font-size: 40px;
+    font-weight: 600;
+    letter-spacing: -0.04em;
+    line-height: 1.05;
+}
+
+.o_plb_aside,
+.o_plp_aside {
+    margin: 0 0 4px;
+    color: #171717;
+    font-size: 18px;
+    font-weight: 500;
+    line-height: 1.3;
+}
+
+.o_plb_aside {
+    text-align: right;
+}
+
+.o_plb_field,
+.o_plp_field {
+    display: block;
+    max-width: 960px;
+    margin: 28px 0 0;
+    animation: o_pl_in 0.28s ease 0.05s both;
+}
+
+.o_price_lookup_backend .o_price_lookup_search {
+    display: block;
+    width: 100%;
+    height: 72px;
+    margin: 0;
+    padding: 0 18px;
+    border: 3px solid #171717;
+    border-radius: 12px;
+    background: var(--pl-paper);
+    box-shadow: none;
+    color: var(--pl-ink);
+    font-family: "PriceLookup Geist", sans-serif;
+    font-size: 28px;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    line-height: 72px;
+}
+
+.o_price_lookup_backend .o_price_lookup_search::placeholder {
+    color: #a3a3a3;
+}
+
+.o_price_lookup_backend .o_price_lookup_search:focus {
+    outline: none;
+    border-color: var(--pl-ink);
+    box-shadow: 0 0 0 1px var(--pl-ink);
+}
+
+.o_plb_idle {
+    max-width: 960px;
+    margin: 22px 0 0;
+    padding: 0;
+    list-style: none;
+    color: #171717;
+    font-size: 22px;
+    font-weight: 500;
+}
+
+.o_plb_idle li {
+    margin: 0 0 10px;
+}
+
+.o_plb_idle strong {
+    font-weight: 700;
+}
+
+.o_plb_stage {
+    max-width: 960px;
+}
+
+.o_plb_note {
+    margin: 20px 0 0;
+    padding: 16px 18px;
+    border-radius: 12px;
+    background: #171717;
+    color: #fff;
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1.3;
+    animation: o_pl_in 0.22s ease both;
+}
+
+.o_plb_ticket {
+    display: grid;
+    grid-template-columns: minmax(220px, 0.9fr) minmax(240px, 0.7fr);
+    gap: 24px 40px;
+    align-items: start;
+    margin-top: 20px;
+    padding: 28px;
+    border-radius: 16px;
+    background: var(--pl-paper);
+    box-shadow: 0 0 0 2px #171717;
+    animation: o_pl_in 0.22s ease both;
+}
+
+.o_plb_name {
+    margin: 0;
+    font-size: 32px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+}
+
+.o_plb_codes,
+.o_plb_row_meta,
+.o_plp_meta,
+.o_price_lookup_codes {
+    margin: 10px 0 0;
+    color: #171717;
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: 0;
+    line-height: 1.4;
+}
+
+.o_pl_code {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin: 8px 0 0;
+}
+
+.o_pl_code_name {
+    flex: 0 0 11em;
+    color: #444;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.o_plb_prices,
+.pos .popup.o_price_lookup_popup .o_price_lookup_prices {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+}
+
+.o_plb_price,
+.pos .popup.o_price_lookup_popup .o_price_lookup_block {
+    min-width: 200px;
+    margin: 0;
+    padding: 16px 18px 14px;
+    border: 0;
+    border-radius: 14px;
+    background: #171717;
+    color: #fff;
+}
+
+.o_plb_price[data-slot="publico_general"],
+.o_plb_price[data-slot="Público General"],
+.pos .popup.o_price_lookup_popup .o_price_lookup_block[data-slot="publico_general"],
+.pos .popup.o_price_lookup_popup .o_price_lookup_block[data-slot="Público General"] {
+    background: #1d4ed8;
+}
+
+.o_plb_price[data-slot="mayorista"],
+.o_plb_price[data-slot="Mayorista"],
+.pos .popup.o_price_lookup_popup .o_price_lookup_block[data-slot="mayorista"],
+.pos .popup.o_price_lookup_popup .o_price_lookup_block[data-slot="Mayorista"] {
+    background: #c2410c;
+}
+
+.o_plb_price[data-slot="distribuidores"],
+.o_plb_price[data-slot="Distribuidores"],
+.pos .popup.o_price_lookup_popup .o_price_lookup_block[data-slot="distribuidores"],
+.pos .popup.o_price_lookup_popup .o_price_lookup_block[data-slot="Distribuidores"] {
+    background: #047857;
+}
+
+.o_plb_label,
+.pos .popup.o_price_lookup_popup .o_price_lookup_label {
+    margin: 0 0 8px;
+    color: #fff;
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.o_plb_amount {
+    color: #fff;
+    font-size: 48px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.04em;
+    line-height: 1;
+}
+
+.o_plb_list {
+    margin-top: 8px;
+    animation: o_pl_in 0.22s ease both;
+}
+
+.o_plb_list_scroll {
+    max-height: 420px;
+    overflow-y: auto;
+}
+
+.o_plb_list .o_plb_kicker {
+    margin: 18px 2px 8px;
+}
+
+.o_price_lookup_backend .o_plb_row,
+.pos .popup.o_price_lookup_popup .o_plb_row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 24px;
+    width: 100%;
+    margin: 0;
+    padding: 18px 12px;
+    border: 0;
+    border-bottom: 1px solid var(--pl-line);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--pl-ink);
+    text-align: left;
+    cursor: pointer;
+}
+
+.o_price_lookup_backend .o_plb_row_name,
+.pos .popup.o_price_lookup_popup .o_plb_row_name {
+    font-size: 22px;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+}
+
+.o_price_lookup_backend .o_plb_row .o_plb_row_meta,
+.pos .popup.o_price_lookup_popup button.o_price_lookup_match .o_plp_meta {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: flex-end;
+    margin: 0;
+}
+
+.o_price_lookup_backend .o_plb_row:hover,
+.o_price_lookup_backend .o_plb_row:focus,
+.pos .popup.o_price_lookup_popup .o_plb_row:hover,
+.pos .popup.o_price_lookup_popup .o_plb_row:focus {
+    outline: none;
+    background: #fff;
+    box-shadow: inset 2px 0 0 #171717;
+}
+
+// POS popup. Same language, sized for the register.
+.pos .modal-dialog .popup.o_price_lookup_popup {
+    width: 980px;
+    max-width: 94vw;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 24px 48px rgba(0, 0, 0, 0.18);
+    color: #171717;
+    font-family: "PriceLookup Geist", sans-serif;
+    font-weight: 400;
+    text-align: left;
+    overflow: hidden;
+}
+
+.pos .popup.o_price_lookup_popup .title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 0;
+    padding: 18px 24px;
+    border-bottom: 1px solid #ebebeb;
+    border-radius: 12px 12px 0 0;
+    background: #fff;
+}
+
+.pos .popup.o_price_lookup_popup .o_plp_kicker {
+    margin: 0;
+    color: #171717;
+    font-family: "PriceLookup Geist", sans-serif;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    text-transform: none;
+}
+
+.pos .popup.o_price_lookup_popup .body {
+    margin: 0;
+    padding: 20px 24px 8px;
+    max-height: 72vh;
+    overflow: auto;
+    font-size: 16px;
+    font-weight: 400;
+    text-align: left;
+    white-space: normal;
+}
+
+.pos .popup.o_price_lookup_popup .o_plb_ticket {
+    max-width: none;
+    margin-top: 16px;
+    box-sizing: border-box;
+}
+
+.pos .popup.o_price_lookup_popup .o_plb_row {
+    font-weight: 500;
+}
+
+.pos .popup.o_price_lookup_popup .o_plp_field {
+    max-width: none;
+    margin: 0;
+    animation: none;
+}
+
+.pos .popup.o_price_lookup_popup input.o_price_lookup_search {
+    display: block;
+    width: 100%;
+    height: 68px;
+    min-height: 0;
+    margin: 0;
+    padding: 0 16px;
+    border: 3px solid #171717;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: none;
+    color: #171717;
+    font-family: "PriceLookup Geist", sans-serif;
+    font-size: 26px;
+    font-weight: 500;
+    line-height: 68px;
+    text-align: left;
+}
+
+.pos .popup.o_price_lookup_popup input.o_price_lookup_search::placeholder {
+    color: #a3a3a3;
+}
+
+.pos .popup.o_price_lookup_popup input.o_price_lookup_search:focus {
+    outline: none;
+    border-color: #171717;
+    box-shadow: 0 0 0 1px #171717;
+}
+
+.pos .popup.o_price_lookup_popup .o_price_lookup_message {
+    margin: 16px 0 0;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: #171717;
+    color: #fff;
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 1.3;
+    animation: o_pl_in 0.22s ease both;
+}
+
+.pos .popup.o_price_lookup_popup .o_price_lookup_hit {
+    display: grid;
+    grid-template-columns: minmax(180px, 0.9fr) minmax(240px, 1.2fr);
+    gap: 20px 28px;
+    align-items: start;
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px solid #ebebeb;
+    animation: o_pl_in 0.22s ease both;
+}
+
+.pos .popup.o_price_lookup_popup .o_price_lookup_name {
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.2;
+}
+
+.pos .popup.o_price_lookup_popup .o_price_lookup_amount {
+    color: #fff;
+    font-size: 40px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.04em;
+    line-height: 1;
+}
+
+.pos .popup.o_price_lookup_popup .o_price_lookup_matches {
+    margin-top: 8px;
+}
+
+.pos .popup.o_price_lookup_popup button.o_price_lookup_match {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    width: 100%;
+    margin: 0;
+    padding: 16px 8px;
+    border: 0;
+    border-bottom: 1px solid #ebebeb;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: #171717;
+    font-family: "PriceLookup Geist", sans-serif;
+    font-size: 20px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.pos .popup.o_price_lookup_popup button.o_price_lookup_match .o_plp_meta {
+    flex: 0 0 auto;
+    margin: 0;
+    font-weight: 400;
+}
+
+.pos .popup.o_price_lookup_popup button.o_price_lookup_match:hover,
+.pos .popup.o_price_lookup_popup button.o_price_lookup_match:focus {
+    outline: none;
+    background: #fafafa;
+    box-shadow: inset 2px 0 0 #171717;
+}
+
+.pos .popup.o_price_lookup_popup .footer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    width: auto;
+    height: auto;
+    margin: 0;
+    padding: 12px 16px 16px;
+    border-top: 1px solid #ebebeb;
+}
+
+.pos .popup.o_price_lookup_popup .footer .button.cancel {
+    float: none;
+    width: auto;
+    height: 52px;
+    margin: 0;
+    padding: 0 22px;
+    border: 0;
+    border-radius: 10px;
+    background: #171717;
+    color: #fff;
+    font-family: "PriceLookup Geist", sans-serif;
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 52px;
+    cursor: pointer;
+}
+
+.pos .popup.o_price_lookup_popup .footer .button.cancel:active {
+    background: #000;
+    border: 0;
+    color: #fff;
+}
+
+@keyframes o_pl_in {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@media (max-width: 860px) {
+    .o_price_lookup_backend {
+        padding: 28px 20px 56px;
+    }
+
+    .o_plb_mast,
+    .o_plb_ticket,
+    .pos .popup.o_price_lookup_popup .o_price_lookup_hit {
+        display: block;
+    }
+
+    .o_plb_aside {
+        margin-top: 10px;
+        text-align: left;
+    }
+
+    .o_plb_prices,
+    .pos .popup.o_price_lookup_popup .o_price_lookup_prices {
+        margin-top: 22px;
+    }
+
+    .o_plb_price:first-child,
+    .pos .popup.o_price_lookup_popup .o_price_lookup_block:first-child {
+        padding-left: 0;
+        border-left: 0;
+    }
+
+    .o_price_lookup_backend .o_plb_row,
+    .pos .popup.o_price_lookup_popup button.o_price_lookup_match {
+        display: block;
+    }
+
+    .o_price_lookup_backend .o_plb_row .o_plb_row_meta,
+    .pos .popup.o_price_lookup_popup button.o_price_lookup_match .o_plp_meta {
+        display: block;
+        margin-top: 4px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .o_plb_mast,
+    .o_plb_field,
+    .o_plb_note,
+    .o_plb_ticket,
+    .o_plb_list,
+    .pos .popup.o_price_lookup_popup .o_price_lookup_message,
+    .pos .popup.o_price_lookup_popup .o_price_lookup_hit {
+        animation: none;
+    }
+}

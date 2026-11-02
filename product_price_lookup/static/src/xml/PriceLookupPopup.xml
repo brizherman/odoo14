@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <t t-name="PriceLookupPopup" owl="1">
+        <div role="dialog" class="modal-dialog" aria-modal="true">
+            <div class="popup o_price_lookup_popup">
+                <header class="title">
+                    <span class="o_plp_kicker">Consulta de precios</span>
+                    <span class="o_plp_aside">Incluye el impuesto</span>
+                </header>
+                <main class="body o_price_lookup">
+                    <label class="o_plp_field">
+                        <span class="o_plp_field_label">Código, referencia o nombre</span>
+                        <input type="text"
+                               class="o_price_lookup_search"
+                               t-ref="search"
+                               placeholder="Escanee el código, la referencia o el nombre"
+                               autocomplete="off"
+                               t-on-keydown="onSearchKeydown"/>
+                    </label>
+                    <ul class="o_plb_idle">
+                        <li><strong>Código o referencia exacta.</strong> Muestra el precio.</li>
+                        <li><strong>Nombre.</strong> Muestra una lista. Elija el producto.</li>
+                        <li><strong>Asterisco al inicio.</strong> Busca en la referencia interna el texto que sigue. Ejemplo: *helio.</li>
+                    </ul>
+                    <p t-if="state.message" class="o_plb_note" t-esc="state.message"/>
+                    <article t-if="state.product" class="o_plb_ticket">
+                        <div class="o_plb_who">
+                            <p class="o_plb_kicker">Producto</p>
+                            <h2 class="o_plb_name" t-esc="state.product.name"/>
+                            <div class="o_plb_codes">
+                                <p t-if="state.product.default_code" class="o_pl_code">
+                                    <span class="o_pl_code_name">Referencia interna</span>
+                                    <span t-esc="state.product.default_code"/>
+                                </p>
+                                <p t-if="state.product.barcode" class="o_pl_code">
+                                    <span class="o_pl_code_name">Código de barras</span>
+                                    <span t-esc="state.product.barcode"/>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="o_plb_prices">
+                            <div t-foreach="state.prices" t-as="price" t-key="price.label" class="o_plb_price" t-att-data-slot="price.slot or price.label">
+                                <div class="o_plb_label" t-esc="price.label"/>
+                                <div class="o_plb_amount" t-esc="price.display"/>
+                            </div>
+                        </div>
+                    </article>
+                    <div t-if="state.matches.length" class="o_plb_list">
+                        <p class="o_plb_kicker">Elija uno</p>
+                        <div class="o_plb_list_scroll">
+                        <button t-foreach="state.matches" t-as="match" t-key="match.id" type="button"
+                                class="o_price_lookup_match o_plb_row" t-on-click="selectMatch" t-att-data-id="match.id">
+                            <span class="o_plb_row_name" t-esc="match.name"/>
+                            <span class="o_plb_row_meta">
+                                <span t-if="match.default_code" class="o_pl_code">
+                                    <span class="o_pl_code_name">Referencia interna</span>
+                                    <span t-esc="match.default_code"/>
+                                </span>
+                                <span t-if="match.barcode" class="o_pl_code">
+                                    <span class="o_pl_code_name">Código de barras</span>
+                                    <span t-esc="match.barcode"/>
+                                </span>
+                            </span>
+                        </button>
+                        </div>
+                    </div>
+                </main>
+                <footer class="footer">
+                    <div class="button cancel" t-on-click="cancel">
+                        Cerrar
+                    </div>
+                </footer>
+            </div>
+        </div>
+    </t>
+
+</templates>

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_price_lookup" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.price.lookup</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="point_of_sale.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@data-key='point_of_sale']" position="inside">
+                <h2 groups="base.group_system">Consulta de precios</h2>
+                <div class="row mt16 o_settings_container" groups="base.group_system">
+                    <div class="col-12 col-lg-6 o_setting_box" id="price_lookup_pricelists">
+                        <div class="o_setting_right_pane">
+                            <span class="o_form_label">Listas de precios</span>
+                            <span class="fa fa-lg fa-building-o" title="Los valores definidos aquí son específicos de la sucursal." aria-label="Los valores definidos aquí son específicos de la sucursal." groups="base.group_multi_company" role="img"/>
+                            <div class="text-muted">
+                                Deje un campo vacío para ocultar esa etiqueta. La misma lista puede usarse en más de un campo.
+                            </div>
+                            <div class="content-group mt16">
+                                <field name="price_lookup_currency_id" invisible="1"/>
+                                <div class="row">
+                                    <label for="price_lookup_publico_general_pricelist_id" class="col-lg-3 o_light_label"/>
+                                    <field name="price_lookup_publico_general_pricelist_id" domain="['&amp;', '|', ('company_id', '=', False), ('company_id', '=', company_id), ('currency_id', '=', price_lookup_currency_id)]"/>
+                                </div>
+                                <div class="row">
+                                    <label for="price_lookup_mayorista_pricelist_id" class="col-lg-3 o_light_label"/>
+                                    <field name="price_lookup_mayorista_pricelist_id" domain="['&amp;', '|', ('company_id', '=', False), ('company_id', '=', company_id), ('currency_id', '=', price_lookup_currency_id)]"/>
+                                </div>
+                                <div class="row">
+                                    <label for="price_lookup_distribuidores_pricelist_id" class="col-lg-3 o_light_label"/>
+                                    <field name="price_lookup_distribuidores_pricelist_id" domain="['&amp;', '|', ('company_id', '=', False), ('company_id', '=', company_id), ('currency_id', '=', price_lookup_currency_id)]"/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>

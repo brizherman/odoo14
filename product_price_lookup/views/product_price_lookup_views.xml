@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_product_price_lookup" model="ir.actions.client">
+        <field name="name">Consulta de precios</field>
+        <field name="tag">product_price_lookup</field>
+        <field name="target">current</field>
+    </record>
+
+    <menuitem id="menu_product_price_lookup"
+              name="Consulta de precios"
+              parent="point_of_sale.menu_point_root"
+              action="action_product_price_lookup"
+              groups="base.group_user"
+              sequence="25"/>
+</odoo>
