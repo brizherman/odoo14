@@ -1,37 +1,50 @@
 # Práctica real paso a paso — Control de mayoreo en POS
 
-**Fecha:** 2026-11-01  
+**Fecha:** 2026-11-02  
 **Módulo:** `pos_wholesale_control` 14.0.1.3.1  
 **Estado:** Guion para hacer la práctica en la caja  
-**Alcance:** Los casos de `capacitacion-control-mayoreo-pos.md` que se pueden ver con estos clientes reales, incluidas las reglas de Distribuidores.
+**Alcance:** Casos reales leídos la mañana del 2026-11-02, después de las ventas que movieron los totales del 2026-11-01.
 
 Haga un paso y revise **Debe ver** antes de pasar al siguiente. No cobre ningún ticket. No use **Excepción de gerente**. No cambie la lista a mano: el botón dice **Lista de precios bloqueada**.
 
 ## Datos de esta práctica
 
-Los totales de los seis primeros clientes se leyeron la mañana del 2026-11-01. Los cuatro distribuidores que sí califican se leyeron la noche del mismo día. Salen de pedidos de Punto de Venta pagados, terminados o facturados de todas las sucursales. Esos diez clientes no tienen devoluciones de noviembre ni pedidos de venta confirmados en octubre.
+Los totales salen de la misma cuenta que usa la caja: todas las sucursales, en hora de Tijuana. Cuentan los pedidos de punto de venta pagados, terminados o facturados y las ventas confirmadas. Una devolución resta el mes de la venta original.
 
-La zona horaria es `America/Tijuana`. Octubre es el mes anterior. Para Mayorista el mínimo de ese mes es MXN $800.00. Para Distribuidores el mínimo de ese mes es MXN $10,000.00. Noviembre es el mes actual, marcado **MTD** en el panel. El ticket abierto no entra en noviembre, pero se suma a MTD a precio de menudeo para decidir. Los clientes Distribuidores solo usan el mínimo de MXN $10,000.00; no usan los mínimos de MXN $800.00 ni MXN $1,500.00. Si un cobro de hoy cambia noviembre antes de empezar, use las cifras del panel.
+La zona horaria es `America/Tijuana`. Octubre es el mes anterior. Noviembre es el mes actual, marcado **MTD** en el panel. El ticket abierto no entra en noviembre, pero se suma a MTD para decidir.
+
+| Tipo | Regla | Lista |
+|---|---|---|
+| Mayorista | Octubre de MXN $800.00, o noviembre más este pedido a menudeo de MXN $1,500.00 | Lista de precios de Mayorista |
+| Distribuidores | Octubre de MXN $10,000.00, o noviembre más este pedido a menudeo de MXN $10,000.00 | Super Precios a Distribuidores |
+| Distribuidores debajo de MXN $10,000.00 | Se queda en menudeo. No usa MXN $800.00 ni MXN $1,500.00 | Lista de precios a Público en General |
 
 Busque cada cliente por teléfono para no abrir un duplicado.
 
 | Práctica | Cliente | Tipo | Teléfono | Octubre | Noviembre |
 |---|---|---|---|---|---|
-| Pasos 4 a 8 | JANETT ALEJANDRA MEZA COTA | Mayorista | 6461482456 | MXN $0.00 | MXN $1,229.47 |
-| Paso 10 | LUZ AMERICA CASTILLO ESCOBEDO PAPELERIA | Mayorista | 6462690030 | MXN $799.63 | MXN $0.00 |
+| Paso 4 | JANETT ALEJANDRA MEZA COTA | Mayorista | 6461482456 | MXN $0.00 | MXN $1,560.64 |
+| Pasos 5 a 8 | LUZ AMERICA CASTILLO ESCOBEDO PAPELERIA | Mayorista | 6462690030 | MXN $799.63 | MXN $1,290.30 |
+| Pasos 9 y 10 | KENIA RODRIGUEZ | Mayorista | 6647313257 | MXN $799.44 | MXN $0.00 |
 | Paso 11 | REYNA ACAHUA ARELLANO | Mayorista | 6643667196 | MXN $800.22 | MXN $0.00 |
 | Paso 12 | BELDEN DE SONORA | Mayorista | 6646861924 | MXN $3,158.80 | MXN $0.00 |
-| Pasos 13 y 14 | ALMA LETICIA MARTINEZ VERDIN | Distribuidores | 6641235327 | MXN $2,447.99 | MXN $0.00 |
-| Pasos 15 y 16 | SARA ALICIA CAMACHO | Distribuidores | 6644076716 | MXN $102.02 | MXN $0.00 |
-| Pasos 17 y 18 | ZULEMA GUTIERREZ | Distribuidores | 6641289088 | MXN $13,484.97 | MXN $0.00 |
+| Pasos 13 y 14 | MARIA ISABEL TEOSOL AGUATZI | Distribuidores | 6643865490 | MXN $8,631.90 | MXN $0.00 |
+| Paso 15 | LOURDES JASSO GALVAN | Distribuidores | 6621484929 | MXN $514.42 | MXN $0.00 |
+| Pasos 16 y 17 | ZULEMA GUTIERREZ | Distribuidores | 6641289088 | MXN $13,484.97 | MXN $0.00 |
 | Mismo caso | ERICKA NOHEMI GUTIERREZ VERDUGO | Distribuidores | 6644923187 | MXN $13,072.13 | MXN $0.00 |
 | Mismo caso | ELSA MARISELA ALVARADO NUÑEZ | Distribuidores | 6646818971 | MXN $11,871.54 | MXN $0.00 |
 | Mismo caso | PERLA CAROLINA NIÑO VEGA | Distribuidores | 6655213364 | MXN $10,480.99 | MXN $0.00 |
 
-Producto: **Caja Blanca Pastel Dubrin C/25**, referencia interna `CB7P`. Precio de catálogo a público: **MXN $398.24**.
+Producto: **Caja Blanca Pastel Dubrin C/25**, referencia interna `CB7P`.
 
-- **2 cajas** quedan debajo de MXN $1,500.00 a menudeo (MXN $796.48).
-- **4 cajas** cruzan MXN $1,500.00 a menudeo (MXN $1,592.96).
+- Precio de catálogo a público: **MXN $398.24**.
+- Referencia que usa la caja, con IVA de 8%: **MXN $430.10** por caja.
+- **2 cajas** a menudeo: **MXN $860.20**. Quedan debajo de MXN $1,500.00.
+- **4 cajas** a menudeo: **MXN $1,720.40**. Cruzan MXN $1,500.00.
+- **23 cajas** a menudeo: **MXN $9,892.28**. Quedan debajo de MXN $10,000.00.
+- **24 cajas** a menudeo: **MXN $10,322.38**. Cruzan MXN $10,000.00.
+
+El total que aparece a la izquierda puede ser menor, porque ya usa la lista concedida. La decisión no se lee en ese total.
 
 En el panel lea el título, el cliente, **Precio**, **Lista de precios**, **Motivo** y los meses. El mes más antiguo se puede ignorar. Octubre y noviembre (**MTD**) son los que importan. En pantalla los meses salen como **octubre 2026** y **noviembre 2026 (MTD)**.
 
@@ -65,41 +78,50 @@ Si el panel no está, esta sucursal no tiene el control activo. Cambie a Insurge
 
 Repita este paso cada vez que el guion diga que el pedido debe quedar vacío.
 
-## Paso 4. Elegir a Janett y leer el historial
+## Paso 4. Janett — noviembre ya cruzó $1,500
 
 1. Pulse **Elegir cliente** en la barra de control de mayoreo.
 2. Busque `6461482456`.
 3. Elija **JANETT ALEJANDRA MEZA COTA**.
-4. Cierre la lista de clientes y lea el panel antes de agregar productos.
+4. No agregue productos.
 
 **Debe ver:**
 
 - Cliente: **JANETT ALEJANDRA MEZA COTA — Mayorista**.
+- **Precio:** Mayoreo.
+- **Lista de precios:** Lista de precios de Mayorista (MXN).
+- **Motivo:** El mes actual alcanza el mínimo de mayoreo.
+- Octubre: **MXN $0.00**.
+- Noviembre **(MTD):** **MXN $1,560.64**.
+
+El pedido vacío ya califica porque noviembre, sin este ticket, pasa de MXN $1,500.00. El 2026-11-01 noviembre estaba en MXN $1,229.47; una venta posterior lo subió.
+
+No cobre. Vacíe el pedido si se agregó algo.
+
+## Paso 5. Luz América — el pedido vacío sigue en menudeo
+
+1. Pedido vacío.
+2. Busque `6462690030`.
+3. Elija **LUZ AMERICA CASTILLO ESCOBEDO PAPELERIA**.
+4. Lea el panel antes de capturar productos.
+
+**Debe ver:**
+
+- Tipo: **Mayorista**.
+- Octubre: **MXN $799.63**, debajo de MXN $800.00.
+- Noviembre **(MTD):** **MXN $1,290.30**, debajo de MXN $1,500.00.
 - **Precio:** Menudeo.
 - **Lista de precios:** Lista de precios a Publico en General (MXN).
 - **Motivo:** Ni el mes anterior ni el acumulado del mes actual más este pedido alcanzan el mínimo de mayoreo.
-- Octubre: **MXN $0.00**.
-- Noviembre **(MTD):** **MXN $1,229.47**.
 
-Si el nombre no es ese, vuelva a buscar por el teléfono. Si octubre o noviembre no coinciden, anote las cifras del panel y úselas en los pasos siguientes. Octubre tiene que seguir debajo de MXN $800.00 y noviembre debajo de MXN $1,500.00 para que el ticket decida. Noviembre ya trae MXN $1,229.47; faltan MXN $270.53 para activar mayoreo.
+Faltan MXN $209.70 de referencia a menudeo para activar mayoreo.
 
-## Paso 5. Reactivación — MTD más una caja califican
+## Paso 6. Luz América — una caja activa mayoreo
 
-1. Deje a Janett seleccionada.
+1. Siga con Luz América.
 2. Busque el producto `CB7P`.
 3. Agregue **1** caja.
 4. Lea el panel.
-
-**Debe ver:** el panel cambia a **Control de mayoreo — mayoreo**. **Precio** cambia a **Mayoreo** y la lista a Mayorista. El motivo dice que el acumulado del mes actual más este pedido alcanza el mínimo. Noviembre sigue en **MXN $1,229.47** y una caja vale MXN $398.24 a menudeo; juntos suman MXN $1,627.71.
-
-No cobre.
-
-## Paso 6. Cuatro cajas conservan el mayoreo
-
-1. Siga con Janett y la misma caja.
-2. Suba la cantidad a **4**.
-3. Espere a que desaparezca **Consultando el historial de compras…**.
-4. Lea el panel y el total del pedido.
 
 **Debe ver:**
 
@@ -107,65 +129,78 @@ No cobre.
 - **Precio:** Mayoreo.
 - **Lista de precios:** Lista de precios de Mayorista (MXN).
 - **Motivo:** El acumulado del mes actual más este pedido, a precio de menudeo, alcanza el mínimo de mayoreo.
-- Octubre sigue en **MXN $0.00**, debajo de MXN $800.00.
-- Noviembre sigue en **MXN $1,229.47**, debajo de MXN $1,500.00.
+- Octubre sigue en **MXN $799.63**.
+- Noviembre sigue en **MXN $1,290.30**.
 
-La caja cambió la lista sola. No toque el botón de lista de precios. Cuatro cajas a menudeo son MXN $1,592.96.
+Noviembre más una caja a menudeo suman MXN $1,720.40. La caja cambió la lista sola.
 
-## Paso 7. Al vaciar el pedido vuelve a menudeo
+No cobre.
 
-1. Siga con Janett y las 4 cajas. El panel debe estar en mayoreo.
-2. Baje la cantidad a **0**.
+## Paso 7. Al quitar la caja vuelve a menudeo
+
+1. Siga con Luz América y la caja.
+2. Ponga la cantidad en **0**.
 3. Lea el panel.
 
-**Debe ver:** otra vez **Control de mayoreo — menudeo**, **Precio** en **Menudeo** y la lista de público. Sin ticket abierto, noviembre queda debajo de MXN $1,500.00.
+**Debe ver:** otra vez **Control de mayoreo — menudeo**, **Precio** en **Menudeo** y la lista de público. Noviembre sigue en **MXN $1,290.30**, debajo de MXN $1,500.00.
 
-## Paso 8. Caso 6 — el total a pagar puede quedar debajo de $1,500
+## Paso 8. El total a pagar puede quedar debajo de $1,500
 
-1. Siga con Janett.
-2. Agregue otra vez **1** caja.
+1. Siga con Luz América.
+2. Agregue otra vez **1** caja de `CB7P`.
 3. Confirme que el panel volvió a mayoreo.
-4. Compare el **total a pagar** del pedido con MXN $1,500.00.
+4. Compare el total a pagar del pedido con MXN $1,500.00.
 
 **Debe ver:**
 
 - El panel permanece en **Mayoreo**.
 - La lista sigue siendo **Lista de precios de Mayorista (MXN)**.
-- El motivo sigue siendo el acumulado de MTD más el pedido a precio de menudeo.
-- El total a pagar puede quedar **debajo** de MXN $1,500.00, porque ya usa precios de mayoreo. Eso no regresa el ticket a menudeo.
+- El total a pagar puede quedar **debajo** de MXN $1,500.00, porque ya usa precios de mayoreo.
 
-No cobre. El panel no muestra el cálculo a menudeo del ticket abierto. La señal es que **Precio** sigue en **Mayoreo** aunque el total cobrado baje de MXN $1,500.00.
-
-## Paso 9. Vaciar el pedido de Janett
-
-1. Ponga la cantidad de `CB7P` en **0** o borre la línea.
-2. No pulse **Pago**.
-
-**Debe ver:** pedido vacío. Janett puede seguir seleccionada. El panel vuelve a menudeo porque MTD sin el pedido abierto no llega a MXN $1,500.00. Noviembre sigue en **MXN $1,229.47**.
-
-## Paso 10. Luz América — justo debajo de $800
-
-1. Vacíe el pedido si todavía tiene productos.
-2. Pulse **Elegir cliente** en la barra de control de mayoreo y busque `6462690030`.
-3. Elija **LUZ AMERICA CASTILLO ESCOBEDO PAPELERIA**.
-4. Lea el panel antes de capturar productos.
-5. Agregue **2** cajas de `CB7P`.
-6. Lea el panel otra vez.
-
-**Debe ver antes de capturar:** tipo **Mayorista**, octubre **MXN $799.63** y noviembre **(MTD) MXN $0.00**.
-
-**Debe ver con 2 cajas:** **Precio** en **Menudeo** y lista de público. El motivo dice que no se alcanza ningún mínimo. MXN $799.63 no llega al mínimo de MXN $800.00, y dos cajas no llegan a MXN $1,500.00 a menudeo.
+La referencia de la decisión sigue siendo MXN $430.10 a menudeo, no el total rebajado.
 
 No cobre. Vacíe el pedido.
 
-## Paso 11. Caso 2 — Reyna, justo arriba de $800
+## Paso 9. Kenia — justo debajo de $800
+
+1. Pedido vacío.
+2. Busque `6647313257`.
+3. Elija **KENIA RODRIGUEZ**.
+4. Lea el panel antes de capturar.
+5. Agregue **2** cajas de `CB7P`.
+6. Lea el panel otra vez.
+
+**Debe ver antes de capturar:** tipo **Mayorista**, octubre **MXN $799.44** y noviembre **(MTD) MXN $0.00**.
+
+**Debe ver con 2 cajas:** **Precio** en **Menudeo** y lista de público. El motivo dice que no se alcanza ningún mínimo. MXN $799.44 no llega a MXN $800.00, y dos cajas a menudeo son MXN $860.20.
+
+No cobre. Deje las 2 cajas para el paso siguiente.
+
+## Paso 10. Kenia — cuatro cajas cruzan $1,500
+
+1. Siga con Kenia y las 2 cajas.
+2. Suba la cantidad a **4**.
+3. Lea el panel.
+4. Después baje la cantidad a **0**.
+
+**Debe ver con 4 cajas:**
+
+- **Precio:** Mayoreo.
+- **Lista de precios:** Lista de precios de Mayorista (MXN).
+- **Motivo:** El acumulado del mes actual más este pedido, a precio de menudeo, alcanza el mínimo de mayoreo.
+- Octubre sigue en **MXN $799.44** y noviembre en **MXN $0.00**.
+
+Cuatro cajas a menudeo son MXN $1,720.40. Al volver a cero, el panel regresa a menudeo.
+
+No cobre.
+
+## Paso 11. Reyna — justo arriba de $800
 
 1. Pedido vacío.
 2. Busque `6643667196`.
 3. Elija **REYNA ACAHUA ARELLANO**. El nombre del registro termina con un espacio; el teléfono identifica el contacto.
-4. Lea octubre en el panel.
-5. Agregue **2** cajas de `CB7P`.
-6. Lea el panel.
+4. Agregue **2** cajas de `CB7P`.
+5. Lea el panel.
 
 **Debe ver:**
 
@@ -178,7 +213,7 @@ No cobre. Vacíe el pedido.
 
 No cobre. Vacíe el pedido.
 
-## Paso 12. Caso 2 otra vez — Belden, historial claro
+## Paso 12. Belden — historial claro
 
 1. Pedido vacío.
 2. Busque `6646861924`.
@@ -195,93 +230,82 @@ No cobre. Vacíe el pedido.
 - **Lista de precios:** Lista de precios de Mayorista (MXN).
 - **Motivo:** El mes anterior alcanza el mínimo de mayoreo.
 
-Octubre, que ahora es el mes anterior, pasa de MXN $800.00. El motivo debe ser ese mes. Dos cajas bastan. Noviembre en cero no cambia la decisión.
+Octubre pasa de MXN $800.00. Dos cajas bastan. Noviembre en cero no cambia la decisión.
 
 No cobre. Vacíe el pedido.
 
-## Paso 13. Alma no llega al mínimo de Distribuidor
+## Paso 13. María Isabel — arriba de $800 y sigue en menudeo
 
 1. Pedido vacío.
-2. Busque `6641235327`.
-3. Elija **ALMA LETICIA MARTINEZ VERDIN**. Ese teléfono también está en otros contactos; no elija esos.
+2. Busque `6643865490`.
+3. Elija **MARIA ISABEL TEOSOL AGUATZI**.
 4. Lea el panel antes de capturar.
-5. Agregue **2** cajas de `CB7P`.
+5. Agregue **4** cajas de `CB7P`.
 6. Lea el panel otra vez.
 
-**Debe ver antes y después de las 2 cajas:**
+**Debe ver antes y después de las 4 cajas:**
 
 - Tipo: **Distribuidores**.
-- Octubre: **MXN $2,447.99**.
+- Octubre: **MXN $8,631.90**.
 - Noviembre **(MTD):** **MXN $0.00**.
-- **Mes anterior:** **MXN $2,447.99**.
 - **Mínimo de distribuidor:** **MXN $10,000.00**.
 - **Precio:** Menudeo / Público general.
 - **Lista de precios:** Lista de precios a Publico en General (MXN).
 - **Motivo:** No alcanza el mínimo de distribuidor. El pedido queda en menudeo.
 
-Aunque octubre supera MXN $800.00, el tipo Distribuidores no usa ese mínimo ni la lista de Mayorista.
+Octubre supera MXN $800.00 y cuatro cajas superan MXN $1,500.00. Esas dos reglas no aplican a un cliente Distribuidores. Octubre tampoco se suma a noviembre para llegar a MXN $10,000.00.
 
 Puede aparecer **Excepción de gerente**. No la pulse.
 
-No cobre. Deje las 2 cajas para el paso siguiente.
+No cobre. Deje el pedido para el paso siguiente.
 
-## Paso 14. Alma con cuatro cajas sigue en menudeo
+## Paso 14. María Isabel — 23 cajas siguen en menudeo y 24 activan Distribuidor
 
-1. Siga con Alma y las 2 cajas.
-2. Suba la cantidad a **4**.
+1. Siga con María Isabel.
+2. Suba la cantidad a **23**.
 3. Lea el panel.
+4. Suba la cantidad a **24**.
+5. Lea el panel y el total a pagar.
+6. Baje la cantidad a **0**.
 
-**Debe ver:**
+**Debe ver con 23 cajas:** sigue en menudeo y en la lista de público. Veintitrés cajas a menudeo son MXN $9,892.28, debajo de MXN $10,000.00.
 
-- **Precio:** Menudeo / Público general.
-- **Lista de precios:** Lista de precios a Publico en General (MXN).
-- **Motivo:** No alcanza el mínimo de distribuidor. El pedido queda en menudeo.
-- Octubre sigue en **MXN $2,447.99** y noviembre en **MXN $0.00**.
-- **Mínimo de distribuidor:** **MXN $10,000.00**.
+**Debe ver con 24 cajas:**
 
-Aunque cuatro cajas superan MXN $1,500.00, un cliente Distribuidores permanece en menudeo hasta alcanzar MXN $10,000.00.
+- **Precio:** Distribuidor.
+- **Lista de precios:** Super Precios a Distribuidores (MXN).
+- **Motivo:** El acumulado del mes actual más este pedido alcanza el mínimo de distribuidor.
+- Octubre sigue en **MXN $8,631.90** y noviembre en **MXN $0.00**.
 
-No cobre. Vacíe el pedido.
+Veinticuatro cajas a menudeo son MXN $10,322.38. El total a pagar queda cerca de MXN $6,916 porque Super Precios es más bajo. Ese total no decide la regla.
 
-## Paso 15. Sara con dos cajas sigue en menudeo
+Al volver a cero, el panel regresa a menudeo.
+
+No cobre.
+
+## Paso 15. Lourdes — debajo de $800 también sigue en menudeo
 
 1. Pedido vacío.
-2. Busque `6644076716`.
-3. Elija **SARA ALICIA CAMACHO**.
-4. Lea el panel antes de capturar.
-5. Agregue **2** cajas de `CB7P`.
-6. Lea el panel.
+2. Busque `6621484929`.
+3. Elija **LOURDES JASSO GALVAN**.
+4. Agregue **4** cajas de `CB7P`.
+5. Lea el panel.
 
 **Debe ver:**
 
 - Tipo: **Distribuidores**.
-- Octubre: **MXN $102.02**.
+- Octubre: **MXN $514.42**.
 - Noviembre **(MTD):** **MXN $0.00**.
-- **Mes anterior:** **MXN $102.02**.
 - **Mínimo de distribuidor:** **MXN $10,000.00**.
-- Con 2 cajas, **Precio** en **Menudeo / Público general** y lista de público.
-- **Motivo:** El mes anterior no alcanza el mínimo de distribuidor.
-
-El tipo Distribuidores no da Super Precios por sí solo. MTD más el pedido tampoco alcanza MXN $10,000.00. No pulse **Excepción de gerente**.
-
-## Paso 16. Sara con cuatro cajas sigue en menudeo
-
-1. Siga con Sara y las 2 cajas.
-2. Suba la cantidad a **4**.
-3. Lea el panel.
-
-**Debe ver:**
-
 - **Precio:** Menudeo / Público general.
 - **Lista de precios:** Lista de precios a Publico en General (MXN).
 - **Motivo:** No alcanza el mínimo de distribuidor. El pedido queda en menudeo.
-- Octubre sigue en **MXN $102.02** y noviembre en **MXN $0.00**.
 
-Cuatro cajas superan MXN $1,500.00, pero ese mínimo no aplica a Distribuidores. El caso que recibe Super Precios es el paso 17.
+Aunque cuatro cajas cruzan MXN $1,500.00, Lourdes no recibe la lista de Mayorista.
 
 No cobre. Vacíe el pedido.
 
-## Paso 17. Zulema ya trae Super Precios
+## Paso 16. Zulema ya trae Super Precios
 
 1. Pedido vacío.
 2. Busque `6641289088`.
@@ -293,19 +317,18 @@ No cobre. Vacíe el pedido.
 - Tipo: **Distribuidores**.
 - Octubre: **MXN $13,484.97**.
 - Noviembre **(MTD):** **MXN $0.00**.
-- **Mes anterior:** **MXN $13,484.97**.
 - **Mínimo de distribuidor:** **MXN $10,000.00**.
 - **Precio:** Distribuidor.
 - **Lista de precios:** Super Precios a Distribuidores (MXN).
 - **Motivo:** El mes anterior alcanza el mínimo de distribuidor.
 
-No es la lista de Mayorista. El botón **Excepción de gerente** no debe aparecer, porque ya califica. También calificaría si MTD más el ticket abierto llegaran a MXN $10,000.00.
+No es la lista de Mayorista. El botón **Excepción de gerente** no debe aparecer, porque ya califica.
 
-Si Zulema no coincide, use el mismo paso con Ericka (`6644923187`), Elsa (`6646818971`) o Perla (`6655213364`). Las tres también pasan de MXN $10,000.00 en octubre. Lea el octubre del panel, no el de esta tabla, si un cobro de hoy lo cambió.
+Si Zulema no coincide, use el mismo paso con Ericka (`6644923187`), Elsa (`6646818971`) o Perla (`6655213364`). Las tres también pasan de MXN $10,000.00 en octubre y noviembre sigue en cero. Lea el octubre del panel, no el de esta tabla, si un cobro de hoy lo cambió.
 
-## Paso 18. Dos cajas no le quitan Super Precios
+## Paso 17. Dos cajas no le quitan Super Precios
 
-1. Siga con Zulema, o con la distribuidora que haya elegido en el paso 17.
+1. Siga con Zulema, o con la distribuidora que haya elegido en el paso 16.
 2. Agregue **2** cajas de `CB7P`.
 3. Lea el panel.
 
@@ -316,11 +339,11 @@ Si Zulema no coincide, use el mismo paso con Ericka (`6644923187`), Elsa (`66468
 - **Motivo:** El mes anterior alcanza el mínimo de distribuidor.
 - Octubre no cambió. Noviembre sigue en **MXN $0.00**.
 
-Dos cajas a menudeo son MXN $796.48. Como ya calificó por el mes anterior, la lista se queda en Super Precios.
+Dos cajas a menudeo son MXN $860.20. Como ya calificó por octubre, la lista se queda en Super Precios.
 
 No cobre. Vacíe el pedido.
 
-## Paso 19. Cerrar la práctica sin cobrar
+## Paso 18. Cerrar la práctica sin cobrar
 
 1. Ponga la cantidad en **0** o borre la línea.
 2. Confirme que el pedido quedó vacío.
@@ -329,4 +352,4 @@ No cobre. Vacíe el pedido.
 
 **Debe ver:** pedido en cero. Ningún pedido nuevo cobrado por esta práctica.
 
-Si en algún paso el panel no coincide con **Debe ver**, deténgase. Anote el paso, el cliente, **Precio**, **Lista de precios**, **Motivo** y los montos de octubre y noviembre. No fuerce la lista ni cobre para “corregirlo”.
+Si en algún paso el panel no coincide con **Debe ver**, deténgase. Anote el paso, el cliente, **Precio**, **Lista de precios**, **Motivo** y los montos de octubre y noviembre. No fuerce la lista ni cobre para corregirlo.
