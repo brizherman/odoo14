@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <template id="pos_screens_stub_assets" inherit_id="point_of_sale.assets" priority="1">
+        <xpath expr="script[1]" position="before">
+            <script type="text/javascript" src="/pos_wholesale_control/static/src/js/pos_screens_stub.js"/>
+        </xpath>
+    </template>
+
     <template id="assets" inherit_id="point_of_sale.assets">
         <xpath expr="." position="inside">
             <script type="text/javascript" src="/pos_wholesale_control/static/src/js/models.js"/>

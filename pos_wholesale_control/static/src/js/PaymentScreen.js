@@ -66,7 +66,8 @@ odoo.define('pos_wholesale_control.PaymentScreen', function (require) {
                     );
                 }
                 if (
-                    order.wholesale.reasonCode === 'history_unavailable'
+                    (order.wholesale.reasonCode === 'history_unavailable'
+                        || order.wholesale.reasonCode === 'currency_mismatch')
                     && !(order.wholesale.override && order.wholesale.override.pricelist_id)
                     && order.pricelist
                     && order.wholesale.retailPricelistId
@@ -112,8 +113,10 @@ odoo.define('pos_wholesale_control.PaymentScreen', function (require) {
                         // Configuration or history errors stay fail-closed on retail.
                         if (allowed && order.pricelist && order.pricelist.id === allowed.id
                             && (!response.expected_pricelist || response.expected_pricelist.id === allowed.id
-                                || response.reason_code === 'history_unavailable')) {
-                            if (response.reason_code === 'history_unavailable'
+                                || response.reason_code === 'history_unavailable'
+                                || response.reason_code === 'currency_mismatch')) {
+                            if ((response.reason_code === 'history_unavailable'
+                                || response.reason_code === 'currency_mismatch')
                                 && order.pricelist.id !== (response.retail_pricelist && response.retail_pricelist.id)
                                 && !(order.wholesale.override && order.wholesale.override.pricelist_id)) {
                                 return response.error || this.env._t(
@@ -196,6 +199,7 @@ odoo.define('pos_wholesale_control.PaymentScreen', function (require) {
                     || text.indexOf('historial') !== -1
                     || text.indexOf('excepción') !== -1
                     || text.indexOf('excepcion') !== -1
+                    || text.indexOf('distribuidor') !== -1
                 );
             }
             _wholesaleErrorMessage(error) {

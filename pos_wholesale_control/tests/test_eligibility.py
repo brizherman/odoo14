@@ -593,15 +593,26 @@ class TestWholesaleThresholds(WholesaleControlCommon):
         self.assertEqual(assigned, pricelist)
 
     def test_current_month_one_cent_below_stays_retail(self):
-        """MXN 1,499.99 already paid this month does not qualify a small ticket."""
+        """MTD plus the open ticket at MXN 1,499.99 stays retail."""
         self.create_pos_order(
             self.partner_mayorista,
-            amount_total=1499.99,
+            amount_total=1200.0,
             date_order=self._current_month_noon(),
         )
-        result = self._eligibility(retail_order_amount=100.0)
-        self.assertTrue(self._same_amount(result['months'][2]['amount'], 1499.99))
+        result = self._eligibility(retail_order_amount=299.99)
+        self.assertTrue(self._same_amount(result['months'][2]['amount'], 1200.0))
         self._assert_retail(result)
+
+    def test_current_month_plus_order_exact_threshold_is_wholesale(self):
+        """MXN 1,200 MTD plus MXN 300 on the open ticket qualifies."""
+        self.create_pos_order(
+            self.partner_mayorista,
+            amount_total=1200.0,
+            date_order=self._current_month_noon(),
+        )
+        result = self._eligibility(retail_order_amount=300.0)
+        self.assertTrue(self._same_amount(result['months'][2]['amount'], 1200.0))
+        self._assert_wholesale(result, 'current_order')
 
     def test_current_month_exact_threshold_keeps_wholesale(self):
         """MXN 1,500.00 already paid this month qualifies later tickets."""

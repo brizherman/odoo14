@@ -22,6 +22,17 @@ SALE_ORDER_STATES = ('sale', 'done')
 # Odoo names a POS refund "{original} REFUND". The Spanish translation of
 # that suffix is "REEMBOLSO", without the leading space.
 POS_REFUND_SUFFIXES = (' REFUND', ' REEMBOLSO', 'REEMBOLSO')
+DISTRIBUTOR_CUSTOMER_TYPE = 'distribuidores'
+# A distributor exception is allowed only for these automatic results.
+DISTRIBUTOR_EXCEPTION_REASONS = (
+    'below_threshold',
+    'history_unavailable',
+    'currency_mismatch',
+)
+
+
+class WholesaleCurrencyError(Exception):
+    """Purchase history includes a company on another currency."""
 
 
 class ResPartner(models.Model):
@@ -51,11 +62,19 @@ class ResPartner(models.Model):
             'retail_amount': retail_amount,
             'decision': 'retail',
             'reason_code': 'no_identified_customer',
+            'pricing_program': self._wholesale_pricing_program(partner),
         }
         if not partner:
             return self._wholesale_eligibility_response(facts)
         try:
             facts['months'] = partner._wholesale_monthly_totals(company)
+        except WholesaleCurrencyError:
+            _logger.warning(
+                'Wholesale history currencies differ for partner %s on company %s',
+                partner.id, company.id,
+            )
+            facts['reason_code'] = 'currency_mismatch'
+            return self._wholesale_eligibility_response(facts)
         except Exception:  # pylint: disable=broad-except
             # Any history failure stays on retail. The cashier may continue
             # only with an audited manager override, which is checked later.
@@ -65,13 +84,32 @@ class ResPartner(models.Model):
             )
             facts['reason_code'] = 'history_unavailable'
             return self._wholesale_eligibility_response(facts)
-        facts['decision'], facts['reason_code'] = self._wholesale_price_decision(
-            company,
-            self._wholesale_previous_month_amount(facts['months']),
-            self._wholesale_current_month_amount(facts['months']),
-            retail_amount,
-        )
+        previous_amount = self._wholesale_previous_month_amount(facts['months'])
+        current_amount = self._wholesale_current_month_amount(facts['months'])
+        if facts['pricing_program'] == 'distributor':
+            (
+                facts['decision'],
+                facts['reason_code'],
+                facts['pricing_program'],
+            ) = self._wholesale_distributor_decision(
+                company, previous_amount, current_amount, retail_amount,
+            )
+        else:
+            facts['decision'], facts['reason_code'] = self._wholesale_price_decision(
+                company,
+                previous_amount,
+                current_amount,
+                retail_amount,
+            )
         return self._wholesale_eligibility_response(facts)
+
+    def _wholesale_pricing_program(self, partner):
+        """Server-side program. A client value is never accepted."""
+        if not partner:
+            return False
+        if partner.customer_type == DISTRIBUTOR_CUSTOMER_TYPE:
+            return 'distributor'
+        return 'wholesale'
 
     def _wholesale_monthly_totals(self, company, moment_utc=None):
         """Three local calendar months of net sales, oldest first.
@@ -88,6 +126,7 @@ class ResPartner(models.Model):
         self.ensure_one()
         company.ensure_one()
         months = company._wholesale_calendar_months(moment_utc)
+        self._wholesale_reject_mixed_currencies(company, months)
         amounts = dict((index, 0.0) for index in range(len(months)))
         if isinstance(self.id, int) and months:
             window_start = months[0]['start_utc']
@@ -103,6 +142,47 @@ class ResPartner(models.Model):
                 amounts, months, window_start, window_end,
             )
         return self._wholesale_month_rows(company, amounts, months)
+
+    def _wholesale_reject_mixed_currencies(self, company, months):
+        """Stop before adding amounts that are not in the register currency.
+
+        Every company with a qualifying order in the window is included.
+        A branch on another currency makes the total unusable.
+        """
+        if not months or not isinstance(self.id, int):
+            return
+        window_start = months[0]['start_utc']
+        window_end = months[-1]['end_utc']
+        company_ids = set()
+        for model_name, states in (
+                ('pos.order', POS_ORDER_STATES),
+                ('sale.order', SALE_ORDER_STATES),
+        ):
+            if model_name not in self.env:
+                continue
+            groups = self.env[model_name].sudo().read_group(
+                [
+                    ('partner_id', '=', self.id),
+                    ('state', 'in', list(states)),
+                    ('date_order', '>=', window_start),
+                    ('date_order', '<', window_end),
+                ],
+                ['company_id'],
+                ['company_id'],
+                lazy=False,
+            )
+            for group in groups:
+                company_value = group.get('company_id')
+                if company_value:
+                    company_ids.add(company_value[0])
+        if not company_ids:
+            return
+        currencies = self.env['res.company'].sudo().browse(list(company_ids)).mapped(
+            'currency_id',
+        )
+        comparison = company.currency_id
+        if any(currency != comparison for currency in currencies):
+            raise WholesaleCurrencyError()
 
     def _wholesale_month_rows(self, company, amounts, months):
         currency = company.currency_id
@@ -429,14 +509,44 @@ class ResPartner(models.Model):
             return 'wholesale', 'previous_month'
         if float_compare(current_month_amount, current_min, precision_rounding=rounding) >= 0:
             return 'wholesale', 'current_month'
-        if float_compare(retail_amount, current_min, precision_rounding=rounding) >= 0:
+        accumulated = self._wholesale_rounded(
+            currency, current_month_amount + retail_amount,
+        )
+        if float_compare(accumulated, current_min, precision_rounding=rounding) >= 0:
             return 'wholesale', 'current_order'
         return 'retail', 'below_threshold'
 
-    def _wholesale_list_for_decision(self, company, partner, decision):
-        """Retail list, or the customer-type wholesale list when the order qualifies."""
+    def _wholesale_distributor_decision(
+            self, company, previous_amount, current_month_amount, retail_amount):
+        """Distributor customers stay retail until a distributor minimum is met."""
+        currency = company.currency_id
+        rounding = currency.rounding or 0.01
+        previous_amount = self._wholesale_rounded(currency, previous_amount)
+        current_month_amount = self._wholesale_rounded(currency, current_month_amount)
+        retail_amount = self._wholesale_rounded(currency, retail_amount)
+        distributor_min = self._wholesale_rounded(
+            currency, company.wholesale_distributor_min,
+        )
+        if float_compare(
+                previous_amount, distributor_min, precision_rounding=rounding) >= 0:
+            return 'wholesale', 'previous_month', 'distributor'
+        if float_compare(
+                current_month_amount, distributor_min, precision_rounding=rounding) >= 0:
+            return 'wholesale', 'current_month', 'distributor'
+        accumulated = self._wholesale_rounded(
+            currency, current_month_amount + retail_amount,
+        )
+        if float_compare(accumulated, distributor_min, precision_rounding=rounding) >= 0:
+            return 'wholesale', 'current_order', 'distributor'
+        return 'retail', 'below_threshold', 'distributor'
+
+    def _wholesale_list_for_decision(self, company, partner, decision, program=False):
+        """Return retail, distributor, or regular wholesale for the chosen tier."""
         if decision != 'wholesale':
             return company.wholesale_retail_pricelist_id
+        if program == 'distributor':
+            mapping = self._wholesale_type_mapping(company, DISTRIBUTOR_CUSTOMER_TYPE)
+            return mapping.pricelist_id
         customer_type = partner.customer_type if partner else False
         mapping = self._wholesale_type_mapping(company, customer_type)
         if mapping:
@@ -457,6 +567,39 @@ class ResPartner(models.Model):
         if not config:
             return True
         return company._pricelist_available_on(config, pricelist)
+
+    def _wholesale_distributor_list_problem(self, company, config):
+        """Why the distributor list cannot be applied. Empty when it can."""
+        mapping = company._wholesale_distributor_mapping_record()
+        if not mapping:
+            return _(
+                'No hay lista de Distribuidores para este cliente. '
+                'No se usa la lista general de mayoreo. El pedido queda en menudeo.'
+            )
+        if not mapping.active:
+            return _(
+                'La asignación de Distribuidores está inactiva. '
+                'No se usa la lista general de mayoreo. El pedido queda en menudeo.'
+            )
+        pricelist = mapping.pricelist_id
+        if not pricelist or not pricelist.active:
+            return _(
+                'La lista de Distribuidores está archivada. '
+                'No se usa la lista general de mayoreo. El pedido queda en menudeo.'
+            )
+        if pricelist.currency_id != company.currency_id:
+            return _(
+                'La lista "%(pricelist)s" no usa la moneda de la sucursal. '
+                'El pedido queda en menudeo.',
+                pricelist=pricelist.display_name,
+            )
+        if config and not company._pricelist_available_on(config, pricelist):
+            return _(
+                'La lista "%(pricelist)s" no está disponible en esta caja. '
+                'El pedido queda en menudeo.',
+                pricelist=pricelist.display_name,
+            )
+        return False
 
     def _wholesale_unusable_list_message(self, pricelist, wholesale):
         if not pricelist:
@@ -483,10 +626,21 @@ class ResPartner(models.Model):
         decision = facts['decision']
         reason_code = facts['reason_code']
         retail_list = company.wholesale_retail_pricelist_id
-        expected = self._wholesale_list_for_decision(company, facts['partner'], decision)
+        expected = self._wholesale_list_for_decision(
+            company, facts['partner'], decision, facts.get('pricing_program'),
+        )
         retail_ok = self._wholesale_list_usable(company, config, retail_list)
         fallback = retail_list if retail_ok else self.env['product.pricelist']
-        closed = reason_code in ('no_identified_customer', 'history_unavailable')
+        closed = reason_code in (
+            'no_identified_customer', 'history_unavailable', 'currency_mismatch',
+        )
+        if facts.get('pricing_program') == 'distributor' and decision == 'wholesale':
+            problem = self._wholesale_distributor_list_problem(company, config)
+            if problem:
+                message = problem
+                if not retail_ok:
+                    message = self._wholesale_unusable_list_message(retail_list, False)
+                return 'retail', fallback, message
         if closed or decision != 'wholesale':
             message = False
             if not retail_ok:
@@ -505,15 +659,44 @@ class ResPartner(models.Model):
             return 'retail', fallback, message
         return 'wholesale', expected, False
 
-    def _wholesale_reason_text(self, reason_code):
+    def _wholesale_reason_text(self, reason_code, program=False):
+        if program == 'distributor':
+            texts = {
+                'previous_month': _(
+                    'El mes anterior alcanza el mínimo de distribuidor.'
+                ),
+                'current_month': _(
+                    'El mes actual alcanza el mínimo de distribuidor.'
+                ),
+                'current_order': _(
+                    'El acumulado del mes actual más este pedido alcanza '
+                    'el mínimo de distribuidor.'
+                ),
+                'below_threshold': _(
+                    'No alcanza el mínimo de distribuidor. El pedido queda en menudeo.'
+                ),
+                'no_identified_customer': _(
+                    'Seleccione un cliente para evaluar el precio de distribuidor.'
+                ),
+                'history_unavailable': _(
+                    'No se pudo consultar el historial de compras. El pedido queda en menudeo.'
+                ),
+                'currency_mismatch': _(
+                    'Las sucursales del historial no usan la misma moneda. '
+                    'El pedido queda en menudeo.'
+                ),
+            }
+            return texts.get(reason_code, '')
         texts = {
             'previous_month': _('El mes anterior alcanza el mínimo de mayoreo.'),
             'current_month': _('El mes actual alcanza el mínimo de mayoreo.'),
             'current_order': _(
-                'El pedido actual, a precio de menudeo, alcanza el mínimo de mayoreo.'
+                'El acumulado del mes actual más este pedido, a precio de menudeo, '
+                'alcanza el mínimo de mayoreo.'
             ),
             'below_threshold': _(
-                'Ni el mes anterior, ni el mes actual, ni este pedido alcanzan el mínimo de mayoreo.'
+                'Ni el mes anterior ni el acumulado del mes actual más este pedido '
+                'alcanzan el mínimo de mayoreo.'
             ),
             'no_identified_customer': _(
                 'Seleccione un cliente para evaluar el precio de mayoreo.'
@@ -521,19 +704,25 @@ class ResPartner(models.Model):
             'history_unavailable': _(
                 'No se pudo consultar el historial de compras. El pedido queda en menudeo.'
             ),
+            'currency_mismatch': _(
+                'Las sucursales del historial no usan la misma moneda. '
+                'El pedido queda en menudeo.'
+            ),
         }
         return texts.get(reason_code, '')
 
-    def _wholesale_response_error(self, reason_code, guard_error):
-        if reason_code == 'history_unavailable':
-            return self._wholesale_reason_text(reason_code)
+    def _wholesale_response_error(self, reason_code, guard_error, program=False):
+        if reason_code in ('history_unavailable', 'currency_mismatch'):
+            return self._wholesale_reason_text(reason_code, program)
         return guard_error or False
 
-    def _wholesale_response_reason_text(self, reason_code, error):
+    def _wholesale_response_reason_text(self, reason_code, error, program=False):
         """Show the block when configuration, not the customer rule, forced retail."""
-        if error and reason_code not in ('no_identified_customer', 'history_unavailable'):
+        if error and reason_code not in (
+                'no_identified_customer', 'history_unavailable', 'currency_mismatch',
+        ):
             return error
-        return self._wholesale_reason_text(reason_code)
+        return self._wholesale_reason_text(reason_code, program)
 
     def _wholesale_pricelist_payload(self, pricelist):
         if not pricelist:
@@ -557,11 +746,13 @@ class ResPartner(models.Model):
         months = facts['months']
         reason_code = facts['reason_code']
         decision, expected, guard_error = self._wholesale_guard_decision(facts)
-        error = self._wholesale_response_error(reason_code, guard_error)
+        program = facts.get('pricing_program') or False
+        error = self._wholesale_response_error(reason_code, guard_error, program)
         currency = company.currency_id
         return {
             'customer_id': partner.id if partner else False,
             'customer_type': partner.customer_type if partner else False,
+            'pricing_program': program,
             'months': months,
             'previous_month_amount': self._wholesale_rounded(
                 currency, self._wholesale_previous_month_amount(months),
@@ -569,13 +760,18 @@ class ResPartner(models.Model):
             'previous_month_min': self._wholesale_rounded(
                 currency, company.wholesale_previous_month_min,
             ),
+            'distributor_min': self._wholesale_rounded(
+                currency, company.wholesale_distributor_min,
+            ),
             'current_order_min': self._wholesale_rounded(
                 currency, company.wholesale_current_order_min,
             ),
             'retail_order_amount': self._wholesale_rounded(currency, facts['retail_amount']),
             'automatic_decision': decision,
             'reason_code': reason_code,
-            'reason_text': self._wholesale_response_reason_text(reason_code, error),
+            'reason_text': self._wholesale_response_reason_text(
+                reason_code, error, program,
+            ),
             'retail_pricelist': self._wholesale_pricelist_payload(
                 company.wholesale_retail_pricelist_id,
             ),

@@ -2,7 +2,7 @@
 # pylint: disable=missing-module-docstring,manifest-required-author,missing-readme
 {
     'name': 'Control de precios mayoristas en POS',
-    'version': '14.0.1.1.1',
+    'version': '14.0.1.3.1',
     'summary': (
         'Aplica precios de menudeo o mayoreo en el punto de venta '
         'según el historial de compra'
@@ -17,8 +17,10 @@ Antes de activarlo en una sucursal, en Punto de venta → Configuración:
 - Lista de mayoreo: Club Mayorista, también disponible en cada caja.
 - Asignaciones: mayorista, público general y mayorista dormido usan
   Club Mayorista. Distribuidores usa Super Precios a Distribuidores.
-- Mínimos: MXN $800 del mes anterior y MXN $1,500 del pedido actual.
-  El mismo mínimo de MXN $1,500 aplica al mes en curso ya cobrado.
+- Mínimos de mayoreo: MXN $800 del mes anterior, o MXN $1,500 entre el
+  mes en curso ya cobrado y el ticket abierto a precio de menudeo.
+- Distribuidores: MXN $10,000 del mes anterior, o entre el mes en curso
+  y el ticket abierto a precio de menudeo. No usan las reglas de mayoreo.
 - Zona horaria: America/Tijuana.
 - La caja debe usar empleados de pos_hr. El gerente necesita el grupo
   Punto de venta / Responsable y un NIP.

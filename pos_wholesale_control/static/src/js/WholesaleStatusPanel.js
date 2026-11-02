@@ -77,7 +77,29 @@ odoo.define('pos_wholesale_control.WholesaleStatusPanel', function (require) {
             }
             return order.pricelist.display_name || order.pricelist.name || '';
         }
+        get isDistributor() {
+            return this.wholesale.pricingProgram === 'distributor';
+        }
+        get hasDistributorMapping() {
+            const pos = this.env.pos;
+            const mapping = pos.wholesale_mapping_by_type && pos.wholesale_mapping_by_type.distribuidores;
+            if (!mapping || !pos.wholesaleFindPricelist) {
+                return false;
+            }
+            const value = mapping.pricelist_id;
+            const pricelistId = value && value instanceof Array ? value[0] : value;
+            return !!pos.wholesaleFindPricelist(pricelistId);
+        }
+        get customerLocked() {
+            return this.isDistributor && this.hasOverride;
+        }
         get pricingLabel() {
+            if (this.isDistributor && this.hasOverride) {
+                return this.env._t('Distributor — manager exception');
+            }
+            if (this.isDistributor && this.wholesale.automaticDecision === 'wholesale' && !this.wholesale.error) {
+                return this.env._t('Distributor');
+            }
             if (this.hasOverride) {
                 return this.wholesale.override.final_decision === 'wholesale'
                     ? this.env._t('Wholesale')
@@ -89,6 +111,9 @@ odoo.define('pos_wholesale_control.WholesaleStatusPanel', function (require) {
             return this.env._t('Retail / General Public');
         }
         get automaticDecisionLabel() {
+            if (this.isDistributor && this.wholesale.automaticDecision === 'wholesale') {
+                return this.env._t('Distributor');
+            }
             return this.wholesale.automaticDecision === 'wholesale'
                 ? this.env._t('Wholesale')
                 : this.env._t('Retail / General Public');
@@ -136,6 +161,16 @@ odoo.define('pos_wholesale_control.WholesaleStatusPanel', function (require) {
             if (!this.client || this.hasOverride || this.isLoading) {
                 return false;
             }
+            if (this.isDistributor) {
+                const allowed = ['below_threshold', 'history_unavailable', 'currency_mismatch'];
+                if (allowed.indexOf(this.wholesale.reasonCode) === -1) {
+                    return false;
+                }
+                if (this.wholesale.automaticDecision === 'wholesale' && !this.wholesale.error) {
+                    return false;
+                }
+                return this.hasDistributorMapping;
+            }
             if (this.wholesale.reasonCode === 'history_unavailable' || this.wholesale.error) {
                 return true;
             }
@@ -155,7 +190,16 @@ odoo.define('pos_wholesale_control.WholesaleStatusPanel', function (require) {
                 order.off('change', null, this);
             }
         }
-        onChooseCustomer() {
+        async onChooseCustomer() {
+            if (this.customerLocked) {
+                await this.showPopup('ErrorPopup', {
+                    title: this.env._t('Customer locked'),
+                    body: this.env._t(
+                        'This ticket has a distributor exception. Open a new ticket to change the customer.'
+                    ),
+                });
+                return;
+            }
             this.trigger('click-customer');
         }
         async onOverrideClick() {
@@ -241,7 +285,12 @@ odoo.define('pos_wholesale_control.WholesaleStatusPanel', function (require) {
                     reason: result.reason,
                     final_decision: result.final_decision || 'wholesale',
                     automatic_decision: result.automatic_decision,
+                    pricing_program: result.pricing_program,
+                    pos_uid: result.pos_uid,
                 };
+                if (result.pricing_program) {
+                    order.wholesale.pricingProgram = result.pricing_program;
+                }
                 order.wholesale.validationError = false;
                 order.wholesale.error = false;
                 if (order._wholesaleUsePricelist) {

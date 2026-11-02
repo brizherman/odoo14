@@ -32,6 +32,10 @@ class TestWholesaleOrderValidation(WholesaleControlCommon):
         month = self.company._wholesale_calendar_months()[1]
         return self.to_utc(month['year'], month['month'], 15)
 
+    def _current_month_noon(self):
+        month = self.company._wholesale_calendar_months()[2]
+        return self.to_utc(month['year'], month['month'], 15)
+
     def _line_amount(self, qty, price_unit, discount):
         net = price_unit * qty * (1.0 - (discount or 0.0) / 100.0)
         return self.company.currency_id.round(net)
@@ -353,6 +357,19 @@ class TestWholesaleOrderValidation(WholesaleControlCommon):
         order = self._pay(partner, self.club_pricelist, qty=15.0)
         self._assert_decision(
             order, 'wholesale', 'current_order', self.club_pricelist, 1500.0,
+        )
+
+    def test_mtd_plus_current_order_applies_wholesale_at_payment(self):
+        """MXN 1,200 MTD plus a MXN 300 ticket applies regular wholesale."""
+        partner = self.partner_mayorista
+        self.create_pos_order(
+            partner,
+            amount_total=1200.0,
+            date_order=self._current_month_noon(),
+        )
+        order = self._pay(partner, self.club_pricelist, qty=3.0)
+        self._assert_decision(
+            order, 'wholesale', 'current_order', self.club_pricelist, 300.0,
         )
 
     def test_scenario_removed_item_restores_retail(self):

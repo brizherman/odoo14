@@ -7,6 +7,7 @@ odoo.define('pos_wholesale_control.models', function (require) {
         'wholesale_control_active',
         'wholesale_previous_month_min',
         'wholesale_current_order_min',
+        'wholesale_distributor_min',
         'wholesale_timezone',
         'wholesale_retail_pricelist_id',
         'wholesale_pricelist_id',
@@ -101,6 +102,8 @@ odoo.define('pos_wholesale_control.models', function (require) {
                 previousMonthAmount: 0,
                 previousMonthMin: 0,
                 currentOrderMin: 0,
+                distributorMin: 0,
+                pricingProgram: false,
                 expectedPricelistId: false,
                 retailPricelistId: false,
                 override: false,
@@ -113,7 +116,23 @@ odoo.define('pos_wholesale_control.models', function (require) {
                 historyLoaded: false,
             };
         },
+        _wholesaleBlocksCustomerChange: function (client) {
+            var state = this.wholesale;
+            var override = state && state.override;
+            if (!override || !override.pricelist_id || state.pricingProgram !== 'distributor') {
+                return false;
+            }
+            var previous = this.get_client();
+            var previousId = previous && previous.id;
+            var nextId = client && client.id;
+            return previousId !== nextId;
+        },
         set_client: function (client) {
+            if (this._wholesaleBlocksCustomerChange(client)) {
+                this.wholesale.validationError = 'Este ticket tiene una excepción de distribuidor. Abra un ticket nuevo para cambiar el cliente.';
+                this.trigger('change', this);
+                return;
+            }
             var previous = this.get_client();
             var previousId = previous && previous.id;
             _super_order.set_client.apply(this, arguments);
@@ -127,6 +146,7 @@ odoo.define('pos_wholesale_control.models', function (require) {
             this.wholesale.historyLoaded = false;
             this.wholesale.customerId = false;
             this.wholesale.customerType = false;
+            this.wholesale.pricingProgram = false;
             this.wholesale.months = [];
             this.wholesale.previousMonthAmount = 0;
             this.wholesale.error = false;
@@ -157,6 +177,9 @@ odoo.define('pos_wholesale_control.models', function (require) {
                 previous_month_amount: state.previousMonthAmount || 0,
                 previous_month_min: state.previousMonthMin || 0,
                 current_order_min: state.currentOrderMin || 0,
+                distributor_min: state.distributorMin || 0,
+                pricing_program: state.pricingProgram || false,
+                pos_uid: this.uid || this.name || false,
                 expected_pricelist_id: state.expectedPricelistId || false,
                 retail_pricelist_id: state.retailPricelistId || false,
                 override: state.override || false,
@@ -182,9 +205,11 @@ odoo.define('pos_wholesale_control.models', function (require) {
             state.previousMonthAmount = saved.previous_month_amount || 0;
             state.previousMonthMin = saved.previous_month_min || 0;
             state.currentOrderMin = saved.current_order_min || 0;
+            state.distributorMin = saved.distributor_min || 0;
+            state.pricingProgram = saved.pricing_program || false;
             state.expectedPricelistId = saved.expected_pricelist_id || false;
             state.retailPricelistId = saved.retail_pricelist_id || false;
-            state.override = saved.override || false;
+            state.override = this._wholesaleRestoredOverride(saved);
             state.error = saved.error || false;
             state.validationError = saved.validation_error || false;
             state.customerId = saved.customer_id || false;
@@ -195,6 +220,21 @@ odoo.define('pos_wholesale_control.models', function (require) {
             state.loading = false;
             state.requestVersion = 0;
             this.wholesale = state;
+        },
+        _wholesaleRestoredOverride: function (saved) {
+            var override = saved.override || false;
+            if (!override || !override.pricelist_id) {
+                return false;
+            }
+            var client = this.get_client();
+            var clientId = client && client.id;
+            if (!clientId || saved.customer_id !== clientId) {
+                return false;
+            }
+            if (saved.pos_uid && this.uid && saved.pos_uid !== this.uid) {
+                return false;
+            }
+            return override;
         },
     });
 });

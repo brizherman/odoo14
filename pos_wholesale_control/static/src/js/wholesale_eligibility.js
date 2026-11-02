@@ -154,6 +154,11 @@ odoo.define('pos_wholesale_control.wholesale_eligibility', function (require) {
             } else if (!this.wholesale.currentOrderMin) {
                 this.wholesale.currentOrderMin = 1500;
             }
+            if (typeof company.wholesale_distributor_min === 'number') {
+                this.wholesale.distributorMin = company.wholesale_distributor_min;
+            } else if (!this.wholesale.distributorMin) {
+                this.wholesale.distributorMin = 10000;
+            }
             this.wholesale.timezone = company.wholesale_timezone || this.wholesale.timezone || 'America/Tijuana';
             var retailId = many2oneId(company.wholesale_retail_pricelist_id);
             if (retailId) {
@@ -163,9 +168,27 @@ odoo.define('pos_wholesale_control.wholesale_eligibility', function (require) {
         _wholesaleRetailPricelist: function () {
             return this.pos.wholesaleFindPricelist(this.wholesale.retailPricelistId);
         },
+        _wholesaleIsDistributor: function () {
+            return !!(this.wholesale && this.wholesale.pricingProgram === 'distributor');
+        },
+        _wholesaleCustomerIsDistributor: function () {
+            return !!(this.wholesale && this.wholesale.customerType === 'distribuidores');
+        },
+        _wholesaleDistributorMapping: function () {
+            var mapping = this.pos.wholesale_mapping_by_type
+                ? this.pos.wholesale_mapping_by_type.distribuidores
+                : null;
+            if (!mapping) {
+                return null;
+            }
+            return this.pos.wholesaleFindPricelist(many2oneId(mapping.pricelist_id));
+        },
         _wholesalePricelistForDecision: function (decision) {
             if (decision !== 'wholesale') {
                 return this._wholesaleRetailPricelist();
+            }
+            if (this._wholesaleIsDistributor()) {
+                return this._wholesaleDistributorMapping();
             }
             var client = this.get_client();
             var customerType = client && client.customer_type;
@@ -193,11 +216,24 @@ odoo.define('pos_wholesale_control.wholesale_eligibility', function (require) {
             var texts = {
                 previous_month: _t('El mes anterior alcanza el mínimo de mayoreo.'),
                 current_month: _t('El mes actual alcanza el mínimo de mayoreo.'),
-                current_order: _t('El pedido actual, a precio de menudeo, alcanza el mínimo de mayoreo.'),
-                below_threshold: _t('Ni el mes anterior, ni el mes actual, ni este pedido alcanzan el mínimo de mayoreo.'),
+                current_order: _t('El acumulado del mes actual más este pedido, a precio de menudeo, alcanza el mínimo de mayoreo.'),
+                below_threshold: _t('Ni el mes anterior ni el acumulado del mes actual más este pedido alcanzan el mínimo de mayoreo.'),
                 no_identified_customer: _t('Seleccione un cliente para evaluar el precio de mayoreo.'),
                 history_unavailable: _t('No se pudo consultar el historial de compras. El pedido queda en menudeo.'),
+                currency_mismatch: _t('Las sucursales del historial no usan la misma moneda. El pedido queda en menudeo.'),
             };
+            if (this._wholesaleIsDistributor()) {
+                var distributorTexts = {
+                    previous_month: _t('El mes anterior alcanza el mínimo de distribuidor.'),
+                    current_month: _t('El mes actual alcanza el mínimo de distribuidor.'),
+                    current_order: _t('El acumulado del mes actual más este pedido alcanza el mínimo de distribuidor.'),
+                    below_threshold: _t('No alcanza el mínimo de distribuidor. El pedido queda en menudeo.'),
+                    history_unavailable: texts.history_unavailable,
+                    currency_mismatch: texts.currency_mismatch,
+                    no_identified_customer: _t('Seleccione un cliente para evaluar el precio de distribuidor.'),
+                };
+                return distributorTexts[reasonCode] || '';
+            }
             return texts[reasonCode] || '';
         },
         _wholesaleLineRetailTotal: function (line, pricelist) {
@@ -259,18 +295,36 @@ odoo.define('pos_wholesale_control.wholesale_eligibility', function (require) {
             var previous = roundAmount(previousAmount, rounding);
             var currentMonth = roundAmount(this._wholesaleCurrentMonthAmount(), rounding);
             var retail = roundAmount(retailAmount, rounding);
+            var accumulated = roundAmount(currentMonth + retail, rounding);
+            if (this._wholesaleCustomerIsDistributor()) {
+                var distributorMin = roundAmount(this.wholesale.distributorMin, rounding);
+                if (floatCompare(previous, distributorMin, rounding) >= 0) {
+                    return {decision: 'wholesale', reason: 'previous_month', program: 'distributor'};
+                }
+                if (floatCompare(currentMonth, distributorMin, rounding) >= 0) {
+                    return {decision: 'wholesale', reason: 'current_month', program: 'distributor'};
+                }
+                if (floatCompare(accumulated, distributorMin, rounding) >= 0) {
+                    return {decision: 'wholesale', reason: 'current_order', program: 'distributor'};
+                }
+                return {decision: 'retail', reason: 'below_threshold', program: 'distributor'};
+            }
             var previousMin = roundAmount(this.wholesale.previousMonthMin, rounding);
             var currentMin = roundAmount(this.wholesale.currentOrderMin, rounding);
             if (floatCompare(previous, previousMin, rounding) >= 0) {
-                return {decision: 'wholesale', reason: 'previous_month'};
+                return {decision: 'wholesale', reason: 'previous_month', program: 'wholesale'};
             }
             if (floatCompare(currentMonth, currentMin, rounding) >= 0) {
-                return {decision: 'wholesale', reason: 'current_month'};
+                return {decision: 'wholesale', reason: 'current_month', program: 'wholesale'};
             }
-            if (floatCompare(retail, currentMin, rounding) >= 0) {
-                return {decision: 'wholesale', reason: 'current_order'};
+            if (floatCompare(accumulated, currentMin, rounding) >= 0) {
+                return {decision: 'wholesale', reason: 'current_order', program: 'wholesale'};
             }
-            return {decision: 'retail', reason: 'below_threshold'};
+            return {
+                decision: 'retail',
+                reason: 'below_threshold',
+                program: this._wholesaleCustomerIsDistributor() ? 'distributor' : 'wholesale',
+            };
         },
         _wholesaleUsePricelist: function (pricelist) {
             if (!pricelist) {
@@ -298,12 +352,17 @@ odoo.define('pos_wholesale_control.wholesale_eligibility', function (require) {
             }
             this.save_to_db();
         },
-        _wholesaleApplyDecision: function (decision, reasonCode) {
+        _wholesaleApplyDecision: function (decision, reasonCode, program) {
+            if (program) {
+                this.wholesale.pricingProgram = program;
+            }
             var list = this._wholesalePricelistForDecision(decision);
             if (decision === 'wholesale' && !list) {
                 this.wholesale.automaticDecision = 'retail';
                 this.wholesale.reasonCode = reasonCode;
-                this.wholesale.error = _t('La lista de mayoreo no está disponible en esta caja. El pedido queda en menudeo.');
+                this.wholesale.error = this._wholesaleIsDistributor()
+                    ? _t('No hay lista de Distribuidores en esta caja. No se usa la lista general de mayoreo. El pedido queda en menudeo.')
+                    : _t('La lista de mayoreo no está disponible en esta caja. El pedido queda en menudeo.');
                 this.wholesale.reasonText = this.wholesale.error;
                 this._wholesaleUsePricelist(this._wholesaleRetailPricelist());
                 return;
@@ -323,6 +382,7 @@ odoo.define('pos_wholesale_control.wholesale_eligibility', function (require) {
             this.wholesale.previousMonthAmount = 0;
             this.wholesale.customerId = false;
             this.wholesale.customerType = false;
+            this.wholesale.pricingProgram = false;
             this.wholesale.error = false;
             this.wholesale.automaticDecision = 'retail';
             this.wholesale.reasonCode = 'no_identified_customer';
@@ -330,14 +390,15 @@ odoo.define('pos_wholesale_control.wholesale_eligibility', function (require) {
             this.wholesale.retailAmount = this._wholesaleRetailAmount();
             this._wholesaleUsePricelist(this._wholesaleRetailPricelist());
         },
-        _wholesaleApplyHistoryFailure: function () {
+        _wholesaleApplyHistoryFailure: function (reasonCode) {
+            var code = reasonCode || 'history_unavailable';
             this.wholesale.loading = false;
             this.wholesale.historyLoaded = false;
             this.wholesale.months = [];
             this.wholesale.previousMonthAmount = 0;
-            this.wholesale.error = this._wholesaleReasonText('history_unavailable');
+            this.wholesale.error = this._wholesaleReasonText(code);
             this.wholesale.automaticDecision = 'retail';
-            this.wholesale.reasonCode = 'history_unavailable';
+            this.wholesale.reasonCode = code;
             this.wholesale.reasonText = this.wholesale.error;
             this.wholesale.retailAmount = this._wholesaleRetailAmount();
             // The automatic result stays retail. A manager override already
@@ -353,6 +414,12 @@ odoo.define('pos_wholesale_control.wholesale_eligibility', function (require) {
             this.wholesale.loading = false;
             this.wholesale.customerId = (client && client.id) || response.customer_id || false;
             this.wholesale.customerType = response.customer_type || (client && client.customer_type) || false;
+            this.wholesale.pricingProgram = response.pricing_program || (
+                this.wholesale.customerType === 'distribuidores' ? 'distributor' : 'wholesale'
+            );
+            if (typeof response.distributor_min === 'number') {
+                this.wholesale.distributorMin = response.distributor_min;
+            }
             this.wholesale.months = response.months || [];
             this.wholesale.previousMonthAmount = response.previous_month_amount || 0;
             this.wholesale.previousMonthMin = response.previous_month_min || this.wholesale.previousMonthMin;
@@ -364,8 +431,12 @@ odoo.define('pos_wholesale_control.wholesale_eligibility', function (require) {
             }
             var retailAmount = this._wholesaleRetailAmount();
             this.wholesale.retailAmount = retailAmount;
-            if (response.reason_code === 'history_unavailable') {
-                this._wholesaleApplyHistoryFailure();
+            if (response.reason_code === 'history_unavailable' || response.reason_code === 'currency_mismatch') {
+                this._wholesaleApplyHistoryFailure(response.reason_code);
+                if (response.reason_text) {
+                    this.wholesale.reasonText = response.reason_text;
+                    this.wholesale.error = response.reason_text;
+                }
                 return;
             }
             if (this.wholesale.override && this.wholesale.override.pricelist_id) {
@@ -375,6 +446,7 @@ odoo.define('pos_wholesale_control.wholesale_eligibility', function (require) {
                 var overridden = this._wholesaleDecide(this.wholesale.previousMonthAmount, retailAmount);
                 this.wholesale.automaticDecision = overridden.decision;
                 this.wholesale.reasonCode = overridden.reason;
+                this.wholesale.pricingProgram = overridden.program;
                 this.wholesale.reasonText = response.reason_text || this._wholesaleReasonText(overridden.reason);
                 this._wholesaleUsePricelist(this._wholesaleAllowedPricelist());
                 return;
@@ -397,12 +469,13 @@ odoo.define('pos_wholesale_control.wholesale_eligibility', function (require) {
                 if (serverList) {
                     this.wholesale.automaticDecision = decision.decision;
                     this.wholesale.reasonCode = decision.reason;
+                    this.wholesale.pricingProgram = decision.program;
                     this.wholesale.reasonText = response.reason_text || this._wholesaleReasonText(decision.reason);
                     this._wholesaleUsePricelist(serverList);
                     return;
                 }
             }
-            this._wholesaleApplyDecision(decision.decision, decision.reason);
+            this._wholesaleApplyDecision(decision.decision, decision.reason, decision.program);
         },
         _wholesaleFetch: function () {
             if (this._wholesaleDestroyed || !this.pos.wholesaleControlActive()) {
@@ -509,7 +582,7 @@ odoo.define('pos_wholesale_control.wholesale_eligibility', function (require) {
             }
             // A missing history stays on retail, including when this ticket
             // would otherwise cross the current-order minimum.
-            if (!this.wholesale.historyLoaded || this.wholesale.reasonCode === 'history_unavailable') {
+            if (!this.wholesale.historyLoaded || this.wholesale.reasonCode === 'history_unavailable' || this.wholesale.reasonCode === 'currency_mismatch') {
                 this.trigger('change', this);
                 this.save_to_db();
                 return;
@@ -523,7 +596,7 @@ odoo.define('pos_wholesale_control.wholesale_eligibility', function (require) {
                 this.wholesale.previousMonthAmount,
                 this.wholesale.retailAmount
             );
-            this._wholesaleApplyDecision(decision.decision, decision.reason);
+            this._wholesaleApplyDecision(decision.decision, decision.reason, decision.program);
         },
     });
 });

@@ -44,6 +44,14 @@
                     <span class="wholesale-status-label"><t t-esc="env._t('Pricelist')"/></span>
                     <span class="wholesale-status-value"><t t-esc="pricelistName"/></span>
                 </div>
+                <div class="wholesale-status-row" t-if="isDistributor">
+                    <span class="wholesale-status-label"><t t-esc="env._t('Previous month')"/></span>
+                    <span class="wholesale-status-value"><t t-esc="formatAmount(wholesale.previousMonthAmount)"/></span>
+                </div>
+                <div class="wholesale-status-row" t-if="isDistributor">
+                    <span class="wholesale-status-label"><t t-esc="env._t('Distributor minimum')"/></span>
+                    <span class="wholesale-status-value"><t t-esc="formatAmount(wholesale.distributorMin)"/></span>
+                </div>
                 <div class="wholesale-status-row wholesale-status-reason">
                     <span class="wholesale-status-label"><t t-esc="env._t('Reason')"/></span>
                     <span class="wholesale-status-value"><t t-esc="reasonText"/></span>
