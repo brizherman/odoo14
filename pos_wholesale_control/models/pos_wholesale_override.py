@@ -6,6 +6,8 @@ import hmac
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
+from .res_partner import DISTRIBUTOR_CUSTOMER_TYPE, DISTRIBUTOR_EXCEPTION_REASONS
+
 DECISION_SELECTION = [
     ('retail', 'Menudeo'),
     ('wholesale', 'Mayoreo'),
@@ -17,6 +19,11 @@ REASON_SELECTION = [
     ('below_threshold', 'Debajo del mínimo'),
     ('no_identified_customer', 'Sin cliente'),
     ('history_unavailable', 'Historial no disponible'),
+    ('currency_mismatch', 'Moneda distinta'),
+]
+PROGRAM_SELECTION = [
+    ('wholesale', 'Mayoreo'),
+    ('distributor', 'Distribuidor'),
 ]
 
 
@@ -41,6 +48,30 @@ class WholesaleOverride(models.Model):
         index=True,
         ondelete='restrict',
         help='Se llena al cobrar. Antes de eso la excepción pertenece solo al ticket.',
+    )
+    pricing_program = fields.Selection(
+        selection=PROGRAM_SELECTION,
+        string='Programa de precios',
+        required=True,
+        default='wholesale',
+    )
+    pos_config_id = fields.Many2one(
+        'pos.config',
+        string='Caja',
+        ondelete='restrict',
+        help='Caja donde se autorizó. Las excepciones anteriores a este '
+             'campo no lo tienen guardado.',
+    )
+    pos_session_id = fields.Many2one(
+        'pos.session',
+        string='Sesión',
+        ondelete='restrict',
+        help='Sesión donde se autorizó. Las excepciones anteriores a este '
+             'campo no lo tienen guardado.',
+    )
+    distributor_min = fields.Monetary(
+        string='Mínimo de distribuidor del mes anterior',
+        currency_field='currency_id',
     )
     company_id = fields.Many2one(
         comodel_name='res.company',
@@ -172,7 +203,12 @@ class WholesaleOverride(models.Model):
         company = session.company_id
         if not company.wholesale_control_active:
             raise UserError(_('El control de mayoreo no está activo en esta sucursal.'))
-        return {'orders': orders, 'company': company, 'config': session.config_id}
+        return {
+            'orders': orders,
+            'company': company,
+            'config': session.config_id,
+            'session': session,
+        }
 
     @api.model
     def _wholesale_approved_request(self, register, manager_employee_id, pin,
@@ -187,6 +223,8 @@ class WholesaleOverride(models.Model):
         target = self._wholesale_override_target(register, ui_order, decision)
         return {
             'company': company,
+            'config': config,
+            'session': register['session'],
             'manager': manager,
             'cashier': self._wholesale_cashier(ui_order, company, config),
             'reason': self._wholesale_clean_reason(reason),
@@ -216,19 +254,67 @@ class WholesaleOverride(models.Model):
             company, partner, fiscal_position, ui_order.get('lines'),
         )
         partners = self.env['res.partner']
-        applied = partners._wholesale_list_for_decision(company, partner, decision)
-        if not partners._wholesale_list_usable(company, config, applied):
-            raise UserError(partners._wholesale_unusable_list_message(
-                applied, decision == 'wholesale',
-            ))
+        eligibility = partners.get_wholesale_eligibility(
+            partner.id, company.id, retail_amount, config.id,
+        )
+        if eligibility.get('pricing_program') == 'distributor':
+            applied = self._wholesale_distributor_exception_list(
+                company, config, eligibility, ui_order, decision,
+            )
+        else:
+            applied = partners._wholesale_list_for_decision(company, partner, decision)
+            if not partners._wholesale_list_usable(company, config, applied):
+                raise UserError(partners._wholesale_unusable_list_message(
+                    applied, decision == 'wholesale',
+                ))
         return {
             'partner': partner,
             'pos_uid': orders._wholesale_pos_uid(ui_order),
-            'eligibility': partners.get_wholesale_eligibility(
-                partner.id, company.id, retail_amount, config.id,
-            ),
+            'eligibility': eligibility,
             'applied': applied,
         }
+
+    @api.model
+    def _wholesale_distributor_exception_list(self, company, config, eligibility,
+                                              ui_order, decision):
+        """Mapped distributor list, or an error when the exception is not allowed."""
+        if decision != 'wholesale':
+            raise UserError(_(
+                'La excepción de distribuidor autoriza la lista de Distribuidores.'
+            ))
+        partners = self.env['res.partner']
+        qualified = (
+            eligibility.get('automatic_decision') == 'wholesale'
+            and not eligibility.get('error')
+        )
+        if qualified:
+            raise UserError(_(
+                'Este distribuidor ya califica por el mes anterior. '
+                'No necesita una excepción.'
+            ))
+        if eligibility.get('reason_code') not in DISTRIBUTOR_EXCEPTION_REASONS:
+            raise UserError(_(
+                'Una excepción de distribuidor solo aplica cuando el mes anterior '
+                'no alcanza el mínimo o el historial no se puede usar.'
+            ))
+        problem = partners._wholesale_distributor_list_problem(company, config)
+        if problem:
+            raise UserError(problem)
+        applied = partners._wholesale_type_mapping(
+            company, DISTRIBUTOR_CUSTOMER_TYPE,
+        ).pricelist_id
+        spoofed = ui_order.get('applied_pricelist_id') or ui_order.get(
+            'distributor_pricelist_id',
+        )
+        spoofed_id = partners._wholesale_record_id(spoofed)
+        if spoofed_id and applied and spoofed_id != applied.id:
+            raise UserError(_(
+                'La excepción de distribuidor solo puede usar la lista '
+                'asignada a Distribuidores.'
+            ))
+        if not partners._wholesale_list_usable(company, config, applied):
+            raise UserError(partners._wholesale_unusable_list_message(applied, True))
+        return applied
 
     @api.model
     def _wholesale_override_vals(self, approved):
@@ -239,6 +325,10 @@ class WholesaleOverride(models.Model):
         return {
             'pos_uid': approved['pos_uid'],
             'company_id': approved['company'].id,
+            'pricing_program': approved['eligibility'].get('pricing_program') or 'wholesale',
+            'pos_config_id': approved['config'].id,
+            'pos_session_id': approved['session'].id,
+            'distributor_min': approved['eligibility'].get('distributor_min') or 0.0,
             'partner_id': approved['partner'].id,
             'manager_employee_id': manager.id,
             'manager_user_id': manager.user_id.id,
@@ -281,6 +371,9 @@ class WholesaleOverride(models.Model):
             'automatic_decision': self.automatic_decision,
             'final_decision': self.final_decision,
             'reason': self.reason,
+            'pricing_program': self.pricing_program,
+            'pos_config_id': self.pos_config_id.id,
+            'pos_session_id': self.pos_session_id.id,
             'applied_pricelist': {
                 'id': pricelist.id,
                 'name': pricelist.display_name,
@@ -358,6 +451,11 @@ class WholesaleOverride(models.Model):
             and existing.reason == approved['reason']
             and existing.final_decision == approved['decision']
             and existing.applied_pricelist_id == approved['applied']
+            and existing.pricing_program == (
+                approved['eligibility'].get('pricing_program') or 'wholesale'
+            )
+            and existing.pos_config_id == approved['config']
+            and existing.pos_session_id == approved['session']
         )
         if not same:
             raise UserError(_(

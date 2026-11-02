@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=import-error,too-few-public-methods
 """Settings screen for wholesale POS pricing."""
-from odoo import api, fields, models
+from odoo import _, api, fields, models
 
 
 MAPPING_FIELD_BY_CUSTOMER_TYPE = {
@@ -25,6 +25,13 @@ class ResConfigSettings(models.TransientModel):
     wholesale_current_order_min = fields.Monetary(
         string='Mínimo del pedido actual',
         currency_field='wholesale_currency_id',
+    )
+    wholesale_distributor_min = fields.Monetary(
+        string='Mínimo de distribuidor del mes anterior',
+        currency_field='wholesale_currency_id',
+        help='Compras netas del mes anterior, o acumulado del mes en curso '
+             'más el ticket abierto, que un cliente Distribuidores necesita '
+             'para Super Precios. El monto usa la moneda de la sucursal.',
     )
     wholesale_timezone = fields.Selection(
         selection=lambda self: self.env[
@@ -73,16 +80,62 @@ class ResConfigSettings(models.TransientModel):
     )
     def _compute_wholesale_mapping_warning(self):
         for settings in self:
+            messages = []
             missing = [
                 settings._fields[field_name].string
                 for field_name in MAPPING_FIELD_BY_CUSTOMER_TYPE.values()
                 if not settings[field_name]
             ]
-            settings.wholesale_mapping_warning = (
-                'Estos tipos de cliente no tienen una asignación de lista de '
-                'precios activa: %s.' % ', '.join(missing)
-                if missing else False
+            if missing:
+                messages.append(_(
+                    'Estos tipos de cliente no tienen una asignación de lista de '
+                    'precios activa: %(types)s.',
+                    types=', '.join(missing),
+                ))
+            messages.extend(settings._wholesale_distributor_setting_messages())
+            settings.wholesale_mapping_warning = '\n'.join(messages) or False
+
+    def _wholesale_distributor_setting_messages(self):
+        """Unsaved distributor-list problems shown before the company is written."""
+        self.ensure_one()
+        pricelist = self.wholesale_distribuidores_pricelist_id
+        if not pricelist:
+            return [_(
+                'Distribuidores no tiene una asignación de lista de precios. '
+                'No se usa la lista general de mayoreo.'
+            )]
+        if not pricelist.active:
+            return [_(
+                'La lista de Distribuidores "%(pricelist)s" está archivada. '
+                'No se usa la lista general de mayoreo.',
+                pricelist=pricelist.display_name,
+            )]
+        currency = self.wholesale_currency_id
+        if currency and pricelist.currency_id != currency:
+            return [_(
+                'La lista de Distribuidores "%(pricelist)s" usa '
+                '%(pricelist_currency)s. Esta sucursal usa %(company_currency)s.',
+                pricelist=pricelist.display_name,
+                pricelist_currency=pricelist.currency_id.name,
+                company_currency=currency.name,
+            )]
+        company = self.company_id
+        if not company:
+            return []
+        configs = company._pos_configs()
+        missing_configs = configs.filtered(
+            lambda config, current=pricelist: not company._pricelist_available_on(
+                config, current,
             )
+        )
+        if missing_configs:
+            return [_(
+                'La lista de Distribuidores "%(pricelist)s" no está disponible '
+                'en %(configs)s.',
+                pricelist=pricelist.display_name,
+                configs=', '.join(missing_configs.mapped('name')),
+            )]
+        return []
 
     @api.model
     def get_values(self):
@@ -94,6 +147,8 @@ class ResConfigSettings(models.TransientModel):
                 company.wholesale_previous_month_min,
             'wholesale_current_order_min':
                 company.wholesale_current_order_min,
+            'wholesale_distributor_min':
+                company.wholesale_distributor_min,
             'wholesale_timezone': company.wholesale_timezone,
             'wholesale_retail_pricelist_id':
                 company.wholesale_retail_pricelist_id.id,
@@ -146,6 +201,7 @@ class ResConfigSettings(models.TransientModel):
             'wholesale_previous_month_min':
                 self.wholesale_previous_month_min,
             'wholesale_current_order_min': self.wholesale_current_order_min,
+            'wholesale_distributor_min': self.wholesale_distributor_min,
             'wholesale_timezone': self.wholesale_timezone,
             'wholesale_retail_pricelist_id':
                 self.wholesale_retail_pricelist_id.id,

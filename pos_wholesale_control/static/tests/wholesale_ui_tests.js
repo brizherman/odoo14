@@ -9,8 +9,13 @@ odoo.define('pos_wholesale_control.tests.ui', function (require) {
     const { xml } = owl.tags;
     const { useState } = owl;
 
+    const Registries = require('point_of_sale.Registries');
+
     require('pos_wholesale_control.WholesaleStatusPanel');
     require('point_of_sale.ActionpadWidget');
+    // The POS UI freezes this registry from main.js, which the QUnit page does
+    // not load. Without it, Owl cannot resolve ActionpadWidget.
+    Registries.Component.freeze();
 
     QUnit.module('pos_wholesale_control.ui', function () {
         QUnit.test('the cashier cannot keep a manually selected wholesale list', function (assert) {
@@ -154,7 +159,7 @@ odoo.define('pos_wholesale_control.tests.ui', function (require) {
         });
 
         QUnit.test('the customer button emits click-customer for the product screen', async function (assert) {
-            assert.expect(2);
+            assert.expect(3);
             const parent = await mountParent(assert, xml`
                 <div class="pos"><WholesaleStatusPanel/></div>
             `, fakePos(makeOrder(null), true), {});
@@ -268,6 +273,42 @@ odoo.define('pos_wholesale_control.tests.ui', function (require) {
             const valueStyle = window.getComputedStyle(parent.el.querySelector('.wholesale-status-value'));
             assert.strictEqual(valueStyle.overflowWrap, 'anywhere');
             assert.ok(buttonText.textContent.includes(longName));
+            parent.destroy();
+        });
+
+        QUnit.test('a distributor panel shows the minimum, month to date, and exception label', async function (assert) {
+            assert.expect(6);
+            const parent = await mountParent(assert, xml`
+                <div class="pos"><WholesaleStatusPanel/></div>
+            `, fakePos(makeOrder(
+                { name: 'Distribuidora Norte', customer_type: 'distribuidores' },
+                {
+                    pricingProgram: 'distributor',
+                    customerType: 'distribuidores',
+                    automaticDecision: 'retail',
+                    reasonCode: 'below_threshold',
+                    reasonText: 'El mes anterior no alcanza el mínimo de distribuidor.',
+                    previousMonthAmount: 9999.99,
+                    distributorMin: 10000,
+                    months: [
+                        { label: 'septiembre 2026', amount: 100, is_current: false },
+                        { label: 'octubre 2026', amount: 9999.99, is_current: false },
+                        { label: 'noviembre 2026', amount: 4000, is_current: true },
+                    ],
+                    override: {
+                        pricelist_id: 4,
+                        final_decision: 'wholesale',
+                    },
+                },
+                { name: 'Super Precios a Distribuidores' }
+            ), true), {});
+            const text = parent.el.textContent;
+            assert.ok(text.includes('Distributor — manager exception'));
+            assert.ok(text.includes('Retail / General Public'));
+            assert.ok(text.includes('Distributor minimum'));
+            assert.ok(text.includes('MTD'));
+            assert.ok(text.includes('El mes anterior no alcanza el mínimo de distribuidor.'));
+            assert.strictEqual(parent.el.querySelector('.wholesale-override-button'), null);
             parent.destroy();
         });
     });

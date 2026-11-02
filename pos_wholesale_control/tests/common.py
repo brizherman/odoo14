@@ -41,9 +41,12 @@ class WholesaleControlCommon(AccountTestInvoicingCommon):
 
     @classmethod
     def setUpClass(cls):
-        # The accounting fixture creates the environment and loads the generic
-        # chart. Looking up that chart before super() runs has no env yet.
-        super(WholesaleControlCommon, cls).setUpClass()
+        # The accounting fixture creates throwaway companies and installs this
+        # chart on them. produccion already has the Mexican chart; it does not
+        # have the generic chart template.
+        super(WholesaleControlCommon, cls).setUpClass(
+            chart_template_ref='l10n_mx.mx_coa',
+        )
         cls.mxn = cls.env.ref('base.MXN')
         if not cls.mxn.active:
             cls.mxn.sudo().write({'active': True})
@@ -87,6 +90,25 @@ class WholesaleControlCommon(AccountTestInvoicingCommon):
         cls.distributor_pricelist = cls.bundle['distributor']
         cls.tax_included = cls.bundle['tax_included']
         cls.tax_excluded = cls.bundle['tax_excluded']
+
+    @classmethod
+    def _ensure_company_sequence(cls, company, code):
+        sequence = cls.env['ir.sequence'].sudo()
+        found = sequence.search([
+            ('code', '=', code),
+            ('company_id', 'in', [company.id, False]),
+        ], limit=1)
+        if found:
+            return found
+        return sequence.create({
+            'name': 'Wholesale test %s' % code,
+            'code': code,
+            'company_id': company.id,
+            'prefix': 'WT%s/' % company.id,
+            'padding': 5,
+            'number_next': 1,
+            'implementation': 'standard',
+        })
 
     @classmethod
     def _clear_foreign_journal_currency(cls, companies):
@@ -186,6 +208,10 @@ class WholesaleControlCommon(AccountTestInvoicingCommon):
             company, company_data, register_name, warehouse_code,
             retail, club, distributor, employees,
         )
+        # produccion keeps these sequences on each company. A new test company
+        # has none, and POS refuses a session whose sequence name is empty.
+        cls._ensure_company_sequence(company, 'pos.session')
+        cls._ensure_company_sequence(company, 'sale.order')
         session = cls.env['pos.session'].sudo().create({
             'user_id': cls.env.uid,
             'config_id': config.id,
@@ -288,6 +314,7 @@ class WholesaleControlCommon(AccountTestInvoicingCommon):
             'wholesale_timezone': 'America/Tijuana',
             'wholesale_previous_month_min': 800.0,
             'wholesale_current_order_min': 1500.0,
+            'wholesale_distributor_min': 10000.0,
             'wholesale_retail_pricelist_id': retail.id,
             'wholesale_pricelist_id': club.id,
             'wholesale_control_active': True,
@@ -477,13 +504,11 @@ class WholesaleControlCommon(AccountTestInvoicingCommon):
         company = bundle['company']
         product = product or self.product
         taxes = tax if tax is not None else self.env['account.tax']
-        order = self.env['sale.order'].sudo().with_company(company).with_context(
-            tracking_disable=True,
-            mail_notrack=True,
-        ).create({
+        values = {
             'partner_id': partner.id,
             'company_id': company.id,
             'date_order': date_order,
+            'team_id': False,
             'order_line': [(0, 0, {
                 'name': product.display_name,
                 'product_id': product.id,
@@ -492,7 +517,13 @@ class WholesaleControlCommon(AccountTestInvoicingCommon):
                 'discount': discount or 0.0,
                 'tax_id': [(6, 0, taxes.ids)],
             })],
-        })
+        }
+        if 'warehouse_id' in self.env['sale.order']._fields:
+            values['warehouse_id'] = bundle['config'].picking_type_id.warehouse_id.id
+        order = self.env['sale.order'].sudo().with_company(company).with_context(
+            tracking_disable=True,
+            mail_notrack=True,
+        ).create(values)
         if state in SALE_DONE_STATES or state == 'cancel':
             order.with_context(tracking_disable=True).action_confirm()
         if state == 'done':

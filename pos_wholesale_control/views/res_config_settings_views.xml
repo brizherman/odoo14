@@ -28,6 +28,10 @@
                                     <field name="wholesale_current_order_min"/>
                                 </div>
                                 <div class="row">
+                                    <label for="wholesale_distributor_min" class="col-lg-5 o_light_label"/>
+                                    <field name="wholesale_distributor_min" widget="monetary" options="{'currency_field': 'wholesale_currency_id'}"/>
+                                </div>
+                                <div class="row">
                                     <label for="wholesale_timezone" class="col-lg-5 o_light_label"/>
                                     <field name="wholesale_timezone"/>
                                 </div>
@@ -57,7 +61,7 @@
                         <div class="o_setting_right_pane">
                             <span class="o_form_label">Asignaciones por tipo de cliente</span>
                             <div class="text-muted">
-                                Mayorista usa Club Mayorista cuando califica. Distribuidores usa Super Precios a Distribuidores. Público General y Mayorista dormido permanecen en la lista de menudeo hasta que el pedido actual califica; entonces usan Club Mayorista.
+                                Distribuidores permanece en menudeo hasta llegar a MXN $10,000 del mes anterior, o entre MTD y el pedido abierto a precio de menudeo. No usa Club Mayorista.
                             </div>
                             <div class="alert alert-warning mt16" role="alert" attrs="{'invisible': [('wholesale_mapping_warning', '=', False)]}">
                                 <field name="wholesale_mapping_warning" nolabel="1" readonly="1"/>

@@ -35,8 +35,16 @@ class ResCompany(models.Model):
         string='Mínimo del pedido actual',
         currency_field='currency_id',
         default=1500.0,
-        help='Total a precio de menudeo que califica el pedido actual para '
-             'mayoreo cuando el mes anterior no alcanza su mínimo.',
+        help='Total acumulado del mes en curso más el pedido actual a precio '
+             'de menudeo que califica para mayoreo.',
+    )
+    wholesale_distributor_min = fields.Monetary(
+        string='Mínimo de distribuidor del mes anterior',
+        currency_field='currency_id',
+        default=10000.0,
+        help='Compras netas del mes anterior, o acumulado del mes en curso '
+             'más el ticket abierto, que un cliente Distribuidores necesita '
+             'para Super Precios. El monto usa la moneda de la sucursal.',
     )
     wholesale_timezone = fields.Selection(
         selection='_wholesale_timezone_selection',
@@ -166,6 +174,7 @@ class ResCompany(models.Model):
                 'precios activa: %(types)s.',
                 types=', '.join(missing),
             ))
+        messages.extend(self._wholesale_distributor_configuration_messages())
         configs = self._pos_configs()
         for mapping in active_mappings:
             missing_configs = configs.filtered(
@@ -182,6 +191,59 @@ class ResCompany(models.Model):
                 ))
         return '\n'.join(messages) or False
 
+    def _wholesale_distributor_mapping_record(self):
+        """The distributor mapping, including an archived one."""
+        self.ensure_one()
+        return self.env['pos.wholesale.pricelist.mapping'].with_context(
+            active_test=False,
+        ).search([
+            ('company_id', '=', self.id),
+            ('customer_type', '=', 'distribuidores'),
+        ], limit=1)
+
+    def _wholesale_distributor_configuration_messages(self):
+        """Explicit distributor-mapping problems. There is no wholesale fallback."""
+        self.ensure_one()
+        mapping = self._wholesale_distributor_mapping_record()
+        if not mapping:
+            return [_(
+                'Distribuidores no tiene una asignación de lista de precios. '
+                'No se usa la lista general de mayoreo.'
+            )]
+        if not mapping.active:
+            return [_(
+                'La asignación de Distribuidores está inactiva. '
+                'No se usa la lista general de mayoreo.'
+            )]
+        pricelist = mapping.pricelist_id
+        if not pricelist or not pricelist.active:
+            return [_(
+                'La lista de Distribuidores está archivada. '
+                'No se usa la lista general de mayoreo.'
+            )]
+        if pricelist.currency_id != self.currency_id:
+            return [_(
+                'La lista de Distribuidores "%(pricelist)s" usa '
+                '%(pricelist_currency)s. Esta sucursal usa %(company_currency)s.',
+                pricelist=pricelist.display_name,
+                pricelist_currency=pricelist.currency_id.name,
+                company_currency=self.currency_id.name,
+            )]
+        configs = self._pos_configs()
+        missing_configs = configs.filtered(
+            lambda config, current=pricelist: not self._pricelist_available_on(
+                config, current,
+            )
+        )
+        if missing_configs:
+            return [_(
+                'La lista de Distribuidores "%(pricelist)s" no está disponible '
+                'en %(configs)s.',
+                pricelist=pricelist.display_name,
+                configs=', '.join(missing_configs.mapped('name')),
+            )]
+        return []
+
     @api.constrains('wholesale_timezone')
     def _check_wholesale_timezone(self):
         for company in self:
@@ -195,6 +257,7 @@ class ResCompany(models.Model):
         'wholesale_control_active',
         'wholesale_previous_month_min',
         'wholesale_current_order_min',
+        'wholesale_distributor_min',
         'wholesale_retail_pricelist_id',
         'wholesale_pricelist_id',
     )
@@ -209,6 +272,7 @@ class ResCompany(models.Model):
         return (
             (self.wholesale_previous_month_min, _('Mínimo del mes anterior')),
             (self.wholesale_current_order_min, _('Mínimo del pedido actual')),
+            (self.wholesale_distributor_min, _('Mínimo de distribuidor del mes anterior')),
         )
 
     def _named_pricelists(self):

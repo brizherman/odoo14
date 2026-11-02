@@ -4,11 +4,20 @@
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
 
-from .pos_wholesale_override import DECISION_SELECTION, REASON_SELECTION
+from .pos_wholesale_override import (
+    DECISION_SELECTION,
+    PROGRAM_SELECTION,
+    REASON_SELECTION,
+)
+from .wholesale_pricelist_mapping import CUSTOMER_TYPE_SELECTION
 
 WHOLESALE_SNAPSHOT_FIELDS = frozenset([
+    'wholesale_customer_type',
+    'wholesale_pricing_program',
+    'wholesale_distributor_min',
     'wholesale_automatic_decision',
     'wholesale_final_decision',
+    'wholesale_expected_pricelist_id',
     'wholesale_reason_code',
     'wholesale_reason_text',
     'wholesale_retail_amount',
@@ -27,6 +36,30 @@ class PosOrder(models.Model):
 
     _inherit = 'pos.order'
 
+    wholesale_customer_type = fields.Selection(
+        selection=CUSTOMER_TYPE_SELECTION,
+        string='Tipo de cliente',
+        readonly=True,
+        copy=False,
+    )
+    wholesale_pricing_program = fields.Selection(
+        selection=PROGRAM_SELECTION,
+        string='Programa de precios',
+        readonly=True,
+        copy=False,
+    )
+    wholesale_distributor_min = fields.Monetary(
+        string='Mínimo de distribuidor del mes anterior',
+        currency_field='currency_id',
+        readonly=True,
+        copy=False,
+    )
+    wholesale_expected_pricelist_id = fields.Many2one(
+        'product.pricelist',
+        string='Lista esperada',
+        readonly=True,
+        copy=False,
+    )
     wholesale_automatic_decision = fields.Selection(
         selection=DECISION_SELECTION,
         string='Decisión automática',
@@ -142,6 +175,10 @@ class PosOrder(models.Model):
     def _export_for_ui(self, order):
         result = super()._export_for_ui(order)
         result.update({
+            'wholesale_customer_type': order.wholesale_customer_type,
+            'wholesale_pricing_program': order.wholesale_pricing_program,
+            'wholesale_distributor_min': order.wholesale_distributor_min,
+            'wholesale_expected_pricelist_id': order.wholesale_expected_pricelist_id.id,
             'wholesale_automatic_decision': order.wholesale_automatic_decision,
             'wholesale_final_decision': order.wholesale_final_decision,
             'wholesale_reason_code': order.wholesale_reason_code,
@@ -218,6 +255,8 @@ class PosOrder(models.Model):
         return {
             'company': company,
             'partner': partner,
+            'config': session.config_id,
+            'session': session,
             'pos_uid': self._wholesale_pos_uid(ui_order),
             'eligibility': self.env['res.partner'].get_wholesale_eligibility(
                 partner.id if partner else False,
@@ -237,13 +276,15 @@ class PosOrder(models.Model):
         eligibility = facts['eligibility']
         if override:
             self._wholesale_check_override(
-                override, facts['partner'], submitted_id, existing_order,
+                override, facts, submitted_id, existing_order,
             )
             return {
                 'override': override,
                 'final_decision': override.final_decision,
                 'applied_id': override.applied_pricelist_id.id,
             }
+        if eligibility.get('pricing_program') == 'distributor':
+            self._wholesale_check_distributor_payment(eligibility, submitted_id)
         expected = eligibility.get('expected_pricelist') or {}
         applied_id = expected.get('id')
         if not applied_id or submitted_id != applied_id:
@@ -259,7 +300,13 @@ class PosOrder(models.Model):
         """Snapshot written on the order. Client copies of these keys are ignored."""
         eligibility = facts['eligibility']
         override = decision['override']
+        expected = eligibility.get('expected_pricelist') or {}
+        partner = facts['partner']
         return {
+            'wholesale_customer_type': partner.customer_type if partner else False,
+            'wholesale_pricing_program': eligibility.get('pricing_program') or False,
+            'wholesale_distributor_min': eligibility.get('distributor_min') or 0.0,
+            'wholesale_expected_pricelist_id': expected.get('id') or False,
             'wholesale_automatic_decision': eligibility['automatic_decision'],
             'wholesale_final_decision': decision['final_decision'],
             'wholesale_reason_code': eligibility['reason_code'],
@@ -426,7 +473,28 @@ class PosOrder(models.Model):
         return override
 
     @api.model
-    def _wholesale_check_override(self, override, partner, submitted_id, existing_order):
+    def _wholesale_check_distributor_payment(self, eligibility, submitted_id):
+        """Distributor pricing needs a qualification or a checked exception.
+
+        This method runs only when no exception was found. A qualified
+        distributor must submit the expected list. Anything else is rejected
+        by the normal mismatch that follows.
+        """
+        expected = eligibility.get('expected_pricelist') or {}
+        expected_id = expected.get('id')
+        qualified = (
+            eligibility.get('automatic_decision') == 'wholesale'
+            and not eligibility.get('error')
+            and expected_id
+        )
+        if qualified and submitted_id == expected_id:
+            return
+        if submitted_id and expected_id and submitted_id != expected_id:
+            self._wholesale_raise_mismatch(eligibility)
+
+    def _wholesale_check_override(self, override, facts, submitted_id, existing_order):
+        partner = facts['partner']
+        eligibility = facts['eligibility']
         if override.partner_id != partner:
             raise UserError(_(
                 'La excepción de mayoreo es para otro cliente. '
@@ -440,6 +508,34 @@ class PosOrder(models.Model):
             raise UserError(_(
                 'El gerente que autorizó esta excepción ya no tiene ese permiso.'
             ))
+        config = facts.get('config')
+        session = facts.get('session')
+        if override.pos_config_id and config and override.pos_config_id != config:
+            raise UserError(_(
+                'La excepción de este ticket es de otra caja. Abra un ticket nuevo.'
+            ))
+        if override.pos_session_id and session and override.pos_session_id != session:
+            raise UserError(_(
+                'La excepción de este ticket es de otra sesión. Abra un ticket nuevo.'
+            ))
+        if override.pricing_program == 'distributor':
+            if eligibility.get('pricing_program') != 'distributor':
+                raise UserError(_(
+                    'La excepción de distribuidor no corresponde al cliente de este ticket.'
+                ))
+            partners = self.env['res.partner']
+            problem = partners._wholesale_distributor_list_problem(
+                facts['company'], config,
+            )
+            if problem:
+                raise UserError(problem)
+            mapped = partners._wholesale_type_mapping(
+                facts['company'], 'distribuidores',
+            ).pricelist_id
+            if not mapped or override.applied_pricelist_id != mapped:
+                raise UserError(_(
+                    'La lista de la excepción ya no es la lista asignada a Distribuidores.'
+                ))
         pricelist = override.applied_pricelist_id
         if not pricelist or not pricelist.active or pricelist.id != submitted_id:
             raise UserError(_(
@@ -464,7 +560,7 @@ class PosOrder(models.Model):
                 or _('No hay una lista de precios válida para cobrar este pedido.')
             )
         reason = eligibility.get('reason_text') or eligibility.get('error') or ''
-        if eligibility.get('reason_code') == 'history_unavailable':
+        if eligibility.get('reason_code') in ('history_unavailable', 'currency_mismatch'):
             reason = _(
                 '%(reason)s Para cobrar en mayoreo se necesita una excepción de gerente.',
                 reason=reason,

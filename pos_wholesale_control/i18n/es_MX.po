@@ -1529,3 +1529,45 @@ msgid ""
 msgstr ""
 "Esta excepción aplica solo al ticket actual. No cambia el tipo de cliente ni"
 " la lista de precios permanente."
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid "Distributor"
+msgstr "Distribuidor"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid "Distributor — manager exception"
+msgstr "Distribuidor — excepción de gerente"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/xml/wholesale_status_panel.xml:0
+#, python-format
+msgid "Previous month"
+msgstr "Mes anterior"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/xml/wholesale_status_panel.xml:0
+#, python-format
+msgid "Distributor minimum"
+msgstr "Mínimo de distribuidor"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid "Customer locked"
+msgstr "Cliente bloqueado"
+
+#. module: pos_wholesale_control
+#. openerp-web
+#: code:addons/pos_wholesale_control/static/src/js/WholesaleStatusPanel.js:0
+#, python-format
+msgid "This ticket has a distributor exception. Open a new ticket to change the customer."
+msgstr "Este ticket tiene una excepción de distribuidor. Abra un ticket nuevo para cambiar el cliente."

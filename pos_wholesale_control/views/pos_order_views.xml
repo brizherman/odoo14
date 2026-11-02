@@ -11,11 +11,14 @@
                       attrs="{'invisible': [('wholesale_final_decision', '=', False)]}">
                     <group>
                         <group string="Decisión">
+                            <field name="wholesale_customer_type" readonly="1"/>
+                            <field name="wholesale_pricing_program" readonly="1"/>
                             <field name="wholesale_final_decision" readonly="1"/>
                             <field name="wholesale_automatic_decision" readonly="1"/>
                             <field name="wholesale_has_override" readonly="1"/>
                             <field name="wholesale_override_id" readonly="1"
                                    groups="pos_wholesale_control.group_wholesale_manager"/>
+                            <field name="wholesale_expected_pricelist_id" readonly="1"/>
                             <field name="wholesale_applied_pricelist_id" readonly="1"/>
                             <field name="wholesale_reason_code" readonly="1"/>
                             <field name="wholesale_reason_text" readonly="1"/>
@@ -25,6 +28,7 @@
                             <field name="wholesale_retail_amount" readonly="1"/>
                             <field name="wholesale_previous_month_amount" readonly="1"/>
                             <field name="wholesale_previous_month_min" readonly="1"/>
+                            <field name="wholesale_distributor_min" readonly="1"/>
                             <field name="wholesale_current_order_min" readonly="1"/>
                             <field name="wholesale_timezone" readonly="1"/>
                         </group>
@@ -40,6 +44,7 @@
         <field name="inherit_id" ref="point_of_sale.view_pos_order_tree"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='state']" position="before">
+                <field name="wholesale_pricing_program" optional="hide"/>
                 <field name="wholesale_final_decision" optional="hide"/>
                 <field name="wholesale_has_override" optional="hide"/>
             </xpath>

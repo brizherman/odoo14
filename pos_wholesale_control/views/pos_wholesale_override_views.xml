@@ -9,6 +9,7 @@
                 <field name="override_datetime"/>
                 <field name="pos_uid"/>
                 <field name="pos_order_id"/>
+                <field name="pricing_program"/>
                 <field name="partner_id"/>
                 <field name="manager_employee_id"/>
                 <field name="cashier_employee_id"/>
@@ -38,8 +39,11 @@
                         <group string="Ticket">
                             <field name="pos_uid"/>
                             <field name="pos_order_id"/>
+                            <field name="pricing_program"/>
                             <field name="partner_id"/>
                             <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="pos_config_id"/>
+                            <field name="pos_session_id"/>
                             <field name="applied_pricelist_id"/>
                             <field name="final_decision"/>
                         </group>
@@ -56,6 +60,7 @@
                             <field name="retail_order_amount"/>
                             <field name="previous_month_amount"/>
                             <field name="previous_month_min"/>
+                            <field name="distributor_min"/>
                             <field name="current_order_min"/>
                         </group>
                     </group>

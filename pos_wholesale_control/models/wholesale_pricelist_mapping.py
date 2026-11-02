@@ -45,9 +45,8 @@ class WholesalePricelistMapping(models.Model):
         required=True,
         check_company=True,
         help='Lista que se aplica cuando este tipo de cliente califica para '
-             'mayoreo. Público General y Mayorista dormido la usan solo cuando '
-             'el pedido actual, a precio de menudeo, alcanza el mínimo. Si no, '
-             'el pedido permanece en la lista de menudeo.',
+             'su mejor nivel de precio. El historial del mes en curso se suma '
+             'al pedido abierto a precio de menudeo para evaluar los mínimos.',
     )
     active = fields.Boolean(string='Activo', default=True)
 
