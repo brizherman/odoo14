@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="assets_backend" name="product price lookup backend" inherit_id="web.assets_backend">
+        <xpath expr="." position="inside">
+            <script type="text/javascript" src="/product_price_lookup/static/src/js/price_lookup_backend.js"/>
+            <link rel="stylesheet" type="text/scss" href="/product_price_lookup/static/src/scss/price_lookup.scss"/>
+        </xpath>
+    </template>
+
+    <template id="assets_pos" name="product price lookup pos" inherit_id="point_of_sale.assets">
+        <xpath expr="." position="inside">
+            <script type="text/javascript" src="/product_price_lookup/static/src/js/PriceLookupButton.js"/>
+            <script type="text/javascript" src="/product_price_lookup/static/src/js/PriceLookupPopup.js"/>
+        </xpath>
+        <xpath expr="//link[@id='pos-stylesheet']" position="after">
+            <link rel="stylesheet" type="text/scss" href="/product_price_lookup/static/src/scss/price_lookup.scss"/>
+        </xpath>
+    </template>
+
+    <template id="qunit_suite_tests" inherit_id="point_of_sale.qunit_suite_tests">
+        <xpath expr="." position="inside">
+            <script type="text/javascript" src="/product_price_lookup/static/tests/price_lookup_tests.js"/>
+        </xpath>
+    </template>
+</odoo>

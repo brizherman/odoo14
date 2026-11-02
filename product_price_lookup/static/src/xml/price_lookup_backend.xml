@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <t t-name="ProductPriceLookupBackend">
+        <div class="o_price_lookup_backend">
+            <header class="o_plb_mast">
+                <div>
+                    <p class="o_plb_kicker">Sucursal activa</p>
+                    <h1 class="o_plb_title">Consulta de precios</h1>
+                </div>
+                <p class="o_plb_aside">Incluye el impuesto de esta sucursal.</p>
+            </header>
+            <label class="o_plb_field">
+                <span class="o_plb_field_label">Código, referencia o nombre</span>
+                <input type="text"
+                       class="o_price_lookup_search"
+                       placeholder="Escanee el código, la referencia o el nombre"
+                       autocomplete="off"/>
+            </label>
+            <div class="o_price_lookup_result">
+                <ul class="o_plb_idle">
+                    <li><strong>Código o referencia exacta.</strong> Muestra el precio.</li>
+                    <li><strong>Nombre.</strong> Muestra una lista. Elija el producto.</li>
+                    <li><strong>Asterisco al inicio.</strong> Busca en la referencia interna el texto que sigue. Ejemplo: *helio.</li>
+                </ul>
+            </div>
+        </div>
+    </t>
+
+    <t t-name="ProductPriceLookupResult">
+        <div class="o_plb_stage">
+            <p t-if="message" class="o_plb_note" t-esc="message"/>
+            <article t-if="product" class="o_plb_ticket">
+                <div class="o_plb_who">
+                    <p class="o_plb_kicker">Producto</p>
+                    <h2 class="o_plb_name" t-esc="product.name"/>
+                    <div class="o_plb_codes">
+                        <p t-if="product.default_code" class="o_pl_code">
+                            <span class="o_pl_code_name">Referencia interna</span>
+                            <span t-esc="product.default_code"/>
+                        </p>
+                        <p t-if="product.barcode" class="o_pl_code">
+                            <span class="o_pl_code_name">Código de barras</span>
+                            <span t-esc="product.barcode"/>
+                        </p>
+                    </div>
+                </div>
+                <div class="o_plb_prices">
+                    <div t-foreach="prices" t-as="price" class="o_plb_price" t-att-data-slot="price.slot or price.label">
+                        <div class="o_plb_label" t-esc="price.label"/>
+                        <div class="o_plb_amount" t-esc="price.display"/>
+                    </div>
+                </div>
+            </article>
+            <div t-if="matches.length" class="o_plb_list">
+                <p class="o_plb_kicker">Elija uno</p>
+                <div class="o_plb_list_scroll">
+                <button t-foreach="matches" t-as="match" type="button"
+                        class="o_price_lookup_match o_plb_row" t-att-data-id="match.id">
+                    <span class="o_plb_row_name" t-esc="match.name"/>
+                    <span class="o_plb_row_meta">
+                        <span t-if="match.default_code" class="o_pl_code">
+                            <span class="o_pl_code_name">Referencia interna</span>
+                            <span t-esc="match.default_code"/>
+                        </span>
+                        <span t-if="match.barcode" class="o_pl_code">
+                            <span class="o_pl_code_name">Código de barras</span>
+                            <span t-esc="match.barcode"/>
+                        </span>
+                    </span>
+                </button>
+                </div>
+            </div>
+        </div>
+    </t>
+
+</templates>
