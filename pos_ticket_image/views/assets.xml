@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="assets_pos" name="pos ticket image" inherit_id="point_of_sale.assets">
+        <xpath expr="." position="inside">
+            <script type="text/javascript" src="/pos_ticket_image/static/src/js/models.js"/>
+            <script type="text/javascript" src="/pos_ticket_image/static/src/js/OrderReceipt.js"/>
+        </xpath>
+        <xpath expr="//link[@id='pos-stylesheet']" position="after">
+            <link rel="stylesheet" type="text/scss" href="/pos_ticket_image/static/src/scss/receipt.scss"/>
+        </xpath>
+    </template>
+
+    <template id="qunit_suite_tests" inherit_id="point_of_sale.qunit_suite_tests">
+        <xpath expr="." position="inside">
+            <script type="text/javascript" src="/pos_ticket_image/static/tests/ticket_image_tests.js"/>
+        </xpath>
+    </template>
+</odoo>

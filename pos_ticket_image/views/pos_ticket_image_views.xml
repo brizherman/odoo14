@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_pos_ticket_image_tree" model="ir.ui.view">
+        <field name="name">pos.ticket.image.tree</field>
+        <field name="model">pos.ticket.image</field>
+        <field name="arch" type="xml">
+            <tree string="Ticket Campaigns">
+                <field name="name"/>
+                <field name="date_start"/>
+                <field name="date_end"/>
+                <field name="position"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_pos_ticket_image_form" model="ir.ui.view">
+        <field name="name">pos.ticket.image.form</field>
+        <field name="model">pos.ticket.image</field>
+        <field name="arch" type="xml">
+            <form string="Ticket Campaign">
+                <sheet>
+                    <field name="image" widget="image" class="oe_avatar" required="1"/>
+                    <group>
+                        <field name="name" required="1"/>
+                        <field name="date_start" required="1"/>
+                        <field name="date_end" required="1"/>
+                        <field name="position" required="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_pos_ticket_image" model="ir.actions.act_window">
+        <field name="name">Ticket Campaigns</field>
+        <field name="res_model">pos.ticket.image</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <menuitem id="menu_pos_ticket_image"
+              name="Ticket Campaigns"
+              parent="point_of_sale.menu_point_config_product"
+              action="action_pos_ticket_image"
+              groups="point_of_sale.group_pos_manager"
+              sequence="50"/>
+</odoo>
