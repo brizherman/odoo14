@@ -22,6 +22,96 @@
         </tr>
     </template>
 
+    <template id="layaway_report_closing">
+        <section class="layaway-closing mt-3">
+            <h5>Situación al cierre del rango</h5>
+            <p>Historial acumulado de los folios con movimientos en el periodo. El neto de caja figura en el resumen por sesión receptora.</p>
+            <t t-set="closing" t-value="campaign['closing']"/>
+            <t t-foreach="closing['folios']" t-as="snapshot">
+                <h6>
+                    <strong t-esc="snapshot['folio']"/> · <span t-esc="snapshot['customer']"/>
+                    <span class="small">
+                        · Recogida hasta <span t-esc="snapshot['pickup_end']" t-options="{'widget': 'date'}"/>
+                    </span>
+                </h6>
+                <table t-if="snapshot['rows']" class="table table-sm small">
+                    <thead>
+                        <tr>
+                            <th>Tienda y producto</th>
+                            <th class="text-right">Reserva inicial</th>
+                            <th class="text-right">Adiciones</th>
+                            <th class="text-right">Traslados entrada / salida</th>
+                            <th class="text-right">Liberadas</th>
+                            <th class="text-right">Entregadas</th>
+                            <th class="text-right">Pendientes</th>
+                            <th class="text-right">Valor reservado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr t-foreach="snapshot['rows']" t-as="row" style="page-break-inside: avoid;">
+                            <td>
+                                <strong t-esc="row['store']"/>
+                                <div t-if="row['context']">Contexto de otra tienda</div>
+                                <div t-esc="row['name']"/>
+                            </td>
+                            <td t-foreach="('initial', 'added')" t-as="column" class="text-right"
+                                t-esc="row[column]"
+                                t-options="{'widget': 'float', 'precision': closing['quantity_precision']}"/>
+                            <td class="text-right">
+                                <span t-esc="row['transferred_in']"
+                                      t-options="{'widget': 'float', 'precision': closing['quantity_precision']}"/>
+                                /
+                                <span t-esc="row['transferred_out']"
+                                      t-options="{'widget': 'float', 'precision': closing['quantity_precision']}"/>
+                            </td>
+                            <td t-foreach="('released', 'delivered', 'pending')" t-as="column" class="text-right"
+                                t-esc="row[column]"
+                                t-options="{'widget': 'float', 'precision': closing['quantity_precision']}"/>
+                            <td class="text-right">
+                                <t t-call="pos_layaway.layaway_report_amount">
+                                    <t t-set="amount" t-value="row['reserved_value']"/>
+                                </t>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p class="small">
+                    <strong>Valor reservado visible</strong>
+                    <t t-call="pos_layaway.layaway_report_amount">
+                        <t t-set="amount" t-value="snapshot['reserved']"/>
+                    </t>
+                    · <strong>Cobrado en cajas accesibles</strong>
+                    <t t-call="pos_layaway.layaway_report_amount">
+                        <t t-set="amount" t-value="snapshot['paid']"/>
+                    </t>
+                    <t t-if="snapshot['due'] is not None">
+                        · <strong>Restante del folio</strong>
+                        <t t-call="pos_layaway.layaway_report_amount">
+                            <t t-set="amount" t-value="snapshot['due']"/>
+                        </t>
+                    </t>
+                    <t t-if="snapshot['credit']">
+                        · <strong>Saldo por vencimiento</strong>
+                        <t t-call="pos_layaway.layaway_report_amount">
+                            <t t-set="amount" t-value="snapshot['credit']['amount']"/>
+                        </t>
+                        (<span t-esc="snapshot['credit']['label']"/>)
+                    </t>
+                </p>
+            </t>
+            <p class="font-weight-bold small">
+                Total de la campaña al cierre · Valor reservado visible
+                <t t-call="pos_layaway.layaway_report_amount">
+                    <t t-set="amount" t-value="closing['reserved']"/>
+                </t>
+                · Cobrado en cajas accesibles
+                <t t-call="pos_layaway.layaway_report_amount">
+                    <t t-set="amount" t-value="closing['paid']"/>
+                </t>
+            </p>
+        </section>
+    </template>
+
     <template id="report_saledetails_layaway" inherit_id="point_of_sale.report_saledetails">
         <xpath expr="//div[hasclass('page')]/strong" position="after">
             <section t-if="layaway_campaigns" id="layaway_sales_details" class="mt-4">
@@ -153,6 +243,7 @@
                             </tr>
                         </tbody>
                     </table>
+                    <t t-call="pos_layaway.layaway_report_closing"/>
                 </t>
             </section>
         </xpath>

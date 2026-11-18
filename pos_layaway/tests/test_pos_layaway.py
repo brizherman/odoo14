@@ -1872,6 +1872,18 @@ class TestPosLayawayCampaign(SavepointCase):
             self.assertEqual(swap_move.invoice_line_ids.product_id, product | replacement)
             self.assertEqual(set(swap_move.invoice_line_ids.mapped("quantity")), {-2, 1})
             self.assertEqual(swap_move.layaway_adjustment_id.reference, change[0])
+            report = self.env["report.point_of_sale.report_saledetails"].with_user(self.manager).with_context(
+                allowed_company_ids=self.company_ids,
+            )
+            group, = report._get_layaway_campaigns({
+                "date_start": moment, "date_stop": moment, "config_ids": self.config_a.ids,
+            })
+            snapshot, = group["closing"]["folios"]
+            goods = {row["name"]: row for row in snapshot["rows"]}
+            released = goods[product.display_name]
+            reserved = goods[replacement.display_name]
+            self.assertEqual((released["initial"], released["released"], released["pending"]), (2, 2, 0))
+            self.assertEqual((reserved["added"], reserved["pending"], reserved["reserved_value"]), (1, 1, 4000))
 
         with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 15, 20)):
             quote, addition = self._checkout_args(b, campaign, product, 1, folio=folio)
@@ -2374,6 +2386,17 @@ class TestPosLayawayCampaign(SavepointCase):
         self.assertEqual(credit.search_count([("layaway_id", "=", folio.id)]), 1)
         for picking in pickings:
             self.assertEqual(self.env["stock.quant"]._get_available_quantity(product, picking.location_id), 8)
+        report = self.env["report.point_of_sale.report_saledetails"].with_user(self.manager).with_context(
+            allowed_company_ids=self.company_ids,
+        )
+        groups = report._get_layaway_campaigns({
+            "date_start": credit.operation_id.create_date, "date_stop": datetime(2027, 2, 1, 8),
+            "config_ids": self.config_a.ids,
+        })
+        snapshot, = groups[0]["closing"]["folios"]
+        self.assertEqual((snapshot["paid"], snapshot["due"], snapshot["reserved"]), (3400, 0, 0))
+        self.assertEqual(snapshot["credit"]["state"], "expired")
+        self.assertEqual([(row["released"], row["pending"]) for row in snapshot["rows"]], [(2, 0), (1, 0)])
 
     def test_expiry_credit_rejects_folios_with_a_sale_or_delivery(self):
         campaign, partner, product = self._settlement_fixture()
@@ -2690,6 +2713,18 @@ class TestPosLayawayCampaign(SavepointCase):
             self.assertEqual(collected["picking_ids"], reservation.ids)
             self.assertEqual(collected["delivered"][0]["location"], destination.complete_name)
             self.assertEqual(collected["pickup_state"], "done")
+            report = self.env["report.point_of_sale.report_saledetails"].with_user(self.manager).with_context(
+                allowed_company_ids=self.company_ids,
+            )
+            groups = report._get_layaway_campaigns({
+                "date_start": fields.Datetime.now(), "date_stop": fields.Datetime.now(),
+                "config_ids": self.config_a.ids,
+            })
+            snapshot, = groups[0]["closing"]["folios"]
+            origin, target = snapshot["rows"]
+            self.assertEqual((origin["initial"], origin["transferred_out"], origin["pending"]), (2, 2, 0))
+            self.assertEqual((target["context"], target["transferred_in"], target["delivered"]), (True, 2, 2))
+            self.assertEqual((snapshot["reserved"], snapshot["due"]), (0, 0))
 
     def test_sale_adjustment_requires_new_coverage_and_rolls_back_stock_failure(self):
         with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 20, 20)):
@@ -2826,6 +2861,10 @@ class TestPosLayawayCampaign(SavepointCase):
             [0, -1000, 1000, 0],
         )
         self.assertEqual(movements(render_values(data)), movements(values))
+        self.assertEqual(
+            [group["closing"] for group in render_values(data)["layaway_campaigns"]],
+            [group["closing"] for group in values["layaway_campaigns"]],
+        )
 
         closing, = final_day["layaway_campaigns"]
         settlement, = closing["movements"]
@@ -2837,3 +2876,63 @@ class TestPosLayawayCampaign(SavepointCase):
         self.assertEqual(closing["other_totals"], {
             "previous": 4000, "credit_issued": 0, "credit_applied": 0, "linked_sale": 6000,
         })
+
+    def test_sales_details_replays_merchandise_and_paid_amounts_at_cutoff(self):
+        campaign, partner, product = self._settlement_fixture()
+        a = self.session_a.with_user(self.cashier_a)
+        b = self.session_b.with_user(self.cashier_b)
+        start, stop, later, pickup_at = (datetime(2026, 11, day, 20) for day in (18, 19, 20, 21))
+        with patch.object(fields.Datetime, "now", return_value=start):
+            _, args = self._checkout_args(a, campaign, product, 2, partner)
+            opened = a.confirm_layaway(*args, [{"method_id": self.cash_a.id, "amount": 2000}])
+        folio = self.env["pos.layaway"].browse(opened["id"])
+        with patch.object(fields.Datetime, "now", return_value=stop):
+            _, args = self._checkout_args(b, campaign, product, 1, folio=folio)
+            b.confirm_layaway(*args, [{"method_id": self.cash_b.id, "amount": 1000}])
+
+        report = self.env["report.point_of_sale.report_saledetails"].with_user(self.manager).with_context(
+            allowed_company_ids=self.company_ids,
+        )
+        action = self.env.ref("point_of_sale.sale_details_report").with_env(report.env)
+        period = {
+            "date_start": start, "date_stop": stop, "config_ids": self.config_a.ids,
+            "layaway_campaign_id": campaign.id,
+        }
+        before, = report._get_layaway_campaigns(period)
+        before_html = action._render_qweb_html([], data=period)[0]
+        self.assertIn("Situación al cierre del rango".encode(), before_html)
+        self.assertIn(b"Contexto de otra tienda", before_html)
+        snapshot, = before["closing"]["folios"]
+        self.assertEqual((snapshot["reserved"], snapshot["paid"], snapshot["due"]), (6000, 3000, 3000))
+        row_a, row_b = snapshot["rows"]
+        self.assertEqual((row_a["initial"], row_a["pending"], row_a["context"]), (2, 2, False))
+        self.assertEqual((row_b["added"], row_b["pending"], row_b["context"]), (1, 1, True))
+        self.assertEqual([row["kind"] for row in before["movements"]], ["open"])
+        self.assertEqual(before["cash_total"]["net"], 2000)
+
+        with patch.object(fields.Datetime, "now", return_value=later):
+            b.register_layaway_installment(folio.id, str(uuid4()), [{"method_id": self.cash_b.id, "amount": 1000}])
+        self.assertEqual(report._get_layaway_campaigns(period), [before])
+        with patch.object(fields.Datetime, "now", return_value=pickup_at):
+            a.settle_layaway(folio.id, str(uuid4()), [{"method_id": self.cash_a.id, "amount": 2000}])
+            b.confirm_layaway_pickup(
+                folio.id, str(uuid4()), {"kind": "holder", "identity_verified": True},
+                b.get_layaway_detail(folio.id)["pickup"]["lines"],
+            )
+        self.assertEqual(report._get_layaway_campaigns(period), [before])
+        self.assertEqual(action._render_qweb_html([], data=period)[0], before_html)
+        extended, = report._get_layaway_campaigns(dict(period, date_stop=pickup_at))
+        updated, = extended["closing"]["folios"]
+        self.assertEqual((updated["reserved"], updated["paid"], updated["due"]), (4000, 6000, 0))
+        context = updated["rows"][1]
+        self.assertEqual((context["delivered"], context["pending"], context["context"]), (1, 0, True))
+        self.assertEqual([row["kind"] for row in extended["movements"]], ["open", "settle"])
+        self.assertEqual(extended["cash_total"]["net"], 4000)
+
+        restricted = report.with_user(self.supervisor_b).with_context(allowed_company_ids=self.company_b.ids)
+        self.assertFalse(restricted._get_layaway_campaigns(period))
+        only_b, = restricted._get_layaway_campaigns(dict(period, config_ids=self.config_b.ids, date_stop=pickup_at))
+        snapshot, = only_b["closing"]["folios"]
+        self.assertEqual((snapshot["paid"], snapshot["reserved"], snapshot["due"]), (2000, 0, None))
+        row, = snapshot["rows"]
+        self.assertEqual((row["store"], row["delivered"], row["context"]), (row_b["store"], 1, False))

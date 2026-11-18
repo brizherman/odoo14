@@ -16,4 +16,5 @@ from . import pos_layaway_credit
 from . import pos_layaway_relocation
 from . import pos_order
 from . import pos_sale_details
+from . import pos_sale_details_history
 from . import res_partner

@@ -108,6 +108,7 @@ class PosSession(models.Model):
             **operation._receipt_identification(folio, operation.create_date),
             "id": folio.id, "folio": folio.folio, "reference": operation.reference,
             "source": source.complete_name, "destination": destination.complete_name,
+            "destination_warehouse_id": destination_type.warehouse_id.id,
             "lines": moved_lines, "transfer_id": transfer.id, "transfer_name": transfer.name,
             "previous_reservation_ids": old_pickings.ids, "reservation_id": reservation.id,
         }

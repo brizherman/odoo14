@@ -37,12 +37,9 @@ class ReportSaleDetails(models.AbstractModel):
                 raise AccessError(_("La campaña de apartados no está disponible."))
             campaign_domain = [("layaway_id.campaign_id", "=", campaign_id)]
 
-        configs = report.env["pos.config"].with_context(active_test=False)
+        accessible_configs = report.env["pos.config"].with_context(active_test=False).search([])
         config_ids = data["config_ids"]
-        if config_ids:
-            configs = configs.search([("id", "in", config_ids)])
-        else:
-            configs = configs.search([])
+        configs = accessible_configs & accessible_configs.browse(config_ids) if config_ids else accessible_configs
         sessions = report.env["pos.session"].search([
             ("config_id", "in", configs.ids),
             ("company_id", "in", report.env.companies.ids),
@@ -82,20 +79,25 @@ class ReportSaleDetails(models.AbstractModel):
                 events.setdefault(key, [])
 
         groups = {}
+        folio_ids = set()
         for operation, session, moment in sorted(
             events, key=lambda key: (key[2], key[0].id, key[1].id),
         ):
             folio = operation.layaway_id
-            group = groups.setdefault((folio.campaign_id.id, folio.currency_id.id), {
+            group_key = (folio.campaign_id.id, folio.currency_id.id)
+            folio_ids.add(folio.id)
+            group = groups.setdefault(group_key, {
                 "name": folio.campaign_name, "code": folio.campaign_code, "movements": [],
                 "currency": folio.currency_id.name, "precision": folio.currency_id.decimal_places,
             })
             group["movements"].append(report._layaway_report_movement(
                 operation, session, moment, events[operation, session, moment],
             ))
-        for (_campaign_id, currency_id), group in groups.items():
-            currency = report.env["res.currency"].browse(currency_id)
+        closing = report._layaway_report_closing(folio_ids, configs, accessible_configs, stop)
+        for key, group in groups.items():
+            currency = report.env["res.currency"].browse(key[1])
             report._summarize_layaway_movements(group, currency)
+            group["closing"] = closing[key]
         return sorted(groups.values(), key=lambda group: (group["name"], group["code"]))
 
     @api.model
