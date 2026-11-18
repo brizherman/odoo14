@@ -2,6 +2,8 @@ from datetime import datetime
 from unittest.mock import patch
 from uuid import uuid4
 
+from lxml import etree
+
 from odoo import fields
 from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests import tagged
@@ -2903,6 +2905,19 @@ class TestPosLayawayCampaign(SavepointCase):
         html = report_action.with_env(wizard.env)._render_qweb_html([], data=data)[0].decode()
         self.assertIn('id="layaway_sales_details"', html)
         self.assertIn(other_folio.folio, html)
+
+        sales_view = self.env.ref("point_of_sale.report_saledetails")
+        arch = etree.fromstring(sales_view.arch_db.encode())
+        total, = arch.xpath("//div[@class='page']/strong")
+        wrapper = etree.Element("div", {"class": "custom-pos-total"})
+        total.addprevious(wrapper)
+        wrapper.append(total)
+        sales_view.arch_db = etree.tostring(arch, encoding="unicode")
+        custom_html = report_action.with_env(wizard.env)._render_qweb_html([], data=data)[0].decode()
+        self.assertIn('class="custom-pos-total"', custom_html)
+        self.assertIn('id="layaway_sales_details"', custom_html)
+        self.assertIn(other_folio.folio, custom_html)
+        self.assertLess(custom_html.index("custom-pos-total"), custom_html.index("layaway_sales_details"))
 
         wizard.layaway_campaign_id = campaign
         filtered = render_values(wizard.generate_report()["data"])

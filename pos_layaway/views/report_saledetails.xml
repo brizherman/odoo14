@@ -113,7 +113,7 @@
     </template>
 
     <template id="report_saledetails_layaway" inherit_id="point_of_sale.report_saledetails">
-        <xpath expr="//div[hasclass('page')]/strong" position="after">
+        <xpath expr="//div[hasclass('page')]" position="inside">
             <section t-if="layaway_campaigns" id="layaway_sales_details" class="mt-4">
                 <h3>Apartados</h3>
                 <t t-foreach="layaway_campaigns" t-as="campaign">
