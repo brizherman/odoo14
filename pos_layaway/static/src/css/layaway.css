@@ -158,3 +158,21 @@
 .pos .layaway-status {
     color: #474747;
 }
+
+.pos .layaway-open-new {
+    margin-bottom: 12px;
+}
+
+.pos .layaway-checkout-message {
+    margin: 0;
+    padding: 10px 20px;
+    background: #e6e8e7;
+}
+
+.pos .layaway-checkout fieldset {
+    display: grid;
+    gap: 12px;
+    margin: 0;
+    padding: 12px;
+    border: 1px solid #ddd;
+}

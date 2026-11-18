@@ -5,6 +5,7 @@ from odoo.exceptions import AccessError, ValidationError
 from odoo.osv import expression
 
 from .pos_layaway_campaign import local_date
+from .pos_layaway_payment import layaway_test_database
 
 
 class PosSession(models.Model):
@@ -28,6 +29,12 @@ class PosSession(models.Model):
         folio = self._find_layaway(record_id)
         return {
             **folio._pos_layaway_values(detail=True),
+            "campaign_id": folio.campaign_id.id,
+            "can_add_products": (
+                layaway_test_database(self.env) and not folio.sale_id
+                and folio.pickup_state != "done"
+                and local_date(fields.Datetime.now(), folio.timezone) <= folio.addition_end
+            ),
             "transfer_review": self._layaway_transfer_detail(folio),
         }
 
@@ -45,6 +52,7 @@ class PosSession(models.Model):
         return {
             "rows": [folio._pos_layaway_values() for folio in page[:page_size]],
             "has_more": len(page) > page_size,
+            "can_open_layaway": layaway_test_database(self.env),
             **scope_filters,
         }
 

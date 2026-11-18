@@ -1,13 +1,15 @@
+import hashlib
 import json
 import math
 import re
 import unicodedata
 
 from odoo import _, fields, models
-from odoo.exceptions import AccessError, ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tools import float_round
 
 from .pos_layaway_campaign import local_date
+from .pos_layaway_payment import layaway_test_database
 
 
 class PosSession(models.Model):
@@ -15,9 +17,103 @@ class PosSession(models.Model):
 
     def quote_layaway(self, lines, campaign_id, partner_id=False, phone=False, layaway_id=False):
         self._check_layaway_session()
-        return self.with_company(self.company_id)._quote_layaway(
+        session = self.with_company(self.company_id)
+        quote = session._quote_layaway(
             lines, campaign_id, partner_id, phone, layaway_id, fields.Datetime.now(),
         )
+        if layaway_test_database(self.env):
+            methods = session._layaway_checkout_methods()
+            quote.update({
+                "confirmation": session._layaway_quote_digest(quote),
+                "methods": [{
+                    "id": method.id, "name": method.name, "cash": method.is_cash_count,
+                } for method in methods],
+            })
+        return quote
+
+    def _layaway_quote_digest(self, quote):
+        snapshot = json.dumps([self.config_id.id, quote], sort_keys=True, allow_nan=False)
+        return hashlib.sha256(snapshot.encode()).hexdigest()
+
+    def _layaway_checkout_methods(self):
+        session = self.sudo()
+        return session.env["pos.layaway.payment"]._available_methods(session).filtered(
+            lambda method: not method.layaway_transfer
+        )
+
+    def confirm_layaway(self, reference, proposal, confirmation, tenders):
+        """Confirm the quoted agreement and its new money and stock together."""
+        self._check_layaway_payment_test()
+        session = self.sudo(False)._check_layaway_session(require_open=False)
+        if not isinstance(proposal, dict) or set(proposal) != {
+            "lines", "campaign_id", "partner_id", "phone", "layaway_id",
+        }:
+            raise ValidationError(_("Los datos de la propuesta de apartado no son válidos."))
+        if not isinstance(confirmation, str) or not re.fullmatch(r"[a-f0-9]{64}", confirmation):
+            raise ValidationError(_("Cotiza el apartado antes de confirmarlo."))
+        session = session.with_company(session.company_id)
+        folio = session._find_layaway(proposal["layaway_id"], require_open=False) if (
+            proposal["layaway_id"]
+        ) else self.env["pos.layaway"]
+        operation_model = session.env["pos.layaway.operation"].sudo()
+        tenders = operation_model.env["pos.layaway.payment"]._normalize_tenders(
+            tenders, session.currency_id,
+        ) if tenders != [] else []
+        kind = "add_products" if folio else "open"
+
+        return operation_model._confirm(
+            session, reference, kind, [proposal, confirmation, tenders],
+            lambda operation: session._apply_layaway_quote(
+                operation, proposal, confirmation, tenders, folio,
+            ),
+            folio, pass_operation=True,
+        )
+
+    def _apply_layaway_quote(self, operation, proposal, confirmation, tenders, folio):
+        self._lock_layaway_stock_session()
+        quote = self._quote_layaway(**proposal, now=operation.create_date)
+        if self._layaway_quote_digest(quote) != confirmation:
+            raise ValidationError(_("Cambió la cotización. Vuelve a cotizar antes de confirmar."))
+        if folio and folio.sale_id:
+            raise UserError(_("Los ajustes de folios liquidados aún no están habilitados."))
+        currency = self.currency_id
+        amount = currency.round(sum(tender["amount"] for tender in tenders))
+        if currency.compare_amounts(amount, quote["required_deposit"]) < 0 or not (amount or folio):
+            raise ValidationError(_("El importe confirmado es insuficiente para reservar la mercancía."))
+        allowed_methods = self._layaway_checkout_methods().ids
+        if any(tender["method_id"] not in allowed_methods for tender in tenders):
+            raise ValidationError(_("Usa un método de cobro inmediato habilitado en esta caja."))
+
+        accounting = self.sudo().with_context({}, allowed_company_ids=self.company_id.ids)
+        env = accounting.env
+        if folio:
+            kind = "installment"
+            lines = env["pos.layaway.line"].create([
+                dict(line, layaway_id=folio.id) for line in quote["lines"]
+            ])
+        else:
+            kind = "deposit"
+            folio = env["pos.layaway"]._create_folio(
+                self, env["pos.layaway.campaign"].browse(quote["campaign_id"]),
+                env["res.partner"].browse(quote["partner_id"]), quote["contact_name"],
+                quote["phone"], operation.create_date, quote["lines"],
+            )
+            lines = folio.line_ids
+        self._check_layaway_payment_amount(folio, amount, operation.create_date)
+        payments = env["pos.layaway.payment"].browse()
+        for tender in tenders:
+            payments |= env["pos.layaway.payment"]._record_tender(
+                operation, accounting, folio, kind, tender,
+            )
+        picking = env["stock.picking"]._reserve_layaway_lines(folio, self, lines)
+        return folio, {
+            "id": folio.id, "folio": folio.folio, "reference": operation.reference,
+            "picking_id": picking.id, "quote": quote, "amount_applied": amount,
+            "amount_paid": folio.amount_paid, "amount_due": folio.amount_due,
+            "payments": payments.read([
+                "method_id", "method_name", "amount", "amount_tendered", "amount_change",
+            ], load="_classic_write"),
+        }
 
     def _quote_layaway(self, lines, campaign_id, partner_id, phone, layaway_id, now):
         config = self.config_id
@@ -58,12 +154,20 @@ class PosSession(models.Model):
         target = currency.round(total * agreement.deposit_percentage / 100)
         return {
             "campaign_id": campaign_id, "layaway_id": layaway_id or False,
+            "campaign_name": agreement.campaign_name if layaway_id else agreement.name,
             "partner_id": partner.id, "contact_name": name, "phone": phone,
             "currency_id": currency.id, "lines": quoted, "amount_new": addition,
             "amount_previous": previous_total, "amount_total": total,
             "amount_paid": paid, "required_deposit": max(0.0, currency.round(target - paid)),
             "wholesale_conditional": not layaway_id,
+            "warehouse": config.picking_type_id.warehouse_id.display_name,
+            "minimum_amount": agreement.minimum_amount,
+            "deposit_percentage": agreement.deposit_percentage,
+            "opening_start": fields.Date.to_string(agreement.opening_start),
+            "opening_end": fields.Date.to_string(agreement.opening_end),
+            "addition_end": fields.Date.to_string(agreement.addition_end),
             "pickup_end": fields.Date.to_string(agreement.pickup_end),
+            "credit_end": fields.Date.to_string(agreement.credit_end),
         }
 
     def _layaway_contact(self, partner, phone):

@@ -594,6 +594,173 @@ class TestPosLayawayCampaign(SavepointCase):
         picking.action_cancel()
         self.assertEqual(quant_model._get_available_quantity(line.product_id, line.location_id), 2)
 
+    def _checkout_fixture(self):
+        self._wholesale_setup()
+        campaign = self.campaigns.create(self.values)
+        campaign.action_activate()
+        partner = self.env["res.partner"].create({
+            "name": "Beneficiario de apertura", "phone": "664 234 5678",
+        })
+        product = self.env["product.product"].create({
+            "name": "Mercancía de apertura", "type": "product", "available_in_pos": True,
+            "lst_price": 2000, "taxes_id": [(5, 0, 0)],
+        })
+        for config in self.config_a | self.config_b:
+            self.env["stock.quant"]._update_available_quantity(
+                product, config.picking_type_id.default_location_src_id, 8,
+            )
+        return campaign, partner, product
+
+    def _checkout_args(self, session, campaign, product, qty, partner=False, folio=False):
+        proposal = {
+            "lines": [{"product_id": product.id, "qty": qty}], "campaign_id": campaign.id,
+            "partner_id": partner.id if partner else False, "phone": False,
+            "layaway_id": folio.id if folio else False,
+        }
+        quote = session.quote_layaway(**proposal)
+        return quote, [str(uuid4()), proposal, quote["confirmation"]]
+
+    def _checkout_state(self, folio):
+        pickings = self.env["stock.picking"].search([("layaway_id", "=", folio.id)])
+        return (
+            folio.line_ids.ids, folio.payment_ids.ids,
+            pickings.ids, pickings.move_lines.mapped("reserved_availability"),
+            folio.amount_total, folio.amount_paid, folio.amount_due,
+            self.session_a.cash_register_balance_end, self.session_b.cash_register_balance_end,
+        )
+
+    def test_checkout_open_and_add_at_original_deadline(self):
+        campaign, partner, product = self._checkout_fixture()
+        cashier_a = self.session_a.with_user(self.cashier_a)
+        cashier_b = self.session_b.with_user(self.cashier_b)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            self.assertEqual(self._wholesale_eligibility(self.session_a, partner)["automatic_decision"], "retail")
+            quote, opening = self._checkout_args(cashier_a, campaign, product, 2, partner)
+            self.assertEqual((quote["amount_total"], quote["required_deposit"]), (4000, 2000))
+            tenders = [
+                {"method_id": self.cash_a.id, "amount": 1200, "amount_tendered": 1300},
+                {"method_id": self.card_a.id, "amount": 800},
+            ]
+            opened = cashier_a.confirm_layaway(*opening, tenders)
+            self.assertEqual(cashier_b.confirm_layaway(*opening, tenders), opened)
+            self.assertEqual(opened["amount_due"], 2000)
+            self.assertEqual(self._wholesale_eligibility(self.session_a, partner)["automatic_decision"], "wholesale")
+        folio = self.env["pos.layaway"].browse(opened["id"])
+        original = folio.line_ids
+        campaign.write({"addition_end": "2026-12-16", "pickup_end": "2026-12-16",
+                        "deposit_percentage": 80})
+        campaign.action_archive()
+        product.lst_price = 1000
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 16, 7, 59)):
+            quote, addition = self._checkout_args(cashier_b, campaign, product, 2, folio=folio)
+            self.assertEqual((quote["amount_new"], quote["amount_total"], quote["required_deposit"]),
+                             (2000, 6000, 1000))
+            self.assertEqual(quote["addition_end"], "2026-12-15")
+            self.assertEqual(quote["pickup_end"], "2026-12-15")
+        tender = [{"method_id": self.cash_b.id, "amount": 1000}]
+        before = self._checkout_state(folio)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 16, 8)):
+            with self.assertRaisesRegex(ValidationError, "Terminó el plazo"):
+                cashier_b.confirm_layaway(*addition, tender)
+        self.assertEqual(self._checkout_state(folio), before)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 16, 7, 59)):
+            added = cashier_b.confirm_layaway(*addition, tender)
+        self.assertEqual(added["folio"], opened["folio"])
+        self.assertEqual((added["amount_paid"], added["amount_due"]), (3000, 3000))
+        self.assertEqual((original.price_unit, (folio.line_ids - original).price_unit), (2000, 1000))
+        self.assertEqual(folio.line_ids.mapped("warehouse_id"),
+                         self.config_a.picking_type_id.warehouse_id | self.config_b.picking_type_id.warehouse_id)
+        pickings = self.env["stock.picking"].browse([opened["picking_id"], added["picking_id"]])
+        self.assertEqual(pickings.mapped("state"), ["assigned", "assigned"])
+        self.assertEqual(pickings.move_lines.mapped("quantity_done"), [0, 0])
+        self.assertFalse(folio.sale_id)
+        self.assertEqual(self.session_a.cash_register_balance_end, 1200)
+        self.assertEqual(self.session_b.cash_register_balance_end, 1000)
+
+    def test_checkout_zero_tender_and_rollback_after_stock_failure(self):
+        campaign, partner, product = self._checkout_fixture()
+        cashier_a = self.session_a.with_user(self.cashier_a)
+        cashier_b = self.session_b.with_user(self.cashier_b)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            _, opening = self._checkout_args(cashier_a, campaign, product, 2, partner)
+            deposit = [{"method_id": self.cash_a.id, "amount": 2000}]
+            opened = cashier_a.confirm_layaway(*opening, deposit)
+            folio = self.env["pos.layaway"].browse(opened["id"])
+            unavailable = self.env["product.product"].create({
+                "name": "Sin stock", "type": "product", "available_in_pos": True,
+                "lst_price": 2000, "taxes_id": [(5, 0, 0)],
+            })
+            _, attempt = self._checkout_args(cashier_b, campaign, unavailable, 1, folio=folio)
+            before = self._checkout_state(folio)
+            with self.assertRaisesRegex(ValidationError, "insuficiente"):
+                cashier_b.confirm_layaway(*attempt, [])
+            with self.assertRaisesRegex(ValidationError, "cobro inmediato"):
+                cashier_b.confirm_layaway(*attempt, [{"method_id": self.transfer_b.id, "amount": 1000}])
+            with self.assertRaisesRegex(UserError, "existencias libres"):
+                cashier_b.confirm_layaway(*attempt, [{"method_id": self.cash_b.id, "amount": 1000}])
+            self.assertEqual(self._checkout_state(folio), before)
+            self.assertFalse(self.env["pos.layaway.operation"].search_count([("reference", "=", attempt[0])]))
+            self._payment(self.session_a, folio, "installment", [{"method_id": self.card_a.id, "amount": 1000}])
+            quote, addition = self._checkout_args(cashier_b, campaign, product, 1, folio=folio)
+            self.assertEqual(quote["required_deposit"], 0)
+            added = cashier_b.confirm_layaway(*addition, [])
+        self.assertEqual((added["amount_paid"], added["amount_due"], added["payments"]), (3000, 3000, []))
+        self.assertEqual(self.session_b.cash_register_balance_end, 0)
+        self.assertEqual(folio.line_ids.mapped("amount_total"), [4000, 2000])
+
+    def test_checkout_cannot_import_another_campaign_line_or_deposit(self):
+        campaign, partner, product = self._checkout_fixture()
+        other = self.campaigns.create(dict(self.values, name="Otra campaña", minimum_amount=5000))
+        other.action_activate()
+        cashier_a = self.session_a.with_user(self.cashier_a)
+        cashier_b = self.session_b.with_user(self.cashier_b)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 20, 20)):
+            _, open_first = self._checkout_args(cashier_a, campaign, product, 2, partner)
+            _, open_other = self._checkout_args(cashier_a, other, product, 3, partner)
+            first = self.env["pos.layaway"].browse(cashier_a.confirm_layaway(
+                *open_first, [{"method_id": self.cash_a.id, "amount": 2000}],
+            )["id"])
+            second = self.env["pos.layaway"].browse(cashier_a.confirm_layaway(
+                *open_other, [{"method_id": self.cash_a.id, "amount": 3000}],
+            )["id"])
+            _, addition = self._checkout_args(cashier_b, campaign, product, 1, folio=first)
+            before = self._checkout_state(first), self._checkout_state(second)
+            proposed_line = {**addition[1]["lines"][0], "line_id": second.line_ids.id}
+            with self.assertRaisesRegex(ValidationError, "datos de la mercancía"):
+                cashier_b.confirm_layaway(
+                    addition[0], dict(addition[1], lines=[proposed_line]), addition[2],
+                    [{"method_id": self.cash_b.id, "amount": 1000}],
+                )
+            self.assertEqual((self._checkout_state(first), self._checkout_state(second)), before)
+            with self.assertRaisesRegex(ValidationError, "desglose de cobro"):
+                cashier_b.confirm_layaway(*addition, [{
+                    "method_id": self.cash_b.id, "amount": 1000, "payment_id": second.payment_ids.id,
+                }])
+            self.assertEqual((self._checkout_state(first), self._checkout_state(second)), before)
+            with self.assertRaisesRegex(AccessError, "campaña"):
+                cashier_b.confirm_layaway(
+                    addition[0], dict(addition[1], campaign_id=other.id), addition[2], [],
+                )
+            with self.assertRaisesRegex(ValidationError, "otra operación"):
+                cashier_b.confirm_layaway(open_other[0], *addition[1:], [])
+            self.assertEqual((self._checkout_state(first), self._checkout_state(second)), before)
+
+    def test_checkout_rejects_stale_quote_and_non_test_database(self):
+        campaign, partner, product = self._checkout_fixture()
+        cashier_a = self.session_a.with_user(self.cashier_a)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            _, opening = self._checkout_args(cashier_a, campaign, product, 2, partner)
+            deposit = [{"method_id": self.cash_a.id, "amount": 2000}]
+            with patch("odoo.addons.pos_layaway.models.pos_layaway_payment.layaway_test_database",
+                       return_value=False):
+                with self.assertRaisesRegex(AccessError, "disponibles para pruebas"):
+                    cashier_a.confirm_layaway(*opening, deposit)
+            product.lst_price = 2500
+            with self.assertRaisesRegex(ValidationError, "Cambió la cotización"):
+                cashier_a.confirm_layaway(*opening, deposit)
+            self.assertFalse(self.env["pos.layaway"].search_count([("partner_id", "=", partner.id)]))
+            self.assertEqual(self.session_a.cash_register_balance_end, 0)
+
     def test_folio_search_filters_and_other_store_access(self):
         campaign = self.campaigns.create(self.values)
         campaign.action_activate()

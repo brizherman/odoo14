@@ -5,9 +5,20 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
     const PosComponent = require('point_of_sale.PosComponent');
     const ProductScreen = require('point_of_sale.ProductScreen');
     const Registries = require('point_of_sale.Registries');
+    const models = require('point_of_sale.models');
     const session = require('web.session');
     const { useListener } = require('web.custom_hooks');
     const { useState } = owl.hooks;
+
+    models.load_fields('product.product', ['type']);
+
+    function operationReference() {
+        const bytes = window.crypto.getRandomValues(new Uint8Array(16));
+        bytes[6] = (bytes[6] & 15) | 64;
+        bytes[8] = (bytes[8] & 63) | 128;
+        const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+        return hex.replace(/^(........)(....)(....)(....)(............)$/, '$1-$2-$3-$4-$5');
+    }
 
     class LayawayScreen extends IndependentToOrderScreen {
         constructor() {
@@ -16,6 +27,8 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                 rows: [], campaigns: [], stores: [], detail: null,
                 stale: !navigator.onLine, loaded: false, loading: false, hasMore: false,
                 transferBusy: false, transferMessage: '', transferRetry: false,
+                canOpen: false, draft: null, checkoutBusy: false, checkoutMessage: '',
+                pendingConfirmation: JSON.parse(sessionStorage.getItem(this.confirmationKey)),
                 filters: { query: '', campaign: '', store: '', from: '', to: '',
                     payment_state: '', pickup_state: '', expiry: '' },
             });
@@ -90,6 +103,7 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                 this.state.campaigns = result.campaigns;
                 this.state.stores = result.stores;
                 this.state.hasMore = result.has_more;
+                this.state.canOpen = result.can_open_layaway;
                 this.state.loaded = true;
             }
         }
@@ -116,7 +130,7 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
         }
 
         refresh() {
-            if (this.state.loading || this.state.transferBusy || !navigator.onLine) {
+            if (this.state.loading || this.state.transferBusy || this.state.checkoutBusy || !navigator.onLine) {
                 return;
             }
             if (this.state.detail) {
@@ -127,6 +141,158 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
             }
             // Confirm reachability without discarding the current search page.
             return this.request('get_layaways', [this.filters, 0]);
+        }
+
+        get confirmationKey() {
+            return ['pos_layaway_checkout', session.db, session.uid, this.env.pos.pos_session.id].join(':');
+        }
+
+        async startCheckout(folio) {
+            if (this.state.stale || this.state.transferBusy || this.state.checkoutBusy || !navigator.onLine) {
+                return;
+            }
+            this.state.checkoutMessage = '';
+            const selected = this.env.pos.layawayCampaign;
+            const draft = {
+                folio, campaigns: [], campaign: folio ? folio.campaign_id : '',
+                partner: null, phone: '', partnerQuery: '', productQuery: '', lines: [], quote: null,
+            };
+            if (!folio) {
+                const campaigns = await this.request('get_layaway_campaigns', []);
+                if (!campaigns) {
+                    return;
+                }
+                draft.campaigns = campaigns;
+                if (selected && campaigns.some(campaign => campaign.id === selected.id)) {
+                    draft.campaign = selected.id;
+                } else if (campaigns.length === 1) {
+                    draft.campaign = campaigns[0].id;
+                }
+            }
+            this.state.draft = draft;
+        }
+
+        cancelCheckout() {
+            this.state.draft = null;
+            this.state.checkoutMessage = '';
+        }
+
+        updateCheckoutField(field, event) {
+            const value = event.target.value;
+            this.state.draft[field] = field === 'campaign' && value ? Number(value) : value;
+        }
+
+        updateCheckoutQuantity(productId, event) {
+            const line = this.state.draft.lines.find(item => item.product_id === productId);
+            line.qty = event.target.value;
+        }
+
+        get matchingPartners() {
+            const query = this.state.draft.partnerQuery.trim();
+            return query ? this.env.pos.db.search_partner(query).slice(0, 8) : [];
+        }
+
+        get matchingProducts() {
+            const query = this.state.draft.productQuery.trim();
+            return query ? this.env.pos.db.search_product_in_category(0, query)
+                .filter(product => product.type === 'product').slice(0, 8) : [];
+        }
+
+        selectPartner(partner) {
+            Object.assign(this.state.draft, {
+                partner, phone: partner.mobile || partner.phone || '', partnerQuery: '',
+            });
+        }
+
+        addProduct(product) {
+            const draft = this.state.draft;
+            const existing = draft.lines.find(line => line.product_id === product.id);
+            if (existing) {
+                existing.qty = Number(existing.qty) + 1;
+            } else {
+                draft.lines.push({ product_id: product.id, name: product.display_name, qty: 1 });
+            }
+            draft.productQuery = '';
+        }
+
+        removeProduct(productId) {
+            const draft = this.state.draft;
+            draft.lines = draft.lines.filter(line => line.product_id !== productId);
+        }
+
+        async quoteCheckout() {
+            const draft = this.state.draft;
+            const proposal = {
+                lines: draft.lines.map(line => ({ product_id: line.product_id, qty: Number(line.qty) })),
+                campaign_id: Number(draft.campaign),
+                partner_id: draft.partner ? draft.partner.id : false,
+                phone: draft.phone || false,
+                layaway_id: draft.folio ? draft.folio.id : false,
+            };
+            const quote = await this.checkoutRequest('quote_layaway', [
+                proposal.lines, proposal.campaign_id, proposal.partner_id, proposal.phone, proposal.layaway_id,
+            ]);
+            if (quote) {
+                draft.proposal = proposal;
+                draft.quote = quote;
+            }
+        }
+
+        async confirmCheckout(event) {
+            if (this.state.stale || this.state.checkoutBusy || !navigator.onLine) {
+                return;
+            }
+            if (!this.state.pendingConfirmation) {
+                const { quote, proposal } = this.state.draft;
+                const data = new FormData(event.currentTarget);
+                const tenders = quote.methods.filter(method => Number(data.get('apply-' + method.id)) > 0)
+                    .map(method => {
+                        const amount = Number(data.get('apply-' + method.id));
+                        return {
+                            method_id: method.id, amount,
+                            amount_tendered: Number(data.get('received-' + method.id) || amount),
+                        };
+                    });
+                const pending = [operationReference(), proposal, quote.confirmation, tenders];
+                sessionStorage.setItem(this.confirmationKey, JSON.stringify(pending));
+                this.state.pendingConfirmation = pending;
+            }
+            const result = await this.checkoutRequest('confirm_layaway', this.state.pendingConfirmation);
+            if (result !== null) {
+                sessionStorage.removeItem(this.confirmationKey);
+                this.state.pendingConfirmation = null;
+            }
+            if (result) {
+                this.state.draft = null;
+                this.state.checkoutMessage = this.env._t('Reserva confirmada') + ' · ' + result.folio;
+                await this.openDetail(result.id);
+            }
+        }
+
+        async checkoutRequest(method, args) {
+            if (this.state.stale || this.state.checkoutBusy || !navigator.onLine) {
+                return null;
+            }
+            this.state.checkoutMessage = '';
+            this.state.checkoutBusy = true;
+            try {
+                return await this.rpc({
+                    model: 'pos.session', method,
+                    args: [[this.env.pos.pos_session.id], ...args],
+                }, { shadow: true, timeout: 10000 });
+            } catch (error) {
+                if (error.event) {
+                    error.event.preventDefault();
+                }
+                if (error.message && error.message.code === 200) {
+                    this.state.checkoutMessage = error.message.data.message;
+                    return false;
+                }
+                this.markOffline();
+                return null;
+            } finally {
+                this.state.checkoutBusy = false;
+            }
         }
 
         async submitTransfer(event) {
@@ -144,12 +310,7 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                         method_id: method.id,
                         amount: Number(data.get('method-' + method.id)),
                     }));
-                const bytes = window.crypto.getRandomValues(new Uint8Array(16));
-                bytes[6] = (bytes[6] & 15) | 64;
-                bytes[8] = (bytes[8] & 63) | 128;
-                const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
-                const reference = hex.replace(/^(........)(....)(....)(....)(............)$/, '$1-$2-$3-$4-$5');
-                pending = { reference, tenders, kind: detail.transfer_review.kind };
+                pending = { reference: operationReference(), tenders, kind: detail.transfer_review.kind };
                 sessionStorage.setItem(key, JSON.stringify(pending));
             }
             const { reference, kind, tenders } = pending;
