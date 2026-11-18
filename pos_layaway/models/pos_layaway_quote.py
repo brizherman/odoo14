@@ -74,8 +74,6 @@ class PosSession(models.Model):
         quote = self._quote_layaway(**proposal, now=operation.create_date)
         if self._layaway_quote_digest(quote) != confirmation:
             raise ValidationError(_("Cambió la cotización. Vuelve a cotizar antes de confirmar."))
-        if folio and folio.sale_id:
-            raise UserError(_("Los ajustes de folios liquidados aún no están habilitados."))
         currency = self.currency_id
         amount = currency.round(sum(tender["amount"] for tender in tenders))
         if currency.compare_amounts(amount, quote["required_deposit"]) < 0 or not (amount or folio):
@@ -106,6 +104,7 @@ class PosSession(models.Model):
                 operation, accounting, folio, kind, tender,
             )
         picking = env["stock.picking"]._reserve_layaway_lines(folio, self, lines)
+        adjustment = self._post_layaway_adjustment(folio, operation, lines)
         return folio, {
             "id": folio.id, "folio": folio.folio, "reference": operation.reference,
             "picking_id": picking.id, "quote": quote, "amount_applied": amount,
@@ -114,6 +113,7 @@ class PosSession(models.Model):
                 "method_id", "method_name", "amount", "amount_tendered", "amount_change",
             ], load="_classic_write"),
             "receipt": operation._receipt_snapshot(folio),
+            **adjustment,
             **self._settle_layaway_if_paid(folio, operation, payments),
         }
 
@@ -130,6 +130,8 @@ class PosSession(models.Model):
                 raise ValidationError(_("Terminó el plazo para agregar productos."))
             if agreement.pickup_state == "done":
                 raise ValidationError(_("El folio ya no tiene mercancía pendiente."))
+            if agreement.sale_id and not agreement._layaway_adjustable_sale():
+                raise UserError(_("La venta vinculada no admite ajustes de prueba."))
             if partner_id and partner_id != agreement.partner_id.id:
                 raise ValidationError(_("El beneficiario del folio se conserva."))
             partner = agreement.partner_id
@@ -161,6 +163,7 @@ class PosSession(models.Model):
             "currency_id": currency.id, "lines": quoted, "amount_new": addition,
             "amount_previous": previous_total, "amount_total": total,
             "amount_paid": paid, "required_deposit": max(0.0, currency.round(target - paid)),
+            "amount_due": currency.round(total - paid),
             "wholesale_conditional": not layaway_id,
             "warehouse": config.picking_type_id.warehouse_id.display_name,
             "minimum_amount": agreement.minimum_amount,

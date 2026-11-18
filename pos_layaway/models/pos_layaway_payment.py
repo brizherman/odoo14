@@ -294,7 +294,8 @@ class PosSession(models.Model):
         currency = folio.currency_id
         if self.rescue or currency != self.currency_id or currency != self.company_id.currency_id:
             raise UserError(_("El cobro requiere una sesión ordinaria en la moneda del apartado."))
-        if folio.sale_id or local_date(date, folio.timezone) > folio.pickup_end:
+        if (folio.sale_id and not folio._layaway_adjustable_sale()
+                or local_date(date, folio.timezone) > folio.pickup_end):
             raise UserError(_("El apartado no admite abonos en su estado actual."))
         if currency.compare_amounts(amount, folio.amount_due) > 0:
             raise ValidationError(_("El importe aplicado no puede superar el restante."))

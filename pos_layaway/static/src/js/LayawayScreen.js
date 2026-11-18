@@ -321,7 +321,8 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                     confirm_layaway_change: this.env._t('Cambio autorizado'),
                     register_layaway_installment: this.env._t('Abono confirmado'),
                 };
-                const message = result.sale_id ? this.env._t('Apartado liquidado')
+                const message = result.sale_adjustment ? this.env._t('Ajuste vinculado a la venta')
+                    : result.sale_id && !result.amount_due ? this.env._t('Apartado liquidado')
                     : messages[pending.method] || this.env._t('Reserva confirmada');
                 this.state.checkoutMessage = message + ' · ' + result.folio;
                 await this.openDetail(result.id);
@@ -410,7 +411,7 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                 data.get('reason'), data.get('evidence'),
             ]);
             if (result) {
-                this.state.transferMessage = result.sale_id ? this.env._t('Apartado liquidado')
+                this.state.transferMessage = result.sale_id && !result.amount_due ? this.env._t('Apartado liquidado')
                     : this.env._t('Transferencia confirmada.');
                 if (result.receipt) {
                     this.state.originalReceipt = { id: result.id, reference: result.reference };

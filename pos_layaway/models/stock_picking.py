@@ -2,6 +2,8 @@ from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
 from odoo.tools import float_compare
 
+from .pos_layaway_payment import layaway_test_database
+
 
 class LayawayStockError(UserError):
     """A POS sale could not obtain or complete its stock reservation."""
@@ -219,7 +221,16 @@ class StockMove(models.Model):
         return super()._prepare_merge_moves_distinct_fields() + ["layaway_line_id"]
 
     def _action_done(self, cancel_backorder=False):
-        for folio in self.sudo().picking_id.layaway_id:
+        folios = self.sudo().picking_id.layaway_id
+        if folios:
+            if not layaway_test_database(self.env):
+                raise AccessError(_("La entrega de apartados solo está disponible para pruebas."))
+            self.env.cr.execute(
+                "SELECT id FROM pos_layaway WHERE id IN %s ORDER BY id FOR UPDATE",
+                (tuple(folios.ids),),
+            )
+            folios.invalidate_cache(["amount_due", "sale_id"])
+        for folio in folios:
             folio._check_pickup_payment()
         return super()._action_done(cancel_backorder=cancel_backorder)
 

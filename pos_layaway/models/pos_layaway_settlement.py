@@ -73,7 +73,9 @@ class PosSession(models.Model):
 
     def _settle_layaway_if_paid(self, folio, operation, new_payments):
         """Apply the payment ledger once, inside the operation that covers the balance."""
-        if not folio.currency_id.is_zero(folio.amount_due) or folio.sale_id:
+        if folio.sale_id:
+            return self._apply_layaway_adjustment_payments(folio, operation, new_payments)
+        if not folio.currency_id.is_zero(folio.amount_due):
             return {}
         self._check_layaway_payment_test()
         if self.rescue or not self.currency_id == folio.currency_id == self.company_id.currency_id:
@@ -137,9 +139,13 @@ class PosSession(models.Model):
         })
         sale.action_pos_order_paid()
         sale._create_order_picking()
-        sale.write({"layaway_application_move_ids": [(6, 0, self._apply_layaway_liabilities(
-            folio, sale, bridge, local_date(operation.create_date, folio.timezone),
-        ).ids)]})
+        if folio.currency_id.compare_amounts(sum(folio.payment_ids.mapped("amount")), sale.amount_total):
+            raise ValidationError(_("Los cobros confirmados deben coincidir con el total de la venta."))
+        applied = self._apply_layaway_liabilities(
+            folio, folio.payment_ids, bridge, local_date(operation.create_date, folio.timezone),
+            "%s · %s" % (folio.folio, sale.name),
+        )
+        sale.write({"layaway_application_move_ids": [(6, 0, applied.ids)]})
         return sale
 
     def _prepare_layaway_sale_line(self, line, position):
@@ -173,11 +179,11 @@ class PosSession(models.Model):
             and (not account.currency_id or account.currency_id == company.currency_id)
         )
 
-    def _apply_layaway_liabilities(self, folio, sale, bridge, date):
+    def _apply_layaway_liabilities(self, folio, payments, counterpart, date, ref):
         """Release each company's tender liabilities without creating any cash movement."""
         balances = defaultdict(lambda: defaultdict(float))
         company = self.company_id
-        for payment in folio.payment_ids:
+        for payment in payments:
             move = payment.move_id
             external_reversals = move.reversal_move_id - payment.correction_ids.move_id
             if (
@@ -192,11 +198,6 @@ class PosSession(models.Model):
             balances[payment.company_id][liability] += payment.amount
 
         currency = folio.currency_id
-        if currency.compare_amounts(sum(sum(group.values()) for group in balances.values()),
-                                    sale.amount_total):
-            raise ValidationError(_("Los cobros confirmados deben coincidir con el total de la venta."))
-
-        ref = "%s · %s" % (folio.folio, sale.name)
         seller = [(account, amount, False) for account, amount in balances.pop(company, {}).items()]
         moves = self.env["account.move"]
         for receiver, group in balances.items():
@@ -208,18 +209,18 @@ class PosSession(models.Model):
                 if (
                     not self._valid_layaway_application_account(due_from, company, "asset")
                     or not self._valid_layaway_application_account(due_to, receiver, "liability")
-                    or due_from == bridge or due_to in group
+                    or due_from == counterpart or due_to in group
                 ):
                     raise UserError(_("Configura las cuentas de aplicación de prueba entre compañías."))
                 seller.append((due_from, net, receiver.partner_id.id))
                 lines.append((due_to, -net, company.partner_id.id))
-            receiving_config = folio.payment_ids.filtered(
+            receiving_config = payments.filtered(
                 lambda payment: payment.company_id == receiver
             )[0].config_id
             moves |= self._post_layaway_application(
                 receiving_config.layaway_card_journal_id, lines, date, ref, receiver,
             )
-        seller.append((bridge, -sale.amount_total, folio.partner_id.commercial_partner_id.id))
+        seller.append((counterpart, -sum(payments.mapped("amount")), folio.partner_id.commercial_partner_id.id))
         return moves | self._post_layaway_application(
             self.config_id.layaway_card_journal_id, seller, date, ref, company,
         )
@@ -251,8 +252,8 @@ class PosLayaway(models.Model):
 
     def _check_layaway_settlement_stock(self):
         self.ensure_one()
-        lines = self.line_ids
-        if not lines or self.pickup_state != "pending":
+        lines = self.line_ids.filtered("qty_pending")
+        if not lines or not self.sale_id and self.pickup_state != "pending":
             raise UserError(_("La liquidación requiere mercancía pendiente de recogida."))
         moves = self.env["stock.move"].search([
             ("layaway_line_id", "in", lines.ids), ("state", "not in", ("done", "cancel")),

@@ -190,6 +190,19 @@
                         </form>
                     </article>
                 </section>
+                <details t-if="folio.sale_adjustments.length" class="layaway-sale-adjustments">
+                    <summary>Ajustes de la venta de prueba</summary>
+                    <table class="layaway-table">
+                        <thead><tr><th>Documento</th><th>Referencia</th><th>Diferencia</th></tr></thead>
+                        <tbody>
+                            <tr t-foreach="folio.sale_adjustments" t-as="adjustment" t-key="adjustment.reference">
+                                <td t-esc="adjustment.name"/>
+                                <td t-esc="adjustment.reference"/>
+                                <td t-esc="money(adjustment.amount)"/>
+                            </tr>
+                        </tbody>
+                    </table>
+                </details>
                 <details t-if="folio.payment_corrections.length || state.pendingCorrection"
                          class="layaway-payment-corrections">
                     <summary>Cobros y correcciones de prueba</summary>
@@ -444,8 +457,10 @@
             <dl class="layaway-totals">
                 <div><dt>Total actualizado</dt><dd t-esc="money(quote.amount_total)"/></div>
                 <div><dt>Pagado</dt><dd t-esc="money(quote.amount_paid)"/></div>
-                <div t-if="draft.change"><dt>Restante</dt><dd t-esc="money(quote.amount_due)"/></div>
-                <div t-else=""><dt>Cobro necesario</dt><dd class="layaway-required" t-esc="money(quote.required_deposit)"/></div>
+                <div t-if="draft.change || draft.folio &amp;&amp; draft.folio.sale_name">
+                    <dt>Restante antes del cobro</dt><dd t-esc="money(quote.amount_due)"/>
+                </div>
+                <div t-if="!draft.change"><dt>Cobro necesario</dt><dd class="layaway-required" t-esc="money(quote.required_deposit)"/></div>
             </dl>
             <form t-on-submit.prevent="confirmCheckout">
                 <fieldset t-att-disabled="blocked">

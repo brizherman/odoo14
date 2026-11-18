@@ -172,7 +172,8 @@ class PosSession(models.Model):
         )
         can_approve = self.env.user.has_group("point_of_sale.group_pos_manager")
         can_register = (
-            transfer_methods and not folio.sale_id and folio.amount_due > 0
+            transfer_methods and (not folio.sale_id or folio._layaway_adjustable_sale())
+            and folio.amount_due > 0
             and local_date(fields.Datetime.now(), folio.timezone) <= folio.pickup_end
         )
         kind = "deposit" if (

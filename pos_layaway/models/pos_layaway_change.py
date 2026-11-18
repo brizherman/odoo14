@@ -15,9 +15,8 @@ class PosSession(models.Model):
         return (
             layaway_test_database(self.env)
             and self.env.user.has_group("point_of_sale.group_pos_manager")
-            and not folio.sale_id and folio.pickup_state != "done"
+            and folio._layaway_can_modify_products(now)
             and folio.currency_id == self.currency_id
-            and local_date(now, folio.timezone) <= folio.addition_end
         )
 
     def _check_layaway_change_access(self):
@@ -27,9 +26,12 @@ class PosSession(models.Model):
             raise AccessError(_("El encargado debe autorizar el cambio de mercancía."))
 
     def _layaway_changeable_lines(self, folio):
+        delivered = self.env["stock.move"].sudo().search([
+            ("layaway_line_id", "in", folio.line_ids.ids), ("state", "=", "done"),
+        ]).layaway_line_id
         return folio.line_ids.filtered(
             lambda line: not line.qty_picked_up and line.warehouse_id.company_id in self.env.companies
-        )
+        ) - delivered
 
     def quote_layaway_change(self, folio_id, remove_ids, lines):
         self._check_layaway_change_access()
@@ -140,6 +142,8 @@ class PosSession(models.Model):
             } for move in picking.move_lines]
         else:
             reserved = []
+        adjustment = self._post_layaway_adjustment(folio, operation, new, removed)
+        settlement = self._settle_layaway_if_paid(folio, operation, env["pos.layaway.payment"])
         return folio, {
             **quote,
             "folio": folio.folio,
@@ -150,7 +154,8 @@ class PosSession(models.Model):
             "current_lines": folio.line_ids._layaway_change_snapshot(),
             "released": released,
             "reserved": reserved,
-            **self._settle_layaway_if_paid(folio, operation, env["pos.layaway.payment"]),
+            **adjustment,
+            **settlement,
         }
 
 

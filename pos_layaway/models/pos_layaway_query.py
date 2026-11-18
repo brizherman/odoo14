@@ -62,7 +62,8 @@ class PosSession(models.Model):
             })
         installment_methods = self.env["pos.payment.method"]
         if (
-            layaway_test_database(self.env) and not self.rescue and not folio.sale_id
+            layaway_test_database(self.env) and not self.rescue
+            and (not folio.sale_id or folio._layaway_adjustable_sale())
             and self.currency_id == folio.currency_id == self.company_id.currency_id
             and not folio.currency_id.is_zero(folio.amount_due)
             and local_date(fields.Datetime.now(), folio.timezone) <= folio.pickup_end
@@ -82,10 +83,10 @@ class PosSession(models.Model):
             "campaign_id": folio.campaign_id.id,
             "sale_url": "/web#model=pos.order&id=%s&view_type=form" % sale.id if can_open_sale else False,
             "can_add_products": (
-                layaway_test_database(self.env) and not folio.sale_id
-                and folio.pickup_state != "done"
-                and local_date(fields.Datetime.now(), folio.timezone) <= folio.addition_end
+                layaway_test_database(self.env)
+                and folio._layaway_can_modify_products(fields.Datetime.now())
             ),
+            "sale_adjustments": folio._layaway_adjustment_history(),
             "transfer_review": self._layaway_transfer_detail(folio),
             "payment_corrections": self._layaway_correction_detail(folio),
             "changeable_lines": (

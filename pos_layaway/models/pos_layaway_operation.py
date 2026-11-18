@@ -61,15 +61,16 @@ class PosLayawayOperation(models.Model):
                 self.env.cr.execute("""
                     INSERT INTO pos_layaway_operation (
                         reference, kind, fingerprint, session_id, warehouse_id,
-                        user_id, create_uid, create_date, write_uid, write_date
+                        user_id, create_uid, create_date, write_uid, write_date, layaway_id
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (reference) DO NOTHING
                     RETURNING id
                 """, (
                     reference, kind, fingerprint, origin.id,
                     origin.config_id.picking_type_id.warehouse_id.id,
                     session.env.uid, session.env.uid, now, session.env.uid, now,
+                    layaway.id if layaway else None,
                 ))
                 claimed = self.env.cr.fetchone()
                 if claimed:
@@ -130,7 +131,7 @@ class PosLayawayOperation(models.Model):
                 _("Los plazos son inclusivos en la zona horaria indicada."),
                 _("La mercancía queda reservada en la tienda indicada. "
                   "La recogida requiere liquidar todo el apartado."),
-                _("Las adiciones antes de liquidar respetan el plazo original "
+                _("Las adiciones respetan el plazo original "
                   "y la cobertura pactada sobre el total vigente."),
                 _("La cancelación voluntaria no está permitida. "
                   "Los cambios de mercancía requieren autorización."),
