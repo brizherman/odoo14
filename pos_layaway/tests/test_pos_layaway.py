@@ -710,7 +710,15 @@ class TestPosLayawayCampaign(SavepointCase):
 
     def test_checkout_cannot_import_another_campaign_line_or_deposit(self):
         campaign, partner, product = self._checkout_fixture()
-        other = self.campaigns.create(dict(self.values, name="Otra campaña", minimum_amount=5000))
+        other = self.campaigns.create(dict(
+            self.values,
+            name="Otra campaña",
+            opening_start="2026-11-20",
+            opening_end="2026-12-02",
+            addition_end="2026-12-17",
+            pickup_end="2026-12-18",
+            minimum_amount=5000,
+        ))
         other.action_activate()
         cashier_a = self.session_a.with_user(self.cashier_a)
         cashier_b = self.session_b.with_user(self.cashier_b)
@@ -723,6 +731,16 @@ class TestPosLayawayCampaign(SavepointCase):
             second = self.env["pos.layaway"].browse(cashier_a.confirm_layaway(
                 *open_other, [{"method_id": self.cash_a.id, "amount": 3000}],
             )["id"])
+            self.assertEqual((first.campaign_id, second.campaign_id), (campaign, other))
+            self.assertEqual((first.campaign_name, second.campaign_name), (campaign.name, other.name))
+            self.assertEqual(
+                (first.opening_start, first.opening_end, first.addition_end, first.pickup_end),
+                (campaign.opening_start, campaign.opening_end, campaign.addition_end, campaign.pickup_end),
+            )
+            self.assertEqual(
+                (second.opening_start, second.opening_end, second.addition_end, second.pickup_end),
+                (other.opening_start, other.opening_end, other.addition_end, other.pickup_end),
+            )
             _, addition = self._checkout_args(cashier_b, campaign, product, 1, folio=first)
             before = self._checkout_state(first), self._checkout_state(second)
             proposed_line = {**addition[1]["lines"][0], "line_id": second.line_ids.id}
