@@ -46,7 +46,7 @@ class PosLayaway(models.Model):
     )
     payment_ids = fields.One2many("pos.layaway.payment", "layaway_id")
     transfer_ids = fields.One2many("pos.layaway.transfer", "layaway_id")
-    sale_id = fields.Many2one("pos.order", copy=False, ondelete="restrict")
+    sale_id = fields.Many2one("pos.order", copy=False, ondelete="restrict", readonly=True)
     amount_total = fields.Monetary(compute="_compute_amounts", store=True)
     amount_deposit = fields.Monetary(compute="_compute_amounts", store=True)
     amount_installments = fields.Monetary(compute="_compute_amounts", store=True)
@@ -139,6 +139,10 @@ class PosLayaway(models.Model):
 
     def write(self, vals):
         self.check_access_rights("write")
+        if "sale_id" in vals and (
+            not self.env.su or not vals["sale_id"] or any(self.mapped("sale_id"))
+        ):
+            raise AccessError(_("La venta del apartado conserva el vínculo asignado por el servidor."))
         immutable = set(TERMS) | {
             "folio", "campaign_id", "campaign_name", "campaign_code", "participant_config_ids",
             "participant_company_ids", "partner_id", "contact_name", "phone", "phone_digits",

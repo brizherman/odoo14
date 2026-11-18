@@ -1044,6 +1044,7 @@ class TestPosLayawayCampaign(SavepointCase):
     def test_change_retires_line_and_checks_shop_delivery_and_original_deadline(self):
         with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 20, 20)):
             campaign, folio, original, manager = self._change_fixture()
+            self._configure_layaway_settlement(original.product_id, taxes=False)
             cashier_b = self.session_b.with_user(self.cashier_b)
             self._payment(self.session_a, folio, "installment", [
                 {"method_id": self.cash_a.id, "amount": 1500},
@@ -1079,6 +1080,7 @@ class TestPosLayawayCampaign(SavepointCase):
         self.assertEqual([row["qty"] for row in result["released"]], [2])
         self.assertEqual(folio.line_ids, other_line)
         self.assertEqual((folio.amount_total, folio.amount_paid, folio.amount_due), (4000, 4000, 0))
+        self.assertEqual(result["sale_id"], folio.sale_id.id)
         self.assertEqual(self._change_stock(original.product_id), {original.product_id.id: (8, 0)})
         move_b = self.env["stock.move"].search([("layaway_line_id", "=", other_line.id)])
         self.assertEqual(move_b.reserved_availability, 2)
@@ -1222,7 +1224,7 @@ class TestPosLayawayCampaign(SavepointCase):
                 self.assertEqual(folio.amount_due, 2000)
                 self.assertEqual(session.cash_register_balance_end, baseline)
                 self.assertEqual(session.cash_register_id.line_ids, statement_lines)
-        with self.assertRaisesRegex(UserError, "liquidación"):
+        with self.assertRaisesRegex(UserError, "reserva"):
             self._payment(session, folio, "installment", [{**cash, "amount": 2000}])
         for amount in (100, 23.45):
             self._payment(session, folio, "installment", [{**cash, "amount": amount}])
@@ -1504,7 +1506,7 @@ class TestPosLayawayCampaign(SavepointCase):
             manager.authorize_layaway_transfer(folio.id, refs[0], "BANK-01", "Motivo", "Extracto")
             with self.assertRaisesRegex(ValidationError, "ya se aplicó"):
                 manager.authorize_layaway_transfer(folio.id, refs[1], " bank-01 ", "Motivo", "Extracto")
-            with self.assertRaisesRegex(UserError, "liquidación"):
+            with self.assertRaisesRegex(UserError, "reserva"):
                 manager.authorize_layaway_transfer(folio.id, refs[2], "BANK-02", "Motivo", "Extracto")
             self._payment(self.session_a, folio, "installment", [{"method_id": self.cash_a.id, "amount": 600}])
             with self.assertRaisesRegex(ValidationError, "superar el restante"):
@@ -1533,3 +1535,213 @@ class TestPosLayawayCampaign(SavepointCase):
                 manager.authorize_layaway_transfer(folio.id, 1, "BANK-01", "Motivo", "Extracto")
         self.assertFalse(folio.transfer_ids)
         self.assertFalse(folio.payment_ids)
+
+    def _settlement_fixture(self):
+        campaign, partner, product = self._checkout_fixture()
+        self._configure_layaway_settlement(product)
+        return campaign, partner, product
+
+    def _configure_layaway_settlement(self, product, taxes=True):
+        account_model = self.env["account.account"]
+        self.session_b.update_stock_at_closing = True
+        self.session_a.update_stock_at_closing = False
+        for config in self.config_a | self.config_b:
+            company = config.company_id
+
+            def account(code, kind, **kwargs):
+                return account_model.create({
+                    "code": code, "name": code, "company_id": company.id,
+                    "user_type_id": self.env.ref("account.data_account_type_" + kind).id,
+                    **kwargs,
+                })
+
+            bridge = account("LWBR", "receivable", reconcile=True)
+            company.layaway_due_to_account_id = account("LWTO", "current_liabilities")
+            company.layaway_due_from_account_id = account("LWFR", "current_assets")
+            income = account("LWIN", "revenue")
+            product.with_company(company).property_account_income_id = income
+            if taxes:
+                tax = self.env["account.tax"].with_company(company).create({
+                    "name": "IVA sintético 16% incluido", "amount_type": "percent", "amount": 16,
+                    "type_tax_use": "sale", "price_include": True, "company_id": company.id,
+                })
+                product.write({"taxes_id": [(4, tax.id)]})
+            config.layaway_application_method_id = self.env["pos.payment.method"].with_company(company).create({
+                "name": "Aplicación de cobros de prueba", "receivable_account_id": bridge.id,
+                "company_id": company.id, "split_transactions": True, "layaway_application": True,
+            })
+
+    def _close_layaway_session(self, session, expected):
+        self.assertEqual(session.cash_register_balance_end, expected)
+        session.cash_register_id.balance_end_real = expected
+        session.action_pos_session_closing_control()
+        session.action_pos_session_validate()
+        self.assertEqual(session.state, "closed")
+        self.assertEqual(session.cash_real_difference, 0)
+
+    def test_settlement_after_cross_shop_addition_and_installments(self):
+        campaign, partner, product = self._settlement_fixture()
+        a = self.session_a.with_user(self.cashier_a)
+        b = self.session_b.with_user(self.cashier_b)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            _, opening = self._checkout_args(a, campaign, product, 2, partner)
+            opened = a.confirm_layaway(*opening, [{"method_id": self.cash_a.id, "amount": 2000}])
+            folio = self.env["pos.layaway"].browse(opened["id"])
+            _, addition = self._checkout_args(b, campaign, product, 1, folio=folio)
+            added = b.confirm_layaway(*addition, [{"method_id": self.cash_b.id, "amount": 1000}])
+            b.register_layaway_installment(folio.id, str(uuid4()), [
+                {"method_id": self.card_b.id, "amount": 1000},
+            ])
+            self.assertFalse(folio.sale_id)
+            pickings = self.env["stock.picking"].browse([opened["picking_id"], added["picking_id"]])
+            before = self._checkout_state(folio)
+            self._close_layaway_session(self.session_b, 1000)
+            ref = str(uuid4())
+            args = (folio.id, ref, [{"method_id": self.cash_a.id, "amount": 2000}])
+            result = a.register_layaway_installment(*args)
+            self.assertEqual(b.register_layaway_installment(*args), result)
+            with self.assertRaises(UserError):
+                a.register_layaway_installment(folio.id, str(uuid4()), args[-1])
+            order = folio.sale_id
+            self.assertEqual(order.layaway_ids, folio)
+            self.assertEqual((result["sale_id"], result["sale_name"]), (order.id, order.name))
+            self.assertEqual(order.amount_tax, 827.58)
+            self.assertEqual(order.payment_ids.amount, 6000)
+            self.assertEqual((order.amount_total, order.amount_paid, order.state), (6000, 6000, "paid"))
+            self.assertEqual(order.lines.mapped("qty"), [2, 1])
+            self.assertEqual(len(order.layaway_application_move_ids), 2)
+            self.assertEqual(result["settlement"]["amount_previous"], 4000)
+            self.assertEqual(result["settlement"]["pickup_state"], "pending")
+            self.assertEqual(result["settlement"]["new_payment_ids"], folio.payment_ids[-1:].ids)
+            self.assertEqual(result["amount_applied"], 2000)
+            self.assertEqual(result["amount_due"], 0)
+            self.assertEqual(a.get_layaway_detail(folio.id)["sale_name"], order.name)
+            self.assertEqual(self._checkout_state(folio)[2:4], before[2:4])
+            monthly = partner._wholesale_monthly_totals(self.company_a, datetime(2026, 11, 19))
+            self.assertEqual((monthly[-1]["amount"], monthly[-1]["ordinary_amount"]), (6000, 0))
+            with self.assertRaises(UserError):
+                order.refund()
+            with self.assertRaises(UserError):
+                order.action_pos_order_invoice()
+            with self.assertRaises(AccessError):
+                folio.with_user(self.cashier_a).write({"sale_id": False})
+
+            self._close_layaway_session(self.session_a, 4000)
+            self.assertEqual(order.state, "done")
+            self.assertFalse(order.picking_ids | (self.session_a | self.session_b).picking_ids)
+            self.assertEqual(pickings.mapped("state"), ["assigned", "assigned"])
+            self.assertEqual(pickings.move_line_ids.mapped("qty_done"), [0, 0])
+            self.assertFalse(pickings.move_lines.stock_valuation_layer_ids)
+            self.assertEqual(self._checkout_state(folio)[2:4], before[2:4])
+            self.assertEqual(a.register_layaway_installment(*args), result)
+            for config in self.config_a | self.config_b:
+                liability = config.layaway_liability_account_id
+                moves = order.layaway_application_move_ids | folio.payment_ids.move_id
+                self.assertEqual(sum(moves.line_ids.filtered_domain([
+                    ("account_id", "=", liability.id),
+                ]).mapped("balance")), 0)
+            bridge = self.config_a.layaway_application_method_id.receivable_account_id
+            bridge_lines = (self.session_a.move_id | order.layaway_application_move_ids).line_ids.filtered_domain([
+                ("account_id", "=", bridge.id),
+            ])
+            self.assertEqual(len(bridge_lines), 2)
+            self.assertTrue(all(bridge_lines.mapped("reconciled")))
+            for company, account, expected in (
+                (self.company_a, self.company_a.layaway_due_from_account_id, 2000),
+                (self.company_b, self.company_b.layaway_due_to_account_id, -2000),
+            ):
+                line = order.layaway_application_move_ids.line_ids.filtered_domain([
+                    ("account_id", "=", account.id), ("company_id", "=", company.id),
+                ])
+                self.assertEqual(line.balance, expected)
+
+    def test_settlement_on_initial_payment_and_deferred_close(self):
+        campaign, partner, product = self._settlement_fixture()
+        b = self.session_b.with_user(self.cashier_b)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            _, request = self._checkout_args(b, campaign, product, 2, partner)
+            tender = [{"method_id": self.cash_b.id, "amount": 4000, "amount_tendered": 4100}]
+            result = b.confirm_layaway(*request, tender)
+            self.assertEqual(b.confirm_layaway(*request, tender), result)
+            self.assertEqual(result["settlement"]["amount_previous"], 0)
+            self.assertEqual(result["payments"][0]["amount_change"], 100)
+            order = self.env["pos.order"].browse(result["sale_id"])
+            self.assertEqual(order.amount_total, 4000)
+            self.assertTrue(self.session_b.update_stock_at_closing)
+            self._close_layaway_session(self.session_b, 4000)
+            self.assertFalse(order.picking_ids | self.session_b.picking_ids)
+            picking = self.env["stock.picking"].browse(result["picking_id"])
+            self.assertEqual((picking.state, picking.move_lines.reserved_availability), ("assigned", 2))
+            self.assertEqual(picking.move_line_ids.qty_done, 0)
+
+    def test_settlement_by_addition_and_transfer_authorization(self):
+        campaign, partner, product = self._settlement_fixture()
+        a = self.session_a.with_user(self.cashier_a)
+        b = self.session_b.with_user(self.cashier_b)
+        manager = self.session_a.with_user(self.supervisor)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            _, opening = self._checkout_args(a, campaign, product, 2, partner)
+            opened = a.confirm_layaway(*opening, [{"method_id": self.cash_a.id, "amount": 2000}])
+            folio = self.env["pos.layaway"].browse(opened["id"])
+            _, addition = self._checkout_args(b, campaign, product, 1, folio=folio)
+            added = b.confirm_layaway(*addition, [{"method_id": self.card_b.id, "amount": 4000}])
+            self.assertEqual((added["amount_due"], folio.sale_id.amount_total), (0, 6000))
+            self.assertEqual(b.confirm_layaway(*addition, [{"method_id": self.card_b.id, "amount": 4000}]), added)
+
+            _, opening = self._checkout_args(a, campaign, product, 2, partner)
+            opened = a.confirm_layaway(*opening, [{"method_id": self.cash_a.id, "amount": 2000}])
+            folio = self.env["pos.layaway"].browse(opened["id"])
+            pending = a.register_layaway_transfer(folio.id, str(uuid4()), "installment", [
+                {"method_id": self.cash_a.id, "amount": 300},
+                {"method_id": self.transfer_a.id, "amount": 1700},
+            ])
+            self.assertEqual(pending["amount_due"], 1700)
+            self.assertFalse(folio.sale_id)
+            approval = (folio.id, pending["pending_transfers"][0], "LW SETTLE", "Verificada", "Extracto")
+            result = manager.authorize_layaway_transfer(*approval)
+            self.assertEqual(manager.authorize_layaway_transfer(*approval), result)
+            self.assertEqual(result["settlement"]["amount_previous"], 2300)
+            self.assertEqual((result["amount_due"], folio.sale_id.amount_total), (0, 4000))
+
+    def test_settlement_explicit_amount_and_rollback_if_reservation_changes(self):
+        campaign, partner, product = self._settlement_fixture()
+        a = self.session_a.with_user(self.cashier_a)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            _, opening = self._checkout_args(a, campaign, product, 2, partner)
+            result = a.confirm_layaway(*opening, [{"method_id": self.cash_a.id, "amount": 2000}])
+            folio = self.env["pos.layaway"].browse(result["id"])
+            with self.assertRaisesRegex(ValidationError, "restante completo"):
+                a.settle_layaway(folio.id, str(uuid4()), [{"method_id": self.cash_a.id, "amount": 100}])
+
+            picking = self.env["stock.picking"].browse(result["picking_id"])
+            picking.do_unreserve()
+            before = self._checkout_state(folio)
+            reference = str(uuid4())
+            args = (folio.id, reference, [{"method_id": self.cash_a.id, "amount": 2000}])
+            with self.assertRaisesRegex(UserError, "reserva"):
+                a.settle_layaway(*args)
+            self.assertEqual(self._checkout_state(folio), before)
+            self.assertFalse(folio.sale_id)
+            picking.action_assign()
+            settled = a.settle_layaway(*args)
+            self.assertEqual(settled["sale_id"], folio.sale_id.id)
+
+    def test_settlement_when_authorized_change_reduces_total_to_paid_amount(self):
+        campaign, partner, product = self._settlement_fixture()
+        a = self.session_a.with_user(self.cashier_a)
+        manager = self.session_a.with_user(self.supervisor)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            _, opening = self._checkout_args(a, campaign, product, 3, partner)
+            result = a.confirm_layaway(*opening, [{"method_id": self.cash_a.id, "amount": 4000}])
+            folio = self.env["pos.layaway"].browse(result["id"])
+            plan = [folio.id, folio.line_ids.ids, [{"product_id": product.id, "qty": 2}]]
+            quote = manager.quote_layaway_change(*plan)
+            args = [str(uuid4()), *plan, quote["confirmation"], "Ajuste al importe ya cubierto"]
+            adjusted = manager.confirm_layaway_change(*args)
+            self.assertEqual(manager.confirm_layaway_change(*args), adjusted)
+            self.assertEqual(adjusted["sale_id"], folio.sale_id.id)
+            self.assertEqual((folio.amount_due, folio.sale_id.amount_total), (0, 4000))
+            self.assertEqual(adjusted["settlement"]["amount_previous"], 4000)
+            self.assertEqual(adjusted["settlement"]["new_payment_ids"], [])
+            self.assertEqual(len(folio.payment_ids), 1)
+            self.assertEqual(self.session_a.cash_register_balance_end, 4000)

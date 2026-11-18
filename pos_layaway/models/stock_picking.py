@@ -186,6 +186,9 @@ class StockPicking(models.Model):
 
     @api.model
     def _create_picking_from_pos_order_lines(self, location_dest_id, lines, picking_type, partner=False):
+        lines = lines.filtered(lambda line: not line.order_id.sudo().layaway_ids)
+        if not lines:
+            return self.browse()
         order_ids = lines.order_id.ids
         holds = self.sudo().search([
             ("layaway_hold_order_id", "in", order_ids), ("state", "=", "done"),

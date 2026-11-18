@@ -114,6 +114,7 @@ class PosSession(models.Model):
                 "method_id", "method_name", "amount", "amount_tendered", "amount_change",
             ], load="_classic_write"),
             "receipt": operation._receipt_snapshot(folio),
+            **self._settle_layaway_if_paid(folio, operation, payments),
         }
 
     def _quote_layaway(self, lines, campaign_id, partner_id, phone, layaway_id, now):

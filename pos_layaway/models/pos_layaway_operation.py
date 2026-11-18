@@ -14,7 +14,7 @@ class PosLayawayOperation(models.Model):
     _order = "create_date, id"
     _rec_name = "reference"
 
-    _receipt_kinds = ("open", "add_products", "installment", "authorize_transfer")
+    _receipt_kinds = ("open", "add_products", "installment", "settle", "authorize_transfer")
 
     reference = fields.Char(required=True)
     kind = fields.Char(required=True)

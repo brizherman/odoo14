@@ -45,6 +45,33 @@ class PosSession(models.Model):
         self._lock_layaway_stock_session()
         return super()._validate_session()
 
+    def _get_split_receivable_vals(self, payment, amount, amount_converted):
+        vals = super()._get_split_receivable_vals(payment, amount, amount_converted)
+        if payment.payment_method_id.sudo().layaway_application:
+            order = payment.pos_order_id
+            vals["name"] = "%s · %s" % (order.pos_reference, order.name)
+        return vals
+
+    def _reconcile_account_move_lines(self, data):
+        data = super()._reconcile_account_move_lines(data)
+        # Native POS creates one receivable line per split payment.
+        for order in self.order_ids.filtered("layaway_application_move_ids"):
+            payment = order.payment_ids
+            bridge = payment.payment_method_id.receivable_account_id
+            entry = order.layaway_application_move_ids.line_ids.filtered_domain([
+                ("account_id", "=", bridge.id), ("reconciled", "=", False),
+            ])
+            counterpart = self.move_id.line_ids.filtered_domain([
+                ("account_id", "=", bridge.id), ("reconciled", "=", False),
+                ("name", "=", "%s · %s" % (order.pos_reference, order.name)),
+            ])
+            if len(entry) != 1 or len(counterpart) != 1 or self.currency_id.compare_amounts(
+                entry.credit, counterpart.debit,
+            ):
+                raise UserError(_("No cuadra la aplicación de cobros de %s.") % order.pos_reference)
+            (entry | counterpart).reconcile()
+        return data
+
     def _create_picking_at_end_of_session(self):
         self.ensure_one()
         holds = self.env["stock.picking"].sudo().with_company(self.company_id).search([

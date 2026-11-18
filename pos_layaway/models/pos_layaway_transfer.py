@@ -106,6 +106,7 @@ class PosLayawayTransfer(models.Model):
                     "method_id", "method_name", "amount", "amount_tendered", "amount_change",
                 ], load="_classic_write"),
             })
+        result.update(authorization.session_id._settle_layaway_if_paid(folio, authorization, payment))
         return folio, result
 
     @api.model
@@ -152,10 +153,14 @@ class PosSession(models.Model):
         reference = str(uuid5(NAMESPACE_URL, "pos_layaway/transfer/%s/%s" % (
             transfer.reference, transfer.method_id.id,
         )))
+
+        def apply(operation):
+            session._lock_layaway_stock_session()
+            return transfer._approve(operation, folio, verification)
+
         return session.env["pos.layaway.operation"].sudo()._confirm(
             session, reference, "authorize_transfer", [transfer.id, verification],
-            lambda operation: transfer._approve(operation, folio, verification),
-            folio, pass_operation=True,
+            apply, folio, pass_operation=True,
         )
 
     def _layaway_transfer_detail(self, folio):

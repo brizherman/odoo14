@@ -194,7 +194,7 @@ class PosLayawayPayment(models.Model):
     def _available_methods(self, session):
         return session.payment_method_ids.filtered_domain([
             ("active", "=", True), ("company_id", "=", session.company_id.id),
-            ("use_payment_terminal", "=", False),
+            ("use_payment_terminal", "=", False), ("layaway_application", "=", False),
         ])
 
     @api.model
@@ -298,13 +298,15 @@ class PosSession(models.Model):
             raise UserError(_("El apartado no admite abonos en su estado actual."))
         if currency.compare_amounts(amount, folio.amount_due) > 0:
             raise ValidationError(_("El importe aplicado no puede superar el restante."))
-        if currency.compare_amounts(amount, folio.amount_due) == 0:
-            raise UserError(_("La liquidación del apartado aún no está habilitada."))
 
     def register_layaway_installment(self, folio_id, reference, tenders):
         return self._register_layaway_payment(folio_id, reference, "installment", tenders)
 
-    def _register_layaway_payment(self, folio_id, reference, kind, tenders, require_transfer=False):
+    def settle_layaway(self, folio_id, reference, tenders):
+        return self._register_layaway_payment(folio_id, reference, "installment", tenders, settle=True)
+
+    def _register_layaway_payment(self, folio_id, reference, kind, tenders, require_transfer=False,
+                                 settle=False):
         """Register a synthetic mixed tender through the server history."""
         self._check_layaway_payment_test()
         session = self.sudo(False)
@@ -341,10 +343,11 @@ class PosSession(models.Model):
                     immediate.append(tender)
             if require_transfer and not transfers:
                 raise ValidationError(_("Indica un importe para la transferencia."))
-            if currency.compare_amounts(sum(tender["amount"] for tender in tenders), folio.amount_due) > 0:
-                raise ValidationError(_("El importe aplicado no puede superar el restante."))
+            total = currency.round(sum(tender["amount"] for tender in tenders))
+            session._check_layaway_payment_amount(folio, total, operation.create_date)
             applied = currency.round(sum(tender["amount"] for tender in immediate))
-            session._check_layaway_payment_amount(folio, applied, operation.create_date)
+            if settle and currency.compare_amounts(applied, folio.amount_due):
+                raise ValidationError(_("Para liquidar, cobra el restante completo que muestra el folio."))
 
             payments = payment_model.browse()
             for tender in immediate:
@@ -368,8 +371,9 @@ class PosSession(models.Model):
                     "method_id": tender["method_id"], "amount": tender["amount"],
                 } for tender in transfers])
                 result["pending_transfers"] = pending.ids
+            result.update(session._settle_layaway_if_paid(folio, operation, payments))
             return folio, result
 
         return self.env["pos.layaway.operation"].sudo()._confirm(
-            session, reference, kind, tenders, apply, folio, pass_operation=True,
+            session, reference, "settle" if settle else kind, tenders, apply, folio, pass_operation=True,
         )

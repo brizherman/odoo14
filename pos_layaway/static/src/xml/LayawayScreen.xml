@@ -119,23 +119,18 @@
                     <strong t-if="folio.expired" class="layaway-expired"> · Vencido</strong>
                 </p>
                 <p><span t-esc="paymentLabels[folio.payment_state]"/> · <span t-esc="pickupLabels[folio.pickup_state]"/></p>
+                <p t-if="folio.sale_name">Venta POS
+                    <a t-if="folio.sale_url" t-att-href="folio.sale_url" target="_blank"
+                       rel="noopener" t-esc="folio.sale_name"/>
+                    <strong t-else="" t-esc="folio.sale_name"/>
+                </p>
                 <dl class="layaway-totals">
                     <div><dt>Total</dt><dd t-esc="money(folio.amount_total)"/></div>
                     <div><dt>Anticipo</dt><dd t-esc="money(folio.amount_deposit)"/></div>
                     <div><dt>Abonos</dt><dd t-esc="money(folio.amount_installments)"/></div>
                     <div><dt>Restante</dt><dd t-esc="money(folio.amount_due)"/></div>
                 </dl>
-                <table class="layaway-table">
-                    <thead><tr>
-                        <th>Producto</th><th>Tienda</th><th>Ubicación</th><th>Cantidad</th><th>Pendiente</th>
-                    </tr></thead>
-                    <tbody>
-                        <tr t-foreach="folio.lines" t-as="line" t-key="line.id">
-                            <td t-esc="line.name"/><td t-esc="line.store"/><td t-esc="line.location"/>
-                            <td t-esc="line.qty"/><td t-esc="line.pending"/>
-                        </tr>
-                    </tbody>
-                </table>
+                <t t-call="pos_layaway.LayawayStockTable"/>
                 <details t-if="folio.receipts.length" class="layaway-receipts">
                     <summary>Comprobantes</summary>
                     <ul>
@@ -277,7 +272,8 @@
                             t-on-click="() => startCheckout(folio, true)">Retirar o sustituir productos</button>
                     <button type="button" t-att-disabled="state.stale || state.loading || state.transferBusy || !folio.installment_methods.length"
                             t-on-click="() => startInstallment(folio)">Registrar abono</button>
-                    <button type="button" disabled="disabled">Liquidar</button>
+                    <button type="button" t-att-disabled="state.stale || state.loading || state.transferBusy || !folio.installment_methods.length"
+                            t-on-click="() => startInstallment(folio, true)">Liquidar</button>
                     <button type="button" disabled="disabled">Registrar recogida</button>
                     <button type="button" disabled="disabled">Liquidar y entregar</button>
                 </div>
@@ -299,11 +295,33 @@
         </t>
     </t>
 
+    <t t-name="pos_layaway.LayawayStockTable" owl="1">
+        <table class="layaway-table">
+            <thead><tr>
+                <th>Producto</th><th>Tienda</th><th>Ubicación</th><th>Cantidad</th><th>Pendiente</th>
+            </tr></thead>
+            <tbody>
+                <tr t-foreach="folio.lines" t-as="line" t-key="line.id">
+                    <td t-esc="line.name"/><td t-esc="line.store"/><td t-esc="line.location"/>
+                    <td t-esc="line.qty"/><td t-esc="line.pending"/>
+                </tr>
+            </tbody>
+        </table>
+    </t>
+
     <t t-name="pos_layaway.LayawayInstallment" owl="1">
         <t t-set="folio" t-value="state.detail"/>
         <button type="button" t-on-click="cancelCheckout" t-att-disabled="state.checkoutBusy">Volver al folio</button>
-        <h2>Registrar abono de prueba · <span t-esc="folio.folio"/></h2>
-        <p><span t-esc="folio.customer"/> · Restante <strong t-esc="money(folio.amount_due)"/></p>
+        <h2><t t-if="state.draft.settle">Liquidar apartado de prueba</t>
+            <t t-else="">Registrar abono de prueba</t> · <span t-esc="folio.folio"/></h2>
+        <p t-esc="folio.customer"/>
+        <dl class="layaway-totals">
+            <div><dt>Total</dt><dd t-esc="money(folio.amount_total)"/></div>
+            <div><dt>Anticipo</dt><dd t-esc="money(folio.amount_deposit)"/></div>
+            <div><dt>Abonos</dt><dd t-esc="money(folio.amount_installments)"/></div>
+            <div><dt>Restante</dt><dd t-esc="money(folio.amount_due)"/></div>
+        </dl>
+        <t t-call="pos_layaway.LayawayStockTable"/>
         <form t-on-submit.prevent="confirmCheckout">
             <fieldset t-att-disabled="state.stale || state.checkoutBusy || state.loading || !folio.installment_methods.length">
                 <div class="layaway-transfer-form">
@@ -311,7 +329,10 @@
                         <t t-set="methods" t-value="state.draft.folio.installment_methods"/>
                     </t>
                 </div>
-                <button type="submit" class="layaway-submit">Confirmar abono de prueba</button>
+                <button type="submit" class="layaway-submit">
+                    <t t-if="state.draft.settle">Confirmar liquidación de prueba</t>
+                    <t t-else="">Confirmar abono de prueba</t>
+                </button>
             </fieldset>
         </form>
     </t>

@@ -68,6 +68,11 @@ class PosSession(models.Model):
             and local_date(fields.Datetime.now(), folio.timezone) <= folio.pickup_end
         ):
             installment_methods = self._layaway_checkout_methods()
+        sale = folio.sale_id.with_env(self.env)
+        can_open_sale = (
+            sale and sale.check_access_rights("read", raise_exception=False)
+            and sale._filter_access_rules("read")
+        )
         return {
             **folio._pos_layaway_values(detail=True),
             "receipts": receipts,
@@ -75,6 +80,7 @@ class PosSession(models.Model):
                 "id": method.id, "name": method.name, "cash": method.is_cash_count,
             } for method in installment_methods],
             "campaign_id": folio.campaign_id.id,
+            "sale_url": "/web#model=pos.order&id=%s&view_type=form" % sale.id if can_open_sale else False,
             "can_add_products": (
                 layaway_test_database(self.env) and not folio.sale_id
                 and folio.pickup_state != "done"
@@ -188,6 +194,7 @@ class PosLayaway(models.Model):
         if detail:
             values.update({
                 "amount_deposit": self.amount_deposit, "amount_installments": self.amount_installments,
+                "sale_name": self.sale_id.name,
                 "lines": [{
                     "id": line.id, "name": line.product_name, "store": line.warehouse_id.display_name,
                     "location": line.location_id.complete_name, "qty": line.qty, "pending": line.qty_pending,

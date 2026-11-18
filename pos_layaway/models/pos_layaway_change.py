@@ -150,6 +150,7 @@ class PosSession(models.Model):
             "current_lines": folio.line_ids._layaway_change_snapshot(),
             "released": released,
             "reserved": reserved,
+            **self._settle_layaway_if_paid(folio, operation, env["pos.layaway.payment"]),
         }
 
 
