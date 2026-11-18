@@ -4,3 +4,4 @@ access_layaway_campaign_manager,pos.layaway.campaign.manager,model_pos_layaway_c
 access_layaway_manager,pos.layaway.manager,model_pos_layaway,group_layaway_campaign_manager,1,0,0,0
 access_layaway_line_manager,pos.layaway.line.manager,model_pos_layaway_line,group_layaway_campaign_manager,1,0,0,0
 access_layaway_operation_manager,pos.layaway.operation.manager,model_pos_layaway_operation,group_layaway_campaign_manager,1,0,0,0
+access_layaway_payment_manager,pos.layaway.payment.manager,model_pos_layaway_payment,point_of_sale.group_pos_manager,1,0,0,0

@@ -1,5 +1,6 @@
 from datetime import datetime
 from unittest.mock import patch
+from uuid import uuid4
 
 from odoo import fields
 from odoo.exceptions import AccessError, UserError, ValidationError
@@ -20,8 +21,8 @@ class TestPosLayawayCampaign(SavepointCase):
         cls.pricelist = cls.env["product.pricelist"].create({
             "name": "Layaway Test Pricelist", "currency_id": cls.company_a.currency_id.id,
         })
-        cls.config_a = cls._create_config(cls.company_a, "Layaway A")
-        cls.config_b = cls._create_config(cls.company_b, "Layaway B")
+        cls.config_a, cls.cash_a, cls.card_a = cls._create_payment_config(cls.company_a, "A")
+        cls.config_b, cls.cash_b, cls.card_b = cls._create_payment_config(cls.company_b, "B")
         cls.config_other = cls._create_config(cls.company_a, "Nonparticipating POS")
         cls.cashier_a = cls._create_user(
             "cashier_a", cls.company_a, "point_of_sale.group_pos_user"
@@ -68,7 +69,7 @@ class TestPosLayawayCampaign(SavepointCase):
         })
 
     @classmethod
-    def _create_config(cls, company, name):
+    def _create_config(cls, company, name, **values):
         warehouse = cls.env["stock.warehouse"].search([("company_id", "=", company.id)], limit=1)
         return cls.env["pos.config"].with_company(company).create({
             "name": name,
@@ -79,13 +80,51 @@ class TestPosLayawayCampaign(SavepointCase):
             "payment_method_ids": [(5, 0, 0)],
             "journal_id": False,
             "invoice_journal_id": False,
+            **values,
         })
 
     @classmethod
+    def _create_payment_config(cls, company, label):
+        def account(code, account_type, **values):
+            return cls.env["account.account"].with_company(company).create({
+                "code": code, "name": code, "company_id": company.id,
+                "user_type_id": cls.env.ref("account.data_account_type_" + account_type).id,
+                **values,
+            })
+
+        def journal(code, kind, **values):
+            return cls.env["account.journal"].with_company(company).create({
+                "code": code, "name": code, "type": kind, "company_id": company.id, **values,
+            })
+
+        liability = account("LWLI", "current_liabilities")
+        clearing = account("LWCL", "current_assets", reconcile=True)
+        receivable = account("LWAR", "receivable", reconcile=True)
+        cash_journal = journal("LWCS", "cash", suspense_account_id=clearing.id)
+        card_journal = journal("LWCD", "general")
+        sale_journal = journal("LWSL", "sale")
+        method_model = cls.env["pos.payment.method"].with_company(company)
+        cash, card = method_model.create([
+            {"name": "Efectivo", "is_cash_count": True, "cash_journal_id": cash_journal.id,
+             "company_id": company.id, "receivable_account_id": receivable.id},
+            {"name": "Tarjeta", "layaway_card_clearing_account_id": clearing.id,
+             "company_id": company.id, "receivable_account_id": receivable.id},
+        ])
+        config = cls._create_config(
+            company, "Layaway " + label, cash_control=True, journal_id=sale_journal.id,
+            payment_method_ids=[(6, 0, (cash | card).ids)],
+            layaway_liability_account_id=liability.id, layaway_card_journal_id=card_journal.id,
+        )
+        return config, cash, card
+
+    @classmethod
     def _create_session(cls, config, user):
-        return cls.env["pos.session"].with_company(config.company_id).create(
+        session = cls.env["pos.session"].with_company(config.company_id).create(
             {"config_id": config.id, "user_id": user.id}
         )
+        if session.state == "opening_control":
+            session.set_cashbox_pos(0, False)
+        return session
 
     def test_campaign_lifecycle(self):
         christmas = self.campaigns.create(self.values)
@@ -186,6 +225,12 @@ class TestPosLayawayCampaign(SavepointCase):
             }],
         )
         return folio
+
+    def _payment(self, session, folio, kind, tenders, reference=None):
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            return session.with_user(session.user_id)._register_layaway_payment(
+                folio.id, reference or str(uuid4()), kind, tenders,
+            )
 
     def test_folio_snapshots_original_agreement(self):
         campaign = self.campaigns.create(self.values)
@@ -302,7 +347,7 @@ class TestPosLayawayCampaign(SavepointCase):
         campaign.action_activate()
         self.company_b.wholesale_pricelist_id = self.pricelist
         folio = self._make_folio(campaign)
-        folio.amount_deposit = 2000
+        self._payment(self.session_a, folio, "deposit", [{"method_id": self.cash_a.id, "amount": 2000}])
         campaign.write({"deposit_percentage": 80})
         campaign.action_archive()
         product = folio.line_ids.product_id
@@ -353,8 +398,8 @@ class TestPosLayawayCampaign(SavepointCase):
         campaign = self.campaigns.create(self.values)
         campaign.action_activate()
         folio = self._make_folio(campaign)
-        folio.amount_deposit = 2000
-        folio.amount_installments = 500
+        self._payment(self.session_a, folio, "deposit", [{"method_id": self.cash_a.id, "amount": 2000}])
+        self._payment(self.session_b, folio, "installment", [{"method_id": self.card_b.id, "amount": 500}])
         folio.line_ids.qty_picked_up = 1
         campaign.action_archive()
         a = self.session_a.with_user(self.cashier_a)
@@ -385,3 +430,111 @@ class TestPosLayawayCampaign(SavepointCase):
         self.assertFalse(other.get_layaways()["rows"])
         with self.assertRaises(AccessError):
             other.get_layaway_detail(folio.id)
+
+    def test_mixed_installment_reconciles_to_receiving_sessions(self):
+        campaign = self.campaigns.create(self.values)
+        campaign.action_activate()
+        folio = self._make_folio(campaign)
+        session_a, session_b = self.session_a, self.session_b
+        baseline_a = session_a.cash_register_balance_end
+        baseline_b = session_b.cash_register_balance_end
+        self._payment(session_a, folio, "deposit", [{"method_id": self.cash_a.id, "amount": 2000}])
+        tenders = [
+            {"method_id": self.cash_b.id, "amount": 400, "amount_tendered": 500},
+            {"method_id": self.card_b.id, "amount": 600},
+        ]
+        reference = str(uuid4())
+        result = self._payment(session_b, folio, "installment", tenders, reference)
+        self.assertEqual(result["amount_paid_before"], 2000)
+        self.assertEqual(result["amount_applied"], 1000)
+        self.assertEqual(result["amount_paid"], 3000)
+        self.assertEqual(result["amount_due"], 1000)
+        self.assertEqual((folio.amount_deposit, folio.amount_installments, folio.amount_due), (2000, 1000, 1000))
+        self.assertEqual(folio.payment_state, "partial")
+        self.assertEqual(folio.pickup_state, "pending")
+        self.assertFalse(folio.sale_id)
+        installments = folio.payment_ids.filtered(lambda payment: payment.kind == "installment")
+        self.assertEqual(set(installments.mapped("reference")), {reference})
+        self.assertEqual(installments.campaign_id, campaign)
+        self.assertEqual(installments.session_id, session_b)
+        self.assertEqual(installments.config_id, self.config_b)
+        self.assertEqual(installments.company_id, self.company_b)
+        self.assertEqual(installments.warehouse_id, self.config_b.picking_type_id.warehouse_id)
+        self.assertEqual(installments.user_id, self.cashier_b)
+        self.assertEqual(set(installments.mapped("paid_at")), {datetime(2026, 11, 18, 20)})
+        cash = installments.filtered(lambda payment: payment.tender_type == "cash")
+        card = installments - cash
+        self.assertEqual((cash.amount, cash.amount_tendered, cash.amount_change), (400, 500, 100))
+        self.assertEqual(cash.statement_line_id.statement_id, session_b.cash_register_id)
+        self.assertEqual(cash.statement_line_id.amount, 400)
+        self.assertEqual(card.move_id.state, "posted")
+        liability = self.config_b.layaway_liability_account_id
+        self.assertEqual(sum((cash | card).move_id.line_ids.filtered(
+            lambda line: line.account_id == liability
+        ).mapped("credit")), 1000)
+        clearing = self.card_b.layaway_card_clearing_account_id
+        self.assertEqual(card.move_id.line_ids.filtered(lambda line: line.account_id == clearing).debit, 600)
+        visible = self.env["pos.layaway.payment"].with_user(self.supervisor).search([
+            ("layaway_id", "=", folio.id),
+        ])
+        self.assertEqual(visible.ids, folio.payment_ids.filtered_domain([
+            ("company_id", "=", self.company_a.id),
+        ]).ids)
+        self.assertEqual(session_a.cash_register_balance_end, baseline_a + 2000)
+        self.assertEqual(session_b.cash_register_balance_end, baseline_b + 400)
+        self.assertFalse((session_a | session_b).order_ids)
+
+        with self.assertRaises(AccessError), self.cr.savepoint():
+            folio.with_user(self.cashier_b).write({"amount_due": 0})
+        with self.assertRaises(AccessError), self.cr.savepoint():
+            cash.statement_line_id.with_user(self.cashier_b).write({"amount": 1})
+        self.assertEqual(self._payment(session_a, folio, "installment", tenders[::-1], reference), result)
+        self.assertEqual(sorted(folio.payment_ids.mapped("amount")), [400, 600, 2000])
+        self.assertEqual(folio.amount_due, 1000)
+        self.assertEqual(session_b.cash_register_balance_end, baseline_b + 400)
+        self.assertEqual(session_a.cash_register_balance_end, baseline_a + 2000)
+
+        for session, expected in ((session_b, baseline_b + 400), (session_a, baseline_a + 2000)):
+            session.cash_register_id.balance_end_real = expected
+            session.action_pos_session_closing_control()
+            session.action_pos_session_validate()
+            self.assertEqual(session.state, "closed")
+            self.assertEqual(session.cash_real_difference, 0)
+            self.assertEqual(session.cash_real_expected, expected)
+        self.assertEqual(cash.move_id.state, "posted")
+        self.assertEqual(self._payment(session_b, folio, "installment", tenders, reference), result)
+
+    def test_invalid_tenders_leave_balance_payments_and_cash_intact(self):
+        campaign = self.campaigns.create(self.values)
+        campaign.action_activate()
+        folio = self._make_folio(campaign)
+        session = self.session_a
+        self._payment(session, folio, "deposit", [{"method_id": self.cash_a.id, "amount": 2000}])
+        baseline = session.cash_register_balance_end
+        payments = folio.payment_ids
+        statement_lines = session.cash_register_id.line_ids
+        cash = {"method_id": self.cash_a.id, "amount": 400}
+        for rejected in (
+            [{**cash, "amount": -1}], [{**cash, "amount": 0}], [{**cash, "amount": 0.001}],
+            [{**cash, "amount": float("nan")}], [{**cash, "amount": True}],
+            [{**cash, "amount": 2000.01}],
+            [cash, {"method_id": self.card_a.id, "amount": 600, "amount_tendered": 601}],
+            [cash, {"method_id": self.card_b.id, "amount": 600}],
+            [{**cash, "amount_tendered": 399}], [cash, cash],
+        ):
+            with self.subTest(rejected=rejected):
+                reference = str(uuid4())
+                with self.assertRaises(ValidationError):
+                    self._payment(session, folio, "installment", rejected, reference)
+                self.assertFalse(self.env["pos.layaway.operation"].search([("reference", "=", reference)]))
+                self.assertEqual(folio.payment_ids, payments)
+                self.assertEqual(folio.amount_due, 2000)
+                self.assertEqual(session.cash_register_balance_end, baseline)
+                self.assertEqual(session.cash_register_id.line_ids, statement_lines)
+        with self.assertRaisesRegex(UserError, "liquidación"):
+            self._payment(session, folio, "installment", [{**cash, "amount": 2000}])
+        for amount in (100, 23.45):
+            self._payment(session, folio, "installment", [{**cash, "amount": amount}])
+        self.assertEqual(folio.amount_due, 1876.55)
+        self.assertEqual(len(folio.payment_ids), 3)
+        self.assertAlmostEqual(session.cash_register_balance_end, baseline + 123.45)

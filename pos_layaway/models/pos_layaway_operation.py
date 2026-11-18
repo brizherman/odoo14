@@ -26,11 +26,12 @@ class PosLayawayOperation(models.Model):
     ]
 
     @api.model
-    def _confirm(self, session, reference, kind, payload, apply, layaway=None):
+    def _confirm(self, session, reference, kind, payload, apply, layaway=None, pass_operation=False):
         """Run a server-owned callback and persist its JSON result in the same transaction.
 
         The callback returns (folio, result). The caller validates access and supplies
         normalized business inputs; the originating session is recorded on first use.
+        Set pass_operation when the callback must link records to the claimed operation.
         """
         if not self.env.su:
             raise AccessError(_("La confirmación requiere una operación del servidor."))
@@ -68,6 +69,7 @@ class PosLayawayOperation(models.Model):
                 ))
                 claimed = self.env.cr.fetchone()
                 if claimed:
+                    operation = self.browse(claimed[0])
                     if layaway:
                         # Serialize different operations on the same folio as well.
                         self.env.cr.execute(
@@ -75,11 +77,11 @@ class PosLayawayOperation(models.Model):
                             (now, layaway.id),
                         )
                         layaway.invalidate_cache(["write_date"])
-                    folio, result = apply()
+                    folio, result = apply(operation) if pass_operation else apply()
                     if not folio or origin.config_id not in folio.participant_config_ids:
                         raise AccessError(_("El resultado no corresponde a esta caja."))
                     stored = json.dumps(result, allow_nan=False)
-                    super(PosLayawayOperation, self.browse(claimed[0])).write({
+                    super(PosLayawayOperation, operation).write({
                         "layaway_id": folio.id, "result": stored,
                     })
                     return json.loads(stored)

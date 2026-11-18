@@ -42,10 +42,11 @@ class PosLayaway(models.Model):
     user_id = fields.Many2one("res.users", required=True, ondelete="restrict")
     warehouse_id = fields.Many2one("stock.warehouse", required=True, ondelete="restrict")
     line_ids = fields.One2many("pos.layaway.line", "layaway_id")
+    payment_ids = fields.One2many("pos.layaway.payment", "layaway_id")
     sale_id = fields.Many2one("pos.order", copy=False, ondelete="restrict")
     amount_total = fields.Monetary(compute="_compute_amounts", store=True)
-    amount_deposit = fields.Monetary(readonly=True)
-    amount_installments = fields.Monetary(readonly=True)
+    amount_deposit = fields.Monetary(compute="_compute_amounts", store=True)
+    amount_installments = fields.Monetary(compute="_compute_amounts", store=True)
     amount_paid = fields.Monetary(compute="_compute_amounts", store=True)
     amount_due = fields.Monetary(compute="_compute_amounts", store=True)
     payment_state = fields.Selection(
@@ -62,11 +63,18 @@ class PosLayaway(models.Model):
         ("sale_unique", "UNIQUE(sale_id)", "La venta ya está vinculada a un apartado."),
     ]
 
-    @api.depends("line_ids.amount_total", "amount_deposit", "amount_installments", "currency_id")
+    @api.depends("line_ids.amount_total", "payment_ids.amount", "payment_ids.kind", "currency_id")
     def _compute_amounts(self):
         for layaway in self:
             currency = layaway.currency_id
+            payments = layaway.payment_ids
             layaway.amount_total = currency.round(sum(layaway.line_ids.mapped("amount_total")))
+            layaway.amount_deposit = currency.round(sum(payments.filtered_domain([
+                ("kind", "=", "deposit"),
+            ]).mapped("amount")))
+            layaway.amount_installments = currency.round(sum(payments.filtered_domain([
+                ("kind", "=", "installment"),
+            ]).mapped("amount")))
             layaway.amount_paid = currency.round(layaway.amount_deposit + layaway.amount_installments)
             layaway.amount_due = currency.round(layaway.amount_total - layaway.amount_paid)
             if layaway.amount_due <= 0:
@@ -113,10 +121,13 @@ class PosLayaway(models.Model):
         })
 
     def write(self, vals):
+        self.check_access_rights("write")
         immutable = set(TERMS) | {
             "folio", "campaign_id", "campaign_name", "campaign_code", "participant_config_ids",
             "participant_company_ids", "partner_id", "contact_name", "phone", "phone_digits",
             "opened_at", "opened_on", "session_id", "user_id", "warehouse_id",
+            "payment_ids", "amount_total", "amount_deposit", "amount_installments",
+            "amount_paid", "amount_due", "payment_state",
         }
         if immutable.intersection(vals):
             raise ValidationError(_("El acuerdo original del apartado se conserva."))
