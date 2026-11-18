@@ -11,5 +11,6 @@ from . import pos_layaway_change
 from . import pos_layaway_adjustment
 from . import pos_layaway_query
 from . import stock_picking
+from . import pos_layaway_pickup
 from . import pos_order
 from . import res_partner

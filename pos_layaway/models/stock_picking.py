@@ -1,8 +1,13 @@
+from collections import defaultdict
+
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
 from odoo.tools import float_compare
 
 from .pos_layaway_payment import layaway_test_database
+
+
+_PICKUP_GUARD = object()
 
 
 class LayawayStockError(UserError):
@@ -33,6 +38,15 @@ class StockPicking(models.Model):
         if not self.env.su and {"layaway_id", "layaway_hold_order_id"}.intersection(vals):
             raise AccessError(_("La referencia de la reserva la asigna el servidor."))
         return super().write(vals)
+
+    def button_validate(self):
+        if self.sudo().layaway_id:
+            raise AccessError(_("Registra la recogida desde el apartado."))
+        return super().button_validate()
+
+    def _send_confirmation_email(self):
+        ordinary = self.filtered(lambda picking: not picking.layaway_id)
+        return super(StockPicking, ordinary)._send_confirmation_email()
 
     @api.model
     def _layaway_stock_location(self, picking_type):
@@ -220,23 +234,97 @@ class StockMove(models.Model):
     def _prepare_merge_moves_distinct_fields(self):
         return super()._prepare_merge_moves_distinct_fields() + ["layaway_line_id"]
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        if not self.env.su and (
+            any("layaway_line_id" in vals for vals in vals_list)
+            or self.env.context.get("default_layaway_line_id")
+        ):
+            raise AccessError(_("La referencia de la reserva la asigna el servidor."))
+        return super().create(vals_list)
+
+    def write(self, vals):
+        if not self.env.su and (
+            "layaway_line_id" in vals or (
+                ("picking_id" in vals or vals.get("state") == "done")
+                and self.sudo().layaway_line_id
+            )
+        ):
+            raise AccessError(_("La referencia de la reserva la asigna el servidor."))
+        return super().write(vals)
+
+    @api.model
+    def _layaway_reserved_moves(self, folio, lines):
+        moves = self.search([
+            ("layaway_line_id", "in", lines.ids), ("state", "not in", ("done", "cancel")),
+        ])
+        # Inventory can also change reservations outside the POS.
+        for table, ids in (
+            ("stock_picking", moves.picking_id.ids), ("stock_move", moves.ids),
+            ("stock_move_line", moves.move_line_ids.ids),
+        ):
+            if ids:
+                self.env.cr.execute(
+                    "SELECT id FROM %s WHERE id IN %%s ORDER BY id FOR UPDATE" % table, (tuple(ids),),
+                )
+        by_line = defaultdict(lambda: self.browse())
+        for move in moves:
+            by_line[move.layaway_line_id.id] |= move
+        for line in lines:
+            move = by_line[line.id]
+            if (
+                len(move) != 1 or move.picking_id.layaway_id != folio
+                or move.state != "assigned" or move.picking_id.state != "assigned"
+                or move.product_id != line.product_id or move.location_id != line.location_id
+                or move.company_id != line.warehouse_id.company_id
+                or move.product_uom != line.product_id.uom_id
+                or float_compare(move.reserved_availability, line.qty_pending,
+                                 precision_rounding=line.product_id.uom_id.rounding)
+                or any(move.move_line_ids.mapped("qty_done"))
+            ):
+                raise LayawayStockError(_("La reserva de %s en %s debe estar completa.")
+                                        % (line.product_name, line.warehouse_id.display_name))
+        return moves
+
     def _action_done(self, cancel_backorder=False):
-        folios = self.sudo().picking_id.layaway_id
+        moves = self.sudo()
+        folios = moves.picking_id.layaway_id | moves.layaway_line_id.layaway_id
         if folios:
             if not layaway_test_database(self.env):
                 raise AccessError(_("La entrega de apartados solo está disponible para pruebas."))
-            self.env.cr.execute(
-                "SELECT id FROM pos_layaway WHERE id IN %s ORDER BY id FOR UPDATE",
-                (tuple(folios.ids),),
-            )
-            folios.invalidate_cache(["amount_due", "sale_id"])
-        for folio in folios:
-            folio._check_pickup_payment()
+            for folio in folios:
+                folio._check_pickup_payment()
+            if not self.env.su or self.env.context.get("layaway_pickup_guard") is not _PICKUP_GUARD:
+                raise AccessError(_("Registra la recogida desde el apartado."))
         return super()._action_done(cancel_backorder=cancel_backorder)
 
 
 class StockMoveLine(models.Model):
     _inherit = "stock.move.line"
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        picking_model = self.env["stock.picking"].sudo()
+        move_model = self.env["stock.move"].sudo()
+        for vals in vals_list:
+            picking = picking_model.browse(vals.get("picking_id", self.env.context.get("default_picking_id")))
+            move = move_model.browse(vals.get("move_id", self.env.context.get("default_move_id")))
+            if (picking.layaway_id and picking.state == "done") or (
+                move.layaway_line_id and move.state == "done"
+            ):
+                raise AccessError(_("La salida confirmada conserva sus movimientos de inventario."))
+        return super().create(vals_list)
+
+    def write(self, vals):
+        if {
+            "qty_done", "state", "move_id", "picking_id", "product_id", "product_uom_id",
+            "location_id", "location_dest_id", "lot_id", "package_id", "result_package_id", "owner_id",
+        }.intersection(vals) and any(
+            line.state == "done" and (line.move_id.layaway_line_id or line.picking_id.layaway_id)
+            for line in self.sudo()
+        ):
+            raise AccessError(_("La salida confirmada conserva sus movimientos de inventario."))
+        return super().write(vals)
 
     def _free_reservation(self, product_id, location_id, quantity, lot_id=None,
                           package_id=None, owner_id=None, ml_to_ignore=None):

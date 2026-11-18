@@ -2,7 +2,6 @@ from collections import defaultdict
 
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError, ValidationError
-from odoo.tools import float_compare
 
 from .pos_layaway_campaign import local_date
 from .pos_layaway_payment import layaway_test_database
@@ -256,32 +255,4 @@ class PosLayaway(models.Model):
         lines = self.line_ids.filtered("qty_pending")
         if not lines or not self.sale_id and self.pickup_state != "pending":
             raise UserError(_("La liquidación requiere mercancía pendiente de recogida."))
-        moves = self.env["stock.move"].search([
-            ("layaway_line_id", "in", lines.ids), ("state", "not in", ("done", "cancel")),
-        ])
-        # Lock the reservation itself as stock operations can change it outside the POS.
-        for table, ids in (
-            ("stock_picking", moves.picking_id.ids), ("stock_move", moves.ids),
-            ("stock_move_line", moves.move_line_ids.ids),
-        ):
-            if ids:
-                self.env.cr.execute(
-                    "SELECT id FROM %s WHERE id IN %%s ORDER BY id FOR UPDATE" % table, (tuple(ids),),
-                )
-        by_line = defaultdict(lambda: self.env["stock.move"])
-        for move in moves:
-            by_line[move.layaway_line_id.id] |= move
-        for line in lines:
-            move = by_line[line.id]
-            if (
-                len(move) != 1 or move.picking_id.layaway_id != self
-                or move.state != "assigned" or move.picking_id.state != "assigned"
-                or move.product_id != line.product_id or move.location_id != line.location_id
-                or move.company_id != line.warehouse_id.company_id
-                or move.product_uom != line.product_id.uom_id
-                or float_compare(move.reserved_availability, line.qty_pending,
-                                 precision_rounding=line.product_id.uom_id.rounding)
-                or any(move.move_line_ids.mapped("qty_done"))
-            ):
-                raise UserError(_("La reserva de %s en %s debe estar completa antes de liquidar.")
-                                % (line.product_name, line.warehouse_id.display_name))
+        self.env["stock.move"]._layaway_reserved_moves(self, lines)

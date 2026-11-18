@@ -93,6 +93,7 @@ class PosSession(models.Model):
                 and folio._layaway_can_modify_products(fields.Datetime.now())
             ),
             "sale_adjustments": folio._layaway_adjustment_history(),
+            "pickup": self._layaway_pickup_detail(folio),
             "transfer_review": self._layaway_transfer_detail(folio),
             "payment_corrections": self._layaway_correction_detail(folio),
             "changeable_lines": (

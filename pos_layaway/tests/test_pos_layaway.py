@@ -1486,7 +1486,7 @@ class TestPosLayawayCampaign(SavepointCase):
         self.assertEqual(picking.state, "assigned")
         for move_line in picking.move_line_ids:
             move_line.qty_done = move_line.product_uom_qty
-        with self.assertRaisesRegex(ValidationError, "después de liquidar"), self.cr.savepoint():
+        with self.assertRaisesRegex(AccessError, "desde el apartado"), self.cr.savepoint():
             picking.button_validate()
         self.assertEqual(picking.state, "assigned")
         self.assertFalse(folio.sale_id)
@@ -1868,6 +1868,12 @@ class TestPosLayawayCampaign(SavepointCase):
             pickings = self.env["stock.picking"].search([
                 ("layaway_id", "=", folio.id), ("state", "=", "assigned"),
             ])
+            for session in (a, b):
+                block = session.get_layaway_detail(folio.id)["pickup"]["lines"]
+                with self.assertRaisesRegex(ValidationError, "después de liquidar"):
+                    session.confirm_layaway_pickup(
+                        folio.id, str(uuid4()), {"kind": "holder", "identity_verified": True}, block,
+                    )
             for picking in pickings:
                 with self.assertRaisesRegex(ValidationError, "después de liquidar"), self.env.cr.savepoint():
                     picking.move_line_ids.qty_done = 1
@@ -1917,14 +1923,19 @@ class TestPosLayawayCampaign(SavepointCase):
             campaign, folio, product, replacement, opening = self._adjustment_fixture()
             a = self.session_a.with_user(self.cashier_a)
             manager = self.session_a.with_user(self.supervisor)
+            b = self.session_b.with_user(self.cashier_b)
+            manager_b = self.session_b.with_user(self.supervisor_b)
             original = folio.line_ids
             original_picking = self.env["stock.picking"].browse(opening["picking_id"])
-            _, addition = self._checkout_args(a, campaign, replacement, 1, folio=folio)
-            added = a.confirm_layaway(*addition, [])
+            self.env["stock.quant"]._update_available_quantity(
+                replacement, b.config_id.picking_type_id.default_location_src_id, 1,
+            )
+            _, addition = self._checkout_args(b, campaign, replacement, 1, folio=folio)
+            added = b.confirm_layaway(*addition, [])
             added_line = folio.line_ids - original
             lines = [{"product_id": product.id, "qty": 1}]
-            quote = manager.quote_layaway_change(folio.id, added_line.ids, lines)
-            removed = manager.confirm_layaway_change(
+            quote = manager_b.quote_layaway_change(folio.id, added_line.ids, lines)
+            removed = manager_b.confirm_layaway_change(
                 str(uuid4()), folio.id, added_line.ids, lines, quote["confirmation"],
                 "Reduce la adición todavía pendiente",
             )
@@ -1941,9 +1952,10 @@ class TestPosLayawayCampaign(SavepointCase):
                 folio.id, pending["pending_transfers"][0], "LW37 DIFF", "Verificada", "Extracto",
             )
             self.assertEqual((approved["amount_due"], invoice.amount_residual), (0, 0))
-            original_picking.move_line_ids.qty_done = 2
-            original_picking._action_done()
-            original.qty_picked_up = original.qty
+            a.confirm_layaway_pickup(
+                folio.id, str(uuid4()), {"kind": "holder", "identity_verified": True},
+                [{"id": original.id, "qty": original.qty}],
+            )
             self.assertEqual(folio.pickup_state, "partial")
             self.assertEqual(original_picking.state, "done")
             with self.assertRaisesRegex(ValidationError, "mercancía pendiente"):
@@ -1958,6 +1970,114 @@ class TestPosLayawayCampaign(SavepointCase):
             with self.assertRaisesRegex(UserError, "plazo"):
                 manager.quote_layaway_change(folio.id, pending_lines, lines)
             self.assertEqual(self._checkout_state(folio), debt)
+
+    def test_pickup_requires_identity_local_block_and_full_reservation(self):
+        campaign, partner, product = self._settlement_fixture()
+        a = self.session_a.with_user(self.cashier_a)
+        b = self.session_b.with_user(self.cashier_b)
+        other = self.session_other.with_user(self.cashier_a)
+        holder = {"kind": "holder", "identity_verified": True}
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            _, opening = self._checkout_args(a, campaign, product, 2, partner)
+            result = a.confirm_layaway(*opening, [{"method_id": self.cash_a.id, "amount": 2000}])
+            folio = self.env["pos.layaway"].browse(result["id"])
+            picking = self.env["stock.picking"].browse(result["picking_id"])
+            _, addition = self._checkout_args(b, campaign, product, 1, folio=folio)
+            b.confirm_layaway(*addition, [{"method_id": self.cash_b.id, "amount": 1000}])
+            lines = a.get_layaway_detail(folio.id)["pickup"]["lines"]
+            with self.assertRaisesRegex(ValidationError, "después de liquidar"):
+                a.confirm_layaway_pickup(folio.id, str(uuid4()), holder, lines)
+            a.settle_layaway(folio.id, str(uuid4()), [{"method_id": self.cash_a.id, "amount": 3000}])
+            before = self._checkout_state(folio)
+            with self.assertRaises(AccessError):
+                other.confirm_layaway_pickup(folio.id, str(uuid4()), holder, lines)
+            with self.assertRaisesRegex(ValidationError, "verificaste su identidad"):
+                a.confirm_layaway_pickup(folio.id, str(uuid4()), {"kind": "holder"}, lines)
+            with patch("odoo.addons.pos_layaway.models.pos_layaway_pickup.layaway_test_database",
+                       return_value=False), self.assertRaisesRegex(AccessError, "solo está disponible"):
+                a.confirm_layaway_pickup(folio.id, str(uuid4()), holder, lines)
+            with self.assertRaisesRegex(ValidationError, "autorizado previamente"):
+                a.confirm_layaway_pickup(folio.id, str(uuid4()), {
+                    "kind": "authorized", "identity_verified": True, "authorization_reference": str(uuid4()),
+                }, lines)
+            with self.assertRaisesRegex(ValidationError, "bloque pendiente"):
+                b.confirm_layaway_pickup(folio.id, str(uuid4()), holder, lines)
+            for qty in (1, 3):
+                with self.assertRaisesRegex(ValidationError, "bloque pendiente"):
+                    a.confirm_layaway_pickup(folio.id, str(uuid4()), holder, [dict(lines[0], qty=qty)])
+            with self.assertRaisesRegex(AccessError, "desde el apartado"):
+                picking.button_validate()
+            with self.assertRaisesRegex(AccessError, "desde el apartado"), self.cr.savepoint():
+                picking.move_line_ids.qty_done = 2
+                picking.with_context(layaway_pickup_guard=True)._action_done()
+            with self.assertRaisesRegex(UserError, "reserva"), self.cr.savepoint():
+                picking.move_lines._do_unreserve()
+                a.confirm_layaway_pickup(folio.id, str(uuid4()), holder, lines)
+            with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 16, 8)):
+                with self.assertRaisesRegex(UserError, "Terminó el plazo"):
+                    a.confirm_layaway_pickup(folio.id, str(uuid4()), holder, lines)
+            self.assertEqual(self._checkout_state(folio), before)
+            self.assertEqual(folio.pickup_state, "pending")
+            self.assertFalse(picking.move_line_ids.filtered("qty_done"))
+            self.assertFalse(a.get_layaway_detail(folio.id)["pickup"]["history"])
+
+    def test_pickup_by_holder_then_registered_recipient_keeps_the_original_sale(self):
+        campaign, partner, product = self._settlement_fixture()
+        a = self.session_a.with_user(self.cashier_a)
+        b = self.session_b.with_user(self.cashier_b)
+        manager_b = self.session_b.with_user(self.supervisor_b)
+        authorized = self.env["res.partner"].create({"name": "Persona autorizada de prueba"})
+        for company in self.company_a | self.company_b:
+            product.with_company(company).standard_price = 100
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            _, opening = self._checkout_args(a, campaign, product, 2, partner)
+            result = a.confirm_layaway(*opening, [{"method_id": self.cash_a.id, "amount": 2000}])
+            folio = self.env["pos.layaway"].browse(result["id"])
+            _, addition = self._checkout_args(b, campaign, product, 1, folio=folio)
+            b.confirm_layaway(*addition, [{"method_id": self.cash_b.id, "amount": 1000}])
+            a.settle_layaway(folio.id, str(uuid4()), [{"method_id": self.cash_a.id, "amount": 3000}])
+            sale = folio.sale_id
+            before = self._checkout_state(folio)
+            auth_args = (folio.id, str(uuid4()), authorized.id)
+            with self.assertRaises(AccessError):
+                b.register_layaway_pickup_authorization(*auth_args)
+            registration = manager_b.register_layaway_pickup_authorization(*auth_args)
+            self.assertEqual(manager_b.register_layaway_pickup_authorization(*auth_args), registration)
+            authorized.name = "Nombre editado tras el registro"
+            holder = {"kind": "holder", "identity_verified": True}
+            a_args = (folio.id, str(uuid4()), holder, a.get_layaway_detail(folio.id)["pickup"]["lines"])
+            first = a.confirm_layaway_pickup(*a_args)
+            self.assertEqual(first["recipient"]["partner_id"], partner.id)
+            self.assertEqual(first["cashier"], self.cashier_a.name)
+            self.assertEqual(first["confirmed_at"], "2026-11-18 12:00:00-08:00")
+            self.assertEqual(first["pickup_state"], "partial")
+            self.assertEqual([line["qty"] for line in first["pending"]], [1])
+            b_detail = b.get_layaway_detail(folio.id)["pickup"]
+            self.assertEqual(b_detail["authorizations"], [registration])
+            self.assertEqual(b_detail["history"], [first])
+            recipient = {
+                "kind": "authorized", "identity_verified": True, "authorization_reference": auth_args[1],
+            }
+            second = b.confirm_layaway_pickup(folio.id, str(uuid4()), recipient, b_detail["lines"])
+            self.assertEqual(second["recipient"], dict(registration, kind="authorized", identity_verified=True))
+            self.assertEqual(second["pickup_state"], "done")
+            self.assertFalse(second["pending"])
+            self.assertEqual(b.confirm_layaway_pickup(*a_args), first)
+            with self.assertRaisesRegex(ValidationError, "bloque pendiente"):
+                a.confirm_layaway_pickup(a_args[0], str(uuid4()), *a_args[2:])
+            history = a.get_layaway_detail(folio.id)["pickup"]["history"]
+            self.assertCountEqual(history, [first, second])
+            self.assertEqual((folio.sale_id, sale.layaway_ids), (sale, folio))
+            self.assertEqual(self._checkout_state(folio)[4:], before[4:])
+            self.assertEqual(folio.payment_ids.ids, before[1])
+            for collected, company, qty in ((first, self.company_a, 2), (second, self.company_b, 1)):
+                picking = self.env["stock.picking"].browse(collected["picking_ids"])
+                self.assertEqual(picking.state, "done")
+                self.assertEqual(sum(picking.move_line_ids.mapped("qty_done")), qty)
+                valuation = picking.move_lines.stock_valuation_layer_ids
+                self.assertEqual((valuation.company_id, valuation.quantity), (company, -qty))
+                with self.assertRaises(AccessError):
+                    picking.move_line_ids.qty_done = qty + 1
 
     def test_sale_adjustment_requires_new_coverage_and_rolls_back_stock_failure(self):
         with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 20, 20)):
