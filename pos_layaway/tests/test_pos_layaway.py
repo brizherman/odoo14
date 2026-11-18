@@ -2653,6 +2653,52 @@ class TestPosLayawayCampaign(SavepointCase):
                 dict(legacy["pickup"], pickup_receipt=True), True,
             ))
 
+    def test_confirmation_recovery_retains_origin_after_close_and_checks_scope(self):
+        campaign, partner, product = self._settlement_fixture()
+        origin = self.session_a.with_user(self.cashier_a)
+        participant = self.session_b.with_user(self.cashier_b)
+        outsider = self.session_other.with_user(self.cashier_a)
+        foreign = self.session_a.with_user(self.cashier_b)
+
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            _, opening = self._checkout_args(origin, campaign, product, 2, partner)
+            deposit = [{"method_id": self.cash_a.id, "amount": 2000}]
+            opened = origin.confirm_layaway(*opening, deposit)
+            folio = self.env["pos.layaway"].browse(opened["id"])
+            lines = origin.get_layaway_detail(folio.id)["pickup"]["lines"]
+            settlement = (folio.id, str(uuid4()), deposit)
+            recipient = {"kind": "holder", "identity_verified": True}
+            pickup = (folio.id, str(uuid4()), recipient, lines)
+
+            with self.assertRaisesRegex(ValidationError, "después de liquidar"):
+                origin.confirm_layaway_pickup(*pickup)
+            paid = origin.settle_layaway(*settlement)
+            collected = origin.confirm_layaway_pickup(*pickup)
+            self._close_layaway_session(self.session_a, 4000)
+
+            before = self._checkout_state(folio)
+            for session in (origin, participant):
+                self.assertEqual(session.settle_layaway(*settlement), paid)
+                self.assertEqual(session.confirm_layaway_pickup(*pickup), collected)
+            for session in (outsider, foreign):
+                with self.assertRaises(AccessError):
+                    session.settle_layaway(*settlement)
+                with self.assertRaises(AccessError):
+                    session.confirm_layaway_pickup(*pickup)
+
+            recorded = self.env["pos.layaway.operation"].search([
+                ("reference", "in", [settlement[1], pickup[1]]),
+            ])
+            self.assertEqual(len(recorded), 2)
+            self.assertEqual(recorded.session_id, self.session_a)
+            self.assertEqual(recorded.user_id, self.cashier_a)
+            self.assertEqual(self._checkout_state(folio), before)
+            self.assertEqual((paid["amount_applied"], paid["settlement"]["amount_previous"]), (2000, 2000))
+            self.assertEqual(collected["sale_id"], paid["sale_id"])
+            self.assertEqual(collected["pickup_state"], "done")
+            picking = self.env["stock.picking"].browse(collected["picking_ids"])
+            self.assertEqual(sum(picking.move_line_ids.mapped("qty_done")), 2)
+
     def test_relocation_moves_the_reserved_lot_before_pickup_in_another_location(self):
         campaign, partner, product = self._settlement_fixture()
         source = self.config_a.picking_type_id.default_location_src_id
