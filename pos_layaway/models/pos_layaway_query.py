@@ -10,12 +10,12 @@ from .pos_layaway_campaign import local_date
 class PosSession(models.Model):
     _inherit = "pos.session"
 
-    def _layaway_query_domain(self):
-        self._check_layaway_session()
+    def _layaway_query_domain(self, require_open=True):
+        self._check_layaway_session(require_open=require_open)
         return [("participant_config_ids", "in", self.config_id.ids)]
 
-    def _find_layaway(self, record_id):
-        domain = self._layaway_query_domain()
+    def _find_layaway(self, record_id, require_open=True):
+        domain = self._layaway_query_domain(require_open=require_open)
         folio = self.env["pos.layaway"].sudo().search(
             domain + [("id", "=", self.env["res.partner"]._wholesale_record_id(record_id))],
             limit=1,
@@ -25,7 +25,11 @@ class PosSession(models.Model):
         return folio
 
     def get_layaway_detail(self, record_id):
-        return self._find_layaway(record_id)._pos_layaway_values(detail=True)
+        folio = self._find_layaway(record_id)
+        return {
+            **folio._pos_layaway_values(detail=True),
+            "transfer_review": self._layaway_transfer_detail(folio),
+        }
 
     def get_layaways(self, filters=None, offset=0):
         scope = self._layaway_query_domain()

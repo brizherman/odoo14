@@ -5,6 +5,7 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
     const PosComponent = require('point_of_sale.PosComponent');
     const ProductScreen = require('point_of_sale.ProductScreen');
     const Registries = require('point_of_sale.Registries');
+    const session = require('web.session');
     const { useListener } = require('web.custom_hooks');
     const { useState } = owl.hooks;
 
@@ -14,6 +15,7 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
             this.state = useState({
                 rows: [], campaigns: [], stores: [], detail: null,
                 stale: !navigator.onLine, loaded: false, loading: false, hasMore: false,
+                transferBusy: false, transferMessage: '', transferRetry: false,
                 filters: { query: '', campaign: '', store: '', from: '', to: '',
                     payment_state: '', pickup_state: '', expiry: '' },
             });
@@ -96,6 +98,10 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
             const result = await this.request('get_layaway_detail', [id]);
             if (result) {
                 this.state.detail = result;
+                this.state.transferRetry = Boolean(
+                    result.transfer_review && result.transfer_review.methods
+                    && sessionStorage.getItem(this.transferKey)
+                );
             }
         }
 
@@ -103,13 +109,14 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
             this.requestNumber++;
             this.state.loading = false;
             this.state.detail = null;
+            this.state.transferMessage = '';
             if (!this.state.stale) {
                 this.loadPage(0);
             }
         }
 
         refresh() {
-            if (this.state.loading || !navigator.onLine) {
+            if (this.state.loading || this.state.transferBusy || !navigator.onLine) {
                 return;
             }
             if (this.state.detail) {
@@ -120,6 +127,88 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
             }
             // Confirm reachability without discarding the current search page.
             return this.request('get_layaways', [this.filters, 0]);
+        }
+
+        async submitTransfer(event) {
+            if (this.state.stale || this.state.transferBusy || !navigator.onLine) {
+                return;
+            }
+            const detail = this.state.detail;
+            const key = this.transferKey;
+            let pending = JSON.parse(sessionStorage.getItem(key));
+            if (!pending) {
+                const data = new FormData(event.currentTarget);
+                const tenders = detail.transfer_review.methods
+                    .filter(method => Number(data.get('method-' + method.id)) > 0)
+                    .map(method => ({
+                        method_id: method.id,
+                        amount: Number(data.get('method-' + method.id)),
+                    }));
+                const bytes = window.crypto.getRandomValues(new Uint8Array(16));
+                bytes[6] = (bytes[6] & 15) | 64;
+                bytes[8] = (bytes[8] & 63) | 128;
+                const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+                const reference = hex.replace(/^(........)(....)(....)(....)(............)$/, '$1-$2-$3-$4-$5');
+                pending = { reference, tenders, kind: detail.transfer_review.kind };
+                sessionStorage.setItem(key, JSON.stringify(pending));
+            }
+            const { reference, kind, tenders } = pending;
+            const result = await this.changeTransfer('register_layaway_transfer', [detail.id, reference, kind, tenders]);
+            if (result !== null) {
+                sessionStorage.removeItem(key);
+                this.state.transferRetry = false;
+            } else {
+                this.state.transferRetry = true;
+            }
+            if (result) {
+                event.target.reset();
+                this.state.transferMessage = this.env._t('Transferencia pendiente de verificación.');
+            }
+        }
+
+        get transferKey() {
+            return ['pos_layaway', session.db, session.uid, this.env.pos.pos_session.id, this.state.detail.id].join(':');
+        }
+
+        async authorizeTransfer(event, transferId) {
+            const data = new FormData(event.currentTarget);
+            const result = await this.changeTransfer('authorize_layaway_transfer', [
+                this.state.detail.id, transferId, data.get('bank_reference'),
+                data.get('reason'), data.get('evidence'),
+            ]);
+            if (result) {
+                this.state.transferMessage = this.env._t('Transferencia confirmada.');
+            }
+        }
+
+        async changeTransfer(method, args) {
+            if (this.state.stale || this.state.transferBusy || !navigator.onLine) {
+                return null;
+            }
+            this.state.transferBusy = true;
+            this.state.transferMessage = '';
+            try {
+                const result = await this.rpc({
+                    model: 'pos.session', method,
+                    args: [[this.env.pos.pos_session.id], ...args],
+                }, { shadow: true, timeout: 5000 });
+                await this.openDetail(args[0]);
+                return result;
+            } catch (error) {
+                if (error.event) {
+                    error.event.preventDefault();
+                }
+                const code = error.message && error.message.code;
+                if (code === 200) {
+                    this.state.transferMessage = error.message.data.message;
+                    return false;
+                }
+                this.markOffline();
+                this.state.transferMessage = this.env._t('Actualiza el apartado para recuperar el resultado.');
+                return null;
+            } finally {
+                this.state.transferBusy = false;
+            }
         }
 
         get paymentLabels() {

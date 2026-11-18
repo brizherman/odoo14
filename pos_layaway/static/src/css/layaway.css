@@ -121,6 +121,40 @@
     margin-top: 1rem;
 }
 
+.pos .layaway-transfers {
+    margin: 16px 0;
+    padding: 12px;
+    border: 1px solid #ddd;
+    background: white;
+}
+
+.pos .layaway-transfers h3 {
+    margin: 0 0 8px;
+}
+
+.pos .layaway-transfer-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 8px;
+}
+
+.pos .layaway-transfer-form label {
+    display: grid;
+    flex: 1 1 140px;
+    gap: 4px;
+}
+
+.pos .layaway-transfer-form input, .pos .layaway-transfer-form textarea {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 38px;
+    padding: 6px 10px;
+    font: inherit;
+    border: 1px solid #b8b8b8;
+    border-radius: 3px;
+}
+
 .pos .layaway-status {
     color: #474747;
 }

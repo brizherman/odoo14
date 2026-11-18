@@ -10,7 +10,8 @@
     <t t-name="pos_layaway.LayawayScreen" owl="1">
         <div class="screen o_pos_layaway_screen">
             <header class="layaway-header">
-                <button type="button" class="layaway-back" t-on-click="close">Volver a venta</button>
+                <button type="button" class="layaway-back" t-on-click="close"
+                        t-att-disabled="state.transferBusy">Volver a venta</button>
                 <h1>Apartados</h1>
             </header>
             <div t-if="state.stale" class="layaway-stale" role="status">
@@ -90,7 +91,8 @@
             <main t-else="" class="layaway-content layaway-detail">
                 <t t-set="folio" t-value="state.detail"/>
                 <div class="layaway-detail-header">
-                    <button type="button" t-on-click="backToSearch">Volver a la búsqueda</button>
+                    <button type="button" t-on-click="backToSearch"
+                            t-att-disabled="state.transferBusy">Volver a la búsqueda</button>
                     <a t-if="!state.stale" t-att-href="labelUrl" target="_blank" rel="noopener">Imprimir etiqueta</a>
                 </div>
                 <h2 t-esc="folio.folio"/>
@@ -116,6 +118,52 @@
                         </tr>
                     </tbody>
                 </table>
+                <t t-set="review" t-value="folio.transfer_review"/>
+                <section t-if="review &amp;&amp; (review.methods &amp;&amp; review.methods.length || review.transfers &amp;&amp; review.transfers.length)"
+                         class="layaway-transfers">
+                    <h3>Transferencias de prueba</h3>
+                    <form t-if="review.methods.length" class="layaway-transfer-form" t-on-submit.prevent="submitTransfer">
+                        <label t-foreach="review.methods" t-as="method" t-key="method.id">
+                            <span t-esc="method.name"/>
+                            <input type="number" min="0" step="any" inputmode="decimal"
+                                   t-att-name="'method-' + method.id"
+                                   t-att-disabled="state.stale || state.transferBusy || state.transferRetry"/>
+                        </label>
+                        <button type="submit" class="layaway-submit" t-att-disabled="state.stale || state.transferBusy">
+                            <t t-if="state.transferRetry">Recuperar registro</t>
+                            <t t-else="">Registrar transferencia pendiente</t>
+                        </button>
+                    </form>
+                    <article t-foreach="review.transfers" t-as="transfer" t-key="transfer.id"
+                             class="layaway-transfer-record">
+                        <p>
+                            <strong t-esc="transfer.method"/> · <span t-esc="money(transfer.amount)"/> ·
+                            <span t-if="transfer.confirmed">Confirmada</span>
+                            <span t-else="">Pendiente de verificación</span>
+                            <span t-if="transfer.bank_reference"> · <span t-esc="transfer.bank_reference"/></span>
+                        </p>
+                        <form t-if="transfer.can_approve &amp;&amp; !transfer.confirmed"
+                              class="layaway-transfer-approval"
+                              t-on-submit.prevent="event => authorizeTransfer(event, transfer.id)">
+                            <p>Comprueba el abono en el banco receptor e identifica el registro que lo acredita.</p>
+                            <div class="layaway-transfer-form">
+                                <label>Referencia bancaria
+                                    <input name="bank_reference" required="required" maxlength="120"/>
+                                </label>
+                                <label>Motivo
+                                    <input name="reason" required="required" maxlength="500"/>
+                                </label>
+                                <label>Evidencia de recepción
+                                    <textarea name="evidence" required="required" maxlength="2000" rows="2"/>
+                                </label>
+                                <button type="submit" class="layaway-submit"
+                                        t-att-disabled="state.stale || state.transferBusy">Confirmar recepción</button>
+                            </div>
+                        </form>
+                    </article>
+                    <p t-if="state.transferMessage" class="layaway-transfer-message" role="status"
+                       t-esc="state.transferMessage"/>
+                </section>
                 <div class="layaway-actions" aria-label="Operaciones del apartado">
                     <button type="button" disabled="disabled">Agregar productos</button>
                     <button type="button" disabled="disabled">Registrar abono</button>

@@ -21,8 +21,8 @@ class TestPosLayawayCampaign(SavepointCase):
         cls.pricelist = cls.env["product.pricelist"].create({
             "name": "Layaway Test Pricelist", "currency_id": cls.company_a.currency_id.id,
         })
-        cls.config_a, cls.cash_a, cls.card_a = cls._create_payment_config(cls.company_a, "A")
-        cls.config_b, cls.cash_b, cls.card_b = cls._create_payment_config(cls.company_b, "B")
+        cls.config_a, cls.cash_a, cls.card_a, cls.transfer_a = cls._create_payment_config(cls.company_a, "A")
+        cls.config_b, cls.cash_b, cls.card_b, cls.transfer_b = cls._create_payment_config(cls.company_b, "B")
         cls.config_other = cls._create_config(cls.company_a, "Nonparticipating POS")
         cls.cashier_a = cls._create_user(
             "cashier_a", cls.company_a, "point_of_sale.group_pos_user"
@@ -32,6 +32,9 @@ class TestPosLayawayCampaign(SavepointCase):
         )
         cls.supervisor = cls._create_user(
             "supervisor", cls.company_a, "point_of_sale.group_pos_manager"
+        )
+        cls.supervisor_b = cls._create_user(
+            "supervisor_b", cls.company_b, "point_of_sale.group_pos_manager"
         )
         cls.manager = cls._create_user(
             "manager", cls.company_a | cls.company_b, "pos_layaway.group_layaway_campaign_manager"
@@ -99,23 +102,29 @@ class TestPosLayawayCampaign(SavepointCase):
 
         liability = account("LWLI", "current_liabilities")
         clearing = account("LWCL", "current_assets", reconcile=True)
+        transfer_clearing = account("LWTC", "current_assets", reconcile=True)
         receivable = account("LWAR", "receivable", reconcile=True)
         cash_journal = journal("LWCS", "cash", suspense_account_id=clearing.id)
         card_journal = journal("LWCD", "general")
+        transfer_journal = journal("LWTR", "general")
         sale_journal = journal("LWSL", "sale")
         method_model = cls.env["pos.payment.method"].with_company(company)
-        cash, card = method_model.create([
+        cash, card, transfer = method_model.create([
             {"name": "Efectivo", "is_cash_count": True, "cash_journal_id": cash_journal.id,
              "company_id": company.id, "receivable_account_id": receivable.id},
             {"name": "Tarjeta", "layaway_card_clearing_account_id": clearing.id,
              "company_id": company.id, "receivable_account_id": receivable.id},
+            {"name": "Transferencia", "layaway_transfer": True,
+             "layaway_transfer_clearing_account_id": transfer_clearing.id,
+             "company_id": company.id, "receivable_account_id": receivable.id},
         ])
         config = cls._create_config(
             company, "Layaway " + label, cash_control=True, journal_id=sale_journal.id,
-            payment_method_ids=[(6, 0, (cash | card).ids)],
+            payment_method_ids=[(6, 0, (cash | card | transfer).ids)],
             layaway_liability_account_id=liability.id, layaway_card_journal_id=card_journal.id,
+            layaway_transfer_journal_id=transfer_journal.id,
         )
-        return config, cash, card
+        return config, cash, card, transfer
 
     @classmethod
     def _create_session(cls, config, user):
@@ -379,6 +388,7 @@ class TestPosLayawayCampaign(SavepointCase):
         line = folio.line_ids
         quant_model = self.env["stock.quant"]
         quant_model._update_available_quantity(line.product_id, line.location_id, line.qty)
+        self._payment(self.session_a, folio, "deposit", [{"method_id": self.cash_a.id, "amount": 2000}])
         session = self.session_a.with_user(self.cashier_a)
         picking = self.env["stock.picking"].sudo()._reserve_layaway_lines(folio, session, line)
         self.assertEqual(picking.state, "assigned")
@@ -538,3 +548,132 @@ class TestPosLayawayCampaign(SavepointCase):
         self.assertEqual(folio.amount_due, 1876.55)
         self.assertEqual(len(folio.payment_ids), 3)
         self.assertAlmostEqual(session.cash_register_balance_end, baseline + 123.45)
+
+    def test_mixed_transfer_requires_manual_confirmation_and_confirmed_coverage(self):
+        campaign = self.campaigns.create(self.values)
+        campaign.action_activate()
+        folio = self._make_folio(campaign)
+        line = folio.line_ids
+        quants = self.env["stock.quant"]
+        quants._update_available_quantity(line.product_id, line.location_id, line.qty)
+        picking_model = self.env["stock.picking"]
+        cashier = self.session_a.with_user(self.cashier_a)
+        manager_a = self.session_a.with_user(self.supervisor)
+        manager_b = self.session_b.with_user(self.supervisor_b)
+        cash_balance = self.session_a.cash_register_balance_end
+        tenders = [
+            {"method_id": self.cash_a.id, "amount": 400, "amount_tendered": 500},
+            {"method_id": self.card_a.id, "amount": 600},
+            {"method_id": self.transfer_a.id, "amount": 1000},
+        ]
+        reference = str(uuid4())
+        registered_at = datetime(2026, 11, 18, 20)
+        with patch.object(fields.Datetime, "now", return_value=registered_at):
+            result = cashier.register_layaway_transfer(folio.id, reference, "deposit", tenders)
+            self.assertEqual(
+                self.session_b.with_user(self.cashier_b).register_layaway_transfer(
+                    folio.id, reference, "deposit", tenders,
+                ),
+                result,
+            )
+        transfer = folio.transfer_ids
+        self.assertEqual(result["pending_transfers"], transfer.ids)
+        self.assertEqual(result["amount_applied"], 1000)
+        self.assertEqual(folio.amount_due, 3000)
+        self.assertEqual(self.session_a.cash_register_balance_end, cash_balance + 400)
+        self.assertEqual(sorted(folio.payment_ids.mapped("amount")), [400, 600])
+        self.assertFalse(transfer.payment_id)
+        with self.assertRaisesRegex(ValidationError, "insuficiente"):
+            picking_model._reserve_layaway_lines(folio, cashier, line)
+        self.assertFalse(picking_model.search([("layaway_id", "=", folio.id)]))
+        self.assertEqual(quants._get_available_quantity(line.product_id, line.location_id), 2)
+        verify = [folio.id, transfer.id, "spei-test-01", "Abono recibido", "Extracto sintético A / 18"]
+        with self.assertRaises(AccessError):
+            cashier.authorize_layaway_transfer(*verify)
+        with self.assertRaises(AccessError):
+            manager_b.authorize_layaway_transfer(*verify)
+        for index in (2, 3, 4):
+            missing = list(verify)
+            missing[index] = " "
+            with self.assertRaises(ValidationError):
+                manager_a.authorize_layaway_transfer(*missing)
+        with self.assertRaises(AccessError):
+            transfer.with_user(self.supervisor).write({"bank_reference": "FORGED"})
+
+        verified_at = datetime(2026, 11, 19, 20)
+        with patch.object(fields.Datetime, "now", return_value=verified_at):
+            authorization = manager_a.authorize_layaway_transfer(*verify)
+            self.assertEqual(manager_b.authorize_layaway_transfer(*verify), authorization)
+            with self.assertRaises(ValidationError):
+                manager_b.authorize_layaway_transfer(*verify[:-1], "Evidencia alterada")
+        self.assertEqual(transfer.bank_reference, "SPEI-TEST-01")
+        self.assertEqual((transfer.reason, transfer.evidence), tuple(verify[3:]))
+        self.assertEqual(transfer.authorization_id.user_id, self.supervisor)
+        self.assertEqual(transfer.authorization_id.create_date, verified_at)
+        payment = transfer.payment_id
+        self.assertEqual(payment.tender_type, "transfer")
+        self.assertEqual(payment.paid_at, verified_at)
+        self.assertEqual(payment.session_id, self.session_a)
+        self.assertEqual(payment.user_id, self.cashier_a)
+        self.assertEqual(payment.move_id.state, "posted")
+        self.assertEqual(payment.move_id.journal_id, self.config_a.layaway_transfer_journal_id)
+        self.assertEqual(payment.move_id.line_ids.filtered(
+            lambda move_line: move_line.account_id == self.transfer_a.layaway_transfer_clearing_account_id
+        ).debit, 1000)
+        self.assertFalse(payment.statement_line_id)
+        self.assertEqual(self.session_a.cash_register_balance_end, cash_balance + 400)
+        self.assertEqual((folio.amount_paid, folio.amount_due), (2000, 2000))
+        self.assertEqual(len(folio.payment_ids), 3)
+        picking = picking_model._reserve_layaway_lines(folio, cashier, line)
+        self.assertEqual(picking.state, "assigned")
+        for move_line in picking.move_line_ids:
+            move_line.qty_done = move_line.product_uom_qty
+        with self.assertRaisesRegex(ValidationError, "después de liquidar"), self.cr.savepoint():
+            picking.button_validate()
+        self.assertEqual(picking.state, "assigned")
+        self.assertFalse(folio.sale_id)
+
+    def test_transfer_cannot_reuse_bank_reference_or_apply_stale_amount(self):
+        campaign = self.campaigns.create(self.values)
+        campaign.action_activate()
+        folio = self._make_folio(campaign)
+        cashier = self.session_a.with_user(self.cashier_a)
+        manager = self.session_a.with_user(self.supervisor)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            refs = [
+                cashier.register_layaway_transfer(folio.id, str(uuid4()), "installment", [
+                    {"method_id": self.transfer_a.id, "amount": amount},
+                ])["pending_transfers"][0] for amount in (1000, 100, 3000, 2500)
+            ]
+            manager.authorize_layaway_transfer(folio.id, refs[0], "BANK-01", "Motivo", "Extracto")
+            with self.assertRaisesRegex(ValidationError, "ya se aplicó"):
+                manager.authorize_layaway_transfer(folio.id, refs[1], " bank-01 ", "Motivo", "Extracto")
+            with self.assertRaisesRegex(UserError, "liquidación"):
+                manager.authorize_layaway_transfer(folio.id, refs[2], "BANK-02", "Motivo", "Extracto")
+            self._payment(self.session_a, folio, "installment", [{"method_id": self.cash_a.id, "amount": 600}])
+            with self.assertRaisesRegex(ValidationError, "superar el restante"):
+                manager.authorize_layaway_transfer(folio.id, refs[3], "BANK-03", "Motivo", "Extracto")
+        self.assertEqual(folio.transfer_ids.filtered("payment_id").ids, refs[:1])
+        self.assertEqual(sorted(folio.payment_ids.mapped("amount")), [600, 1000])
+        self.assertEqual(folio.amount_due, 2400)
+
+    def test_transfer_endpoints_are_disabled_outside_test_databases(self):
+        campaign = self.campaigns.create(self.values)
+        campaign.action_activate()
+        folio = self._make_folio(campaign)
+        cashier = self.session_a.with_user(self.cashier_a)
+        manager = self.session_a.with_user(self.supervisor)
+        payment_module = "odoo.addons.pos_layaway.models.pos_layaway_payment"
+        transfer_module = "odoo.addons.pos_layaway.models.pos_layaway_transfer"
+        with patch(payment_module + ".layaway_test_database", return_value=False), patch(
+            transfer_module + ".layaway_test_database", return_value=False,
+        ):
+            self.assertFalse(cashier.get_layaway_detail(folio.id)["transfer_review"])
+            with self.assertRaises(AccessError):
+                cashier.register_layaway_transfer(folio.id, str(uuid4()), "deposit", [
+                    {"method_id": self.transfer_a.id, "amount": 1000},
+                ])
+            with self.assertRaises(AccessError):
+                manager.authorize_layaway_transfer(folio.id, 1, "BANK-01", "Motivo", "Extracto")
+        self.assertFalse(folio.transfer_ids)
+        self.assertFalse(folio.payment_ids)

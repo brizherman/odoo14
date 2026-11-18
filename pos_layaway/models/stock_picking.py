@@ -91,6 +91,8 @@ class StockPicking(models.Model):
             raise UserError(_("La mercancía no corresponde a la tienda del apartado."))
         # A second call for the same lines must run through the operation ledger.
         with self.env.cr.savepoint():
+            self.env.cr.execute("SELECT id FROM pos_layaway WHERE id = %s FOR UPDATE", (layaway.id,))
+            layaway._check_reservation_coverage()
             self.env.cr.execute(
                 "UPDATE pos_layaway_line SET write_date = %s WHERE id IN %s",
                 (fields.Datetime.now(), tuple(lines.ids)),
@@ -212,6 +214,11 @@ class StockMove(models.Model):
 
     def _prepare_merge_moves_distinct_fields(self):
         return super()._prepare_merge_moves_distinct_fields() + ["layaway_line_id"]
+
+    def _action_done(self, cancel_backorder=False):
+        for folio in self.sudo().picking_id.layaway_id:
+            folio._check_pickup_payment()
+        return super()._action_done(cancel_backorder=cancel_backorder)
 
 
 class StockMoveLine(models.Model):

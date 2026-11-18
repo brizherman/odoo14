@@ -43,6 +43,7 @@ class PosLayaway(models.Model):
     warehouse_id = fields.Many2one("stock.warehouse", required=True, ondelete="restrict")
     line_ids = fields.One2many("pos.layaway.line", "layaway_id")
     payment_ids = fields.One2many("pos.layaway.payment", "layaway_id")
+    transfer_ids = fields.One2many("pos.layaway.transfer", "layaway_id")
     sale_id = fields.Many2one("pos.order", copy=False, ondelete="restrict")
     amount_total = fields.Monetary(compute="_compute_amounts", store=True)
     amount_deposit = fields.Monetary(compute="_compute_amounts", store=True)
@@ -91,6 +92,17 @@ class PosLayaway(models.Model):
                 layaway.pickup_state = "partial" if any(
                     layaway.line_ids.mapped("qty_pending")
                 ) else "done"
+
+    def _check_reservation_coverage(self):
+        self.ensure_one()
+        required = self.currency_id.round(self.amount_total * self.deposit_percentage / 100)
+        if self.currency_id.compare_amounts(self.amount_paid, required) < 0:
+            raise ValidationError(_("El importe confirmado es insuficiente para reservar la mercancía."))
+
+    def _check_pickup_payment(self):
+        self.ensure_one()
+        if self.currency_id.compare_amounts(self.amount_due, 0) > 0 or not self.sale_id:
+            raise ValidationError(_("La mercancía solo se puede entregar después de liquidar el apartado."))
 
     @api.model
     def _create_folio(self, session, campaign, partner, name, phone, opened_at, lines):

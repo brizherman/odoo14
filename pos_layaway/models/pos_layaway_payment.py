@@ -7,6 +7,10 @@ from odoo.exceptions import AccessError, UserError, ValidationError
 from .pos_layaway_campaign import local_date
 
 
+def layaway_test_database(env):
+    return bool(re.fullmatch(r"odoo_test(?:_[a-z0-9_]+)?", env.cr.dbname))
+
+
 class PosConfig(models.Model):
     _inherit = "pos.config"
 
@@ -18,6 +22,10 @@ class PosConfig(models.Model):
         "account.journal", check_company=True, ondelete="restrict",
         groups="account.group_account_manager", string="Diario de cobros con tarjeta de apartados",
     )
+    layaway_transfer_journal_id = fields.Many2one(
+        "account.journal", check_company=True, ondelete="restrict",
+        groups="account.group_account_manager", string="Diario de transferencias de apartados",
+    )
 
 
 class PosPaymentMethod(models.Model):
@@ -26,6 +34,13 @@ class PosPaymentMethod(models.Model):
     layaway_card_clearing_account_id = fields.Many2one(
         "account.account", check_company=True, ondelete="restrict",
         groups="account.group_account_manager", string="Cuenta puente de tarjeta de apartados",
+    )
+    layaway_transfer = fields.Boolean(
+        groups="account.group_account_manager", string="Transferencia manual de apartados",
+    )
+    layaway_transfer_clearing_account_id = fields.Many2one(
+        "account.account", check_company=True, ondelete="restrict",
+        groups="account.group_account_manager", string="Cuenta puente de transferencias de apartados",
     )
 
 
@@ -61,8 +76,11 @@ class PosLayawayPayment(models.Model):
     session_id = fields.Many2one(related="operation_id.session_id", store=True, index=True)
     warehouse_id = fields.Many2one(related="operation_id.warehouse_id", store=True)
     user_id = fields.Many2one(related="operation_id.user_id", store=True)
+    authorization_id = fields.Many2one(
+        "pos.layaway.operation", ondelete="restrict", copy=False,
+    )
     paid_at = fields.Datetime(
-        related="operation_id.create_date", string="Fecha y hora del cobro", store=True, index=True,
+        compute="_compute_paid_at", string="Fecha y hora del cobro", store=True, index=True,
     )
     config_id = fields.Many2one("pos.config", required=True, ondelete="restrict")
     company_id = fields.Many2one("res.company", required=True, ondelete="restrict", index=True)
@@ -71,7 +89,9 @@ class PosLayawayPayment(models.Model):
         "pos.payment.method", required=True, ondelete="restrict", check_company=True,
     )
     method_name = fields.Char(required=True)
-    tender_type = fields.Selection([("cash", "Efectivo"), ("card", "Tarjeta")], required=True)
+    tender_type = fields.Selection(
+        [("cash", "Efectivo"), ("card", "Tarjeta"), ("transfer", "Transferencia")], required=True,
+    )
     amount = fields.Monetary(required=True)
     amount_tendered = fields.Monetary(required=True)
     amount_change = fields.Monetary(required=True)
@@ -86,7 +106,14 @@ class PosLayawayPayment(models.Model):
         ("valid_tender", "CHECK(amount > 0 AND amount_change >= 0 "
          "AND amount_tendered = amount + amount_change "
          "AND (tender_type = 'cash' OR amount_change = 0))", "Los importes del cobro no son válidos."),
+        ("transfer_authorized", "CHECK((tender_type = 'transfer') = (authorization_id IS NOT NULL))",
+         "La transferencia debe conservar su autorización."),
     ]
+
+    @api.depends("operation_id.create_date", "authorization_id.create_date")
+    def _compute_paid_at(self):
+        for payment in self:
+            payment.paid_at = (payment.authorization_id or payment.operation_id).create_date
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -134,15 +161,23 @@ class PosLayawayPayment(models.Model):
         raise ValidationError(_("El importe del cobro debe ser positivo y válido para la moneda."))
 
     @api.model
-    def _record_tender(self, operation, session, folio, kind, tender):
+    def _available_methods(self, session):
+        return session.payment_method_ids.filtered_domain([
+            ("active", "=", True), ("company_id", "=", session.company_id.id),
+            ("use_payment_terminal", "=", False),
+        ])
+
+    @api.model
+    def _record_tender(self, operation, session, folio, kind, tender, authorization=None):
         config = session.config_id
         company = session.company_id
-        method = session.payment_method_ids.filtered_domain([
-            ("id", "=", tender["method_id"]), ("active", "=", True),
-            ("company_id", "=", company.id), ("use_payment_terminal", "=", False),
-        ])
+        method = self._available_methods(session).filtered_domain([("id", "=", tender["method_id"])])
         if not method:
             raise ValidationError(_("El método de cobro no está disponible en esta caja."))
+        if method.layaway_transfer != bool(authorization):
+            raise ValidationError(_("La transferencia requiere verificación del encargado."))
+        if authorization and method.is_cash_count:
+            raise ValidationError(_("Una transferencia no puede registrarse como efectivo."))
         liability = config.layaway_liability_account_id
         if (
             liability.company_id != company or liability.deprecated or
@@ -152,10 +187,11 @@ class PosLayawayPayment(models.Model):
             raise UserError(_("Configura una cuenta de pasivo para los cobros de apartados."))
 
         ref = "%s · %s · %s · %s" % (folio.folio, session.name, operation.reference, method.id)
-        date = local_date(operation.create_date, folio.timezone)
+        date = local_date((authorization or operation).create_date, folio.timezone)
         amount = tender["amount"]
         statement_line = self.env["account.bank.statement.line"]
         if method.is_cash_count:
+            tender_type = "cash"
             statement = session.cash_register_id
             if (
                 statement.state != "open" or statement.journal_id != method.cash_journal_id or
@@ -170,8 +206,13 @@ class PosLayawayPayment(models.Model):
         else:
             if tender["amount_change"]:
                 raise ValidationError(_("Solo el efectivo puede generar cambio."))
-            journal = config.layaway_card_journal_id
-            clearing = method.layaway_card_clearing_account_id
+            tender_type = "transfer" if authorization else "card"
+            if authorization:
+                journal = config.layaway_transfer_journal_id
+                clearing = method.layaway_transfer_clearing_account_id
+            else:
+                journal = config.layaway_card_journal_id
+                clearing = method.layaway_card_clearing_account_id
             if (
                 journal.company_id != company or journal.type != "general" or
                 (journal.currency_id and journal.currency_id != folio.currency_id) or
@@ -179,7 +220,7 @@ class PosLayawayPayment(models.Model):
                 clearing.internal_group != "asset" or clearing.internal_type != "other" or
                 (clearing.currency_id and clearing.currency_id != folio.currency_id)
             ):
-                raise UserError(_("El método requiere una configuración de tarjeta para apartados."))
+                raise UserError(_("Configura el diario y la cuenta puente para %s.") % method.name)
             move = self.env["account.move"].create({
                 "journal_id": journal.id, "move_type": "entry", "ref": ref, "date": date,
                 "line_ids": [
@@ -192,7 +233,8 @@ class PosLayawayPayment(models.Model):
         return self.create({
             **tender, "operation_id": operation.id, "layaway_id": folio.id, "kind": kind,
             "config_id": config.id, "company_id": company.id, "currency_id": folio.currency_id.id,
-            "method_name": method.name, "tender_type": "cash" if method.is_cash_count else "card",
+            "method_name": method.name, "tender_type": tender_type,
+            "authorization_id": authorization.id if authorization else False,
             "move_id": move.id, "statement_line_id": statement_line.id,
         })
 
@@ -204,17 +246,26 @@ class PosSession(models.Model):
     def _compute_cash_balance(self):
         super()._compute_cash_balance()
 
-    def _register_layaway_payment(self, folio_id, reference, kind, tenders):
-        """Post a synthetic deposit or partial installment through the server history."""
-        if not re.fullmatch(r"odoo_test(?:_[a-z0-9_]+)?", self.env.cr.dbname):
+    def _check_layaway_payment_test(self):
+        if not layaway_test_database(self.env):
             raise AccessError(_("Los cobros de apartados solo están disponibles para pruebas."))
-        session = self.sudo(False)._check_layaway_session(require_open=False)
-        folio = self.env["pos.layaway"].sudo().search([
-            ("id", "=", self.env["res.partner"]._wholesale_record_id(folio_id)),
-            ("participant_config_ids", "in", session.config_id.ids),
-        ], limit=1)
-        if not folio:
-            raise AccessError(_("El apartado no está disponible en esta caja."))
+
+    def _check_layaway_payment_amount(self, folio, amount, date):
+        currency = folio.currency_id
+        if self.rescue or currency != self.currency_id or currency != self.company_id.currency_id:
+            raise UserError(_("El cobro requiere una sesión ordinaria en la moneda del apartado."))
+        if folio.sale_id or local_date(date, folio.timezone) > folio.pickup_end:
+            raise UserError(_("El apartado no admite abonos en su estado actual."))
+        if currency.compare_amounts(amount, folio.amount_due) > 0:
+            raise ValidationError(_("El importe aplicado no puede superar el restante."))
+        if currency.compare_amounts(amount, folio.amount_due) == 0:
+            raise UserError(_("La liquidación del apartado aún no está habilitada."))
+
+    def _register_layaway_payment(self, folio_id, reference, kind, tenders, require_transfer=False):
+        """Register a synthetic mixed tender through the server history."""
+        self._check_layaway_payment_test()
+        session = self.sudo(False)
+        folio = session._find_layaway(folio_id, require_open=False)
         if kind not in ("deposit", "installment"):
             raise ValidationError(_("El tipo de cobro no es válido."))
 
@@ -225,26 +276,37 @@ class PosSession(models.Model):
 
         def apply(operation):
             session._lock_layaway_stock_session()
-            if session.rescue or currency != session.currency_id or currency != session.company_id.currency_id:
-                raise UserError(_("El cobro requiere una sesión ordinaria en la moneda del apartado."))
-            if folio.sale_id or local_date(operation.create_date, folio.timezone) > folio.pickup_end:
-                raise UserError(_("El apartado no admite abonos en su estado actual."))
-            if kind == "deposit" and (folio.amount_paid or folio.session_id != session):
+            if kind == "deposit" and (
+                folio.amount_paid or folio.session_id != session
+                or any(transfer.kind == "deposit" for transfer in folio.transfer_ids)
+            ):
                 raise ValidationError(_("El anticipo inicial corresponde a la sesión de apertura."))
             previous = folio.amount_paid
-            applied = currency.round(sum(tender["amount"] for tender in tenders))
-            comparison = currency.compare_amounts(applied, folio.amount_due)
-            if comparison > 0:
+            methods = {method.id: method for method in payment_model._available_methods(accounting_session)}
+            if any(tender["method_id"] not in methods for tender in tenders):
+                raise ValidationError(_("El método de cobro no está disponible en esta caja."))
+            transfers, immediate = [], []
+            for tender in tenders:
+                method = methods[tender["method_id"]]
+                if method.layaway_transfer:
+                    if method.is_cash_count or tender["amount_change"]:
+                        raise ValidationError(_("Una transferencia debe coincidir con el importe aplicado."))
+                    transfers.append(tender)
+                else:
+                    immediate.append(tender)
+            if require_transfer and not transfers:
+                raise ValidationError(_("Indica un importe para la transferencia."))
+            if currency.compare_amounts(sum(tender["amount"] for tender in tenders), folio.amount_due) > 0:
                 raise ValidationError(_("El importe aplicado no puede superar el restante."))
-            if comparison == 0:
-                raise UserError(_("La liquidación del apartado aún no está habilitada."))
+            applied = currency.round(sum(tender["amount"] for tender in immediate))
+            session._check_layaway_payment_amount(folio, applied, operation.create_date)
 
             payments = payment_model.browse()
-            for tender in tenders:
+            for tender in immediate:
                 payments |= payment_model._record_tender(
                     operation, accounting_session, folio, kind, tender,
                 )
-            return folio, {
+            result = {
                 "reference": operation.reference, "folio": folio.folio,
                 "amount_applied": applied, "amount_paid_before": previous,
                 "amount_paid": folio.amount_paid, "amount_due": folio.amount_due,
@@ -252,6 +314,14 @@ class PosSession(models.Model):
                     "method_id", "method_name", "amount", "amount_tendered", "amount_change",
                 ], load="_classic_write"),
             }
+            if transfers:
+                pending = payment_model.env["pos.layaway.transfer"].create([{
+                    "operation_id": operation.id, "layaway_id": folio.id, "kind": kind,
+                    "company_id": session.company_id.id, "currency_id": currency.id,
+                    "method_id": tender["method_id"], "amount": tender["amount"],
+                } for tender in transfers])
+                result["pending_transfers"] = pending.ids
+            return folio, result
 
         return self.env["pos.layaway.operation"].sudo()._confirm(
             session, reference, kind, tenders, apply, folio, pass_operation=True,
