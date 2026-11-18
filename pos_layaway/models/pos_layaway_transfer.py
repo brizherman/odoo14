@@ -88,12 +88,22 @@ class PosLayawayTransfer(models.Model):
         super(PosLayawayTransfer, self).write({
             **verification, "authorization_id": authorization.id, "payment_id": payment.id,
         })
-        return folio, {
+        result = {
+            "id": folio.id, "folio": folio.folio,
             "reference": authorization.reference, "transfer_id": self.id,
             "session_id": receiving.id, "payment_id": payment.id, "amount_applied": self.amount,
             "amount_paid_before": paid_before, "amount_paid": folio.amount_paid,
             "amount_due": folio.amount_due,
         }
+        if self.kind == "installment":
+            result.update({
+                "receipt": self.operation_id._installment_receipt(folio, authorization),
+                "transfer_reference": self.reference,
+                "payments": payment.read([
+                    "method_id", "method_name", "amount", "amount_tendered", "amount_change",
+                ], load="_classic_write"),
+            })
+        return folio, result
 
 
 class PosSession(models.Model):

@@ -174,6 +174,11 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
             this.state.draft = draft;
         }
 
+        startInstallment(folio) {
+            this.state.checkoutMessage = '';
+            this.state.draft = { installment: true, folio };
+        }
+
         cancelCheckout() {
             this.state.draft = null;
             this.state.checkoutMessage = '';
@@ -269,20 +274,34 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                 return;
             }
             if (!this.state.pendingConfirmation) {
-                const { quote, proposal, change } = this.state.draft;
+                const { quote, proposal, change, installment, folio } = this.state.draft;
                 const data = new FormData(event.currentTarget);
                 const reference = operationReference();
-                const pending = change ? {
-                    method: 'confirm_layaway_change',
-                    args: [reference, ...proposal, quote.confirmation, data.get('reason')],
-                } : [reference, proposal, quote.confirmation, this.checkoutTenders(quote, data)];
+                let pending;
+                if (installment) {
+                    const tenders = this.checkoutTenders(folio.installment_methods, data);
+                    if (!tenders.length) {
+                        this.state.checkoutMessage = this.env._t('Indica un importe para el abono.');
+                        return;
+                    }
+                    pending = {
+                        method: 'register_layaway_installment',
+                        args: [folio.id, reference, tenders],
+                    };
+                } else if (change) {
+                    pending = {
+                        method: 'confirm_layaway_change',
+                        args: [reference, ...proposal, quote.confirmation, data.get('reason')],
+                    };
+                } else {
+                    pending = [reference, proposal, quote.confirmation, this.checkoutTenders(quote.methods, data)];
+                }
                 sessionStorage.setItem(this.confirmationKey, JSON.stringify(pending));
                 this.state.pendingConfirmation = pending;
             }
             const pending = this.state.pendingConfirmation;
-            const change = pending.method === 'confirm_layaway_change';
             const result = await this.checkoutRequest(
-                change ? pending.method : 'confirm_layaway', change ? pending.args : pending
+                pending.method || 'confirm_layaway', pending.args || pending
             );
             if (result !== null) {
                 sessionStorage.removeItem(this.confirmationKey);
@@ -292,14 +311,18 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                 this.state.draft = null;
                 this.state.originalReceipt = result.receipt
                     ? { id: result.id, reference: result.reference } : null;
-                const message = change ? this.env._t('Cambio autorizado') : this.env._t('Reserva confirmada');
+                const messages = {
+                    confirm_layaway_change: this.env._t('Cambio autorizado'),
+                    register_layaway_installment: this.env._t('Abono confirmado'),
+                };
+                const message = messages[pending.method] || this.env._t('Reserva confirmada');
                 this.state.checkoutMessage = message + ' · ' + result.folio;
                 await this.openDetail(result.id);
             }
         }
 
-        checkoutTenders(quote, data) {
-            return quote.methods.filter(method => Number(data.get('apply-' + method.id)) > 0)
+        checkoutTenders(methods, data) {
+            return methods.filter(method => Number(data.get('apply-' + method.id)) > 0)
                 .map(method => {
                     const amount = Number(data.get('apply-' + method.id));
                     return {
@@ -379,6 +402,9 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
             ]);
             if (result) {
                 this.state.transferMessage = this.env._t('Transferencia confirmada.');
+                if (result.receipt) {
+                    this.state.originalReceipt = { id: result.id, reference: result.reference };
+                }
             }
         }
 

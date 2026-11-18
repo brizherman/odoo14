@@ -46,12 +46,34 @@ class PosSession(models.Model):
 
     def get_layaway_detail(self, record_id):
         folio = self._find_layaway(record_id)
+        receipts = []
+        for operation in self._layaway_receipt_operations([("layaway_id", "=", folio.id)]):
+            result = json.loads(operation.result)
+            receipt = result.get("receipt")
+            if not receipt and (
+                operation.kind == "authorize_transfer"
+                or (operation.kind == "installment" and not result.get("amount_applied"))
+            ):
+                continue
+            receipts.append({
+                "reference": operation.reference,
+                "kind": receipt["kind"] if receipt else operation.kind,
+                "available": bool(receipt),
+            })
+        installment_methods = self.env["pos.payment.method"]
+        if (
+            layaway_test_database(self.env) and not self.rescue and not folio.sale_id
+            and self.currency_id == folio.currency_id == self.company_id.currency_id
+            and not folio.currency_id.is_zero(folio.amount_due)
+            and local_date(fields.Datetime.now(), folio.timezone) <= folio.pickup_end
+        ):
+            installment_methods = self._layaway_checkout_methods()
         return {
             **folio._pos_layaway_values(detail=True),
-            "receipts": [{
-                "reference": operation.reference, "kind": operation.kind,
-                "available": bool(json.loads(operation.result).get("receipt")),
-            } for operation in self._layaway_receipt_operations([("layaway_id", "=", folio.id)])],
+            "receipts": receipts,
+            "installment_methods": [{
+                "id": method.id, "name": method.name, "cash": method.is_cash_count,
+            } for method in installment_methods],
             "campaign_id": folio.campaign_id.id,
             "can_add_products": (
                 layaway_test_database(self.env) and not folio.sale_id

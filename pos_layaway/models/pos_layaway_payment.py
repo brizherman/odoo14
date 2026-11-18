@@ -261,6 +261,9 @@ class PosSession(models.Model):
         if currency.compare_amounts(amount, folio.amount_due) == 0:
             raise UserError(_("La liquidación del apartado aún no está habilitada."))
 
+    def register_layaway_installment(self, folio_id, reference, tenders):
+        return self._register_layaway_payment(folio_id, reference, "installment", tenders)
+
     def _register_layaway_payment(self, folio_id, reference, kind, tenders, require_transfer=False):
         """Register a synthetic mixed tender through the server history."""
         self._check_layaway_payment_test()
@@ -289,6 +292,8 @@ class PosSession(models.Model):
             for tender in tenders:
                 method = methods[tender["method_id"]]
                 if method.layaway_transfer:
+                    if not require_transfer:
+                        raise ValidationError(_("Registra la transferencia para revisión del encargado."))
                     if method.is_cash_count or tender["amount_change"]:
                         raise ValidationError(_("Una transferencia debe coincidir con el importe aplicado."))
                     transfers.append(tender)
@@ -307,13 +312,15 @@ class PosSession(models.Model):
                     operation, accounting_session, folio, kind, tender,
                 )
             result = {
-                "reference": operation.reference, "folio": folio.folio,
+                "id": folio.id, "reference": operation.reference, "folio": folio.folio,
                 "amount_applied": applied, "amount_paid_before": previous,
                 "amount_paid": folio.amount_paid, "amount_due": folio.amount_due,
                 "payments": payments.read([
                     "method_id", "method_name", "amount", "amount_tendered", "amount_change",
                 ], load="_classic_write"),
             }
+            if kind == "installment" and payments:
+                result["receipt"] = operation._installment_receipt(folio)
             if transfers:
                 pending = payment_model.env["pos.layaway.transfer"].create([{
                     "operation_id": operation.id, "layaway_id": folio.id, "kind": kind,

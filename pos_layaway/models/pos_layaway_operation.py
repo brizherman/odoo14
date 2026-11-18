@@ -14,7 +14,7 @@ class PosLayawayOperation(models.Model):
     _order = "create_date, id"
     _rec_name = "reference"
 
-    _receipt_kinds = ("open", "add_products")
+    _receipt_kinds = ("open", "add_products", "installment", "authorize_transfer")
 
     reference = fields.Char(required=True)
     kind = fields.Char(required=True)
@@ -98,11 +98,10 @@ class PosLayawayOperation(models.Model):
                 raise ValidationError(_("La referencia corresponde a otra operación."))
             return json.loads(operation.result)
 
-    def _receipt_snapshot(self, folio):
+    def _receipt_identification(self, folio, confirmed_at):
         self.ensure_one()
-        confirmed_at = pytz.UTC.localize(self.create_date).astimezone(pytz.timezone(folio.timezone))
+        confirmed_at = pytz.UTC.localize(confirmed_at).astimezone(pytz.timezone(folio.timezone))
         return {
-            "kind": self.kind,
             "cashier": self.user_id.name,
             "register": self.session_id.config_id.name,
             "session": self.session_id.name,
@@ -110,6 +109,23 @@ class PosLayawayOperation(models.Model):
             "timezone": folio.timezone,
             "currency": folio.currency_id.name,
             "decimal_places": folio.currency_id.decimal_places,
+        }
+
+    def _installment_receipt(self, folio, authorization=None):
+        return {
+            **self._receipt_identification(folio, (authorization or self).create_date),
+            "kind": "installment",
+            "campaign_name": folio.campaign_name,
+            "contact_name": folio.contact_name,
+            "phone": folio.phone,
+            "warehouse": self.warehouse_id.display_name,
+            "amount_total": folio.amount_total,
+        }
+
+    def _receipt_snapshot(self, folio):
+        return {
+            **self._receipt_identification(folio, self.create_date),
+            "kind": self.kind,
             "conditions": [
                 _("Los plazos son inclusivos en la zona horaria indicada."),
                 _("La mercancía queda reservada en la tienda indicada. "

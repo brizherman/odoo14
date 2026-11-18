@@ -2,27 +2,35 @@
 <odoo>
     <template id="layaway_receipt">
         <t t-call="web.html_container">
-            <t t-set="quote" t-value="document['quote']"/>
+            <t t-set="quote" t-value="document.get('quote')"/>
             <t t-set="receipt" t-value="document['receipt']"/>
             <t t-set="opening" t-value="receipt['kind'] == 'open'"/>
+            <t t-set="installment" t-value="receipt['kind'] == 'installment'"/>
+            <t t-set="agreement" t-value="receipt if installment else quote"/>
             <div class="page container pt-3 pb-3">
                 <button type="button" class="btn btn-secondary float-right d-print-none"
                         onclick="window.print()">Imprimir</button>
                 <p t-if="reprint" class="layaway-reprint font-weight-bold">Reimpresión</p>
                 <h2 t-if="opening">Comprobante de apartado y anticipo</h2>
+                <h2 t-elif="installment">Comprobante de abono</h2>
                 <h2 t-else="">Constancia de adición de mercancía</h2>
                 <p>Mercancía reservada · Recogida pendiente</p>
                 <dl class="row">
                     <dt class="col-4">Campaña</dt>
-                    <dd class="col-8" t-esc="quote['campaign_name']"/>
+                    <dd class="col-8" t-esc="agreement['campaign_name']"/>
                     <dt class="col-4">Folio</dt>
                     <dd class="col-8" t-esc="document['folio']"/>
                     <dt class="col-4">Referencia de operación</dt>
                     <dd class="col-8" t-esc="document['reference']"/>
                     <dt class="col-4">Cliente</dt>
-                    <dd class="col-8"><span t-esc="quote['contact_name']"/> · <span t-esc="quote['phone']"/></dd>
-                    <dt class="col-4">Tienda de reserva</dt>
-                    <dd class="col-8" t-esc="quote['warehouse']"/>
+                    <dd class="col-8"><span t-esc="agreement['contact_name']"/> · <span t-esc="agreement['phone']"/></dd>
+                    <t t-if="document.get('transfer_reference')">
+                        <dt class="col-4">Registro de transferencia</dt>
+                        <dd class="col-8" t-esc="document['transfer_reference']"/>
+                    </t>
+                    <dt t-if="installment" class="col-4">Tienda receptora</dt>
+                    <dt t-else="" class="col-4">Tienda de reserva</dt>
+                    <dd class="col-8" t-esc="agreement['warehouse']"/>
                     <dt class="col-4">Caja y sesión</dt>
                     <dd class="col-8"><span t-esc="receipt['register']"/> · <span t-esc="receipt['session']"/></dd>
                     <dt class="col-4">Cajero</dt>
@@ -31,7 +39,7 @@
                     <dd class="col-8"><time t-esc="receipt['confirmed_at']"/> · <span t-esc="receipt['timezone']"/></dd>
                 </dl>
 
-                <section class="layaway-merchandise">
+                <section t-if="not installment" class="layaway-merchandise">
                     <h3 t-if="opening">Mercancía del apartado</h3>
                     <h3 t-else="">Mercancía agregada</h3>
                     <p>Importes en <span t-esc="receipt['currency']"/></p>
@@ -71,6 +79,13 @@
                 </section>
 
                 <section class="layaway-payment">
+                    <t t-if="installment">
+                        <p>Importes en <span t-esc="receipt['currency']"/></p>
+                        <dl class="row">
+                            <dt class="col-8">Total vigente del apartado</dt>
+                            <dd class="col-4 text-right" t-esc="money(receipt['amount_total'])"/>
+                        </dl>
+                    </t>
                     <t t-if="document['payments']">
                         <h3 t-if="opening">Anticipo recibido por método</h3>
                         <h3 t-else="">Abono recibido por método</h3>
@@ -78,6 +93,12 @@
                             <t t-foreach="document['payments']" t-as="payment">
                                 <dt class="col-8" t-esc="payment['method_name']"/>
                                 <dd class="col-4 text-right" t-esc="money(payment['amount'])"/>
+                                <t t-if="installment and payment['amount_change']">
+                                    <dt class="col-8">Efectivo entregado</dt>
+                                    <dd class="col-4 text-right" t-esc="money(payment['amount_tendered'])"/>
+                                    <dt class="col-8">Cambio devuelto</dt>
+                                    <dd class="col-4 text-right" t-esc="money(payment['amount_change'])"/>
+                                </t>
                             </t>
                             <dt class="col-8">Total recibido en esta operación</dt>
                             <dd class="col-4 text-right" t-esc="money(document['amount_applied'])"/>
@@ -87,7 +108,7 @@
                     <dl class="row">
                         <t t-if="not opening">
                             <dt class="col-8">Pagado antes de esta operación</dt>
-                            <dd class="col-4 text-right" t-esc="money(quote['amount_paid'])"/>
+                            <dd class="col-4 text-right" t-esc="money(document['amount_paid_before'] if installment else quote['amount_paid'])"/>
                             <dt class="col-8">Pagado acumulado</dt>
                             <dd class="col-4 text-right" t-esc="money(document['amount_paid'])"/>
                         </t>
@@ -96,7 +117,7 @@
                     </dl>
                 </section>
 
-                <section>
+                <section t-if="not installment">
                     <h3>Plazos y condiciones pactados</h3>
                     <ul>
                         <li t-if="opening">

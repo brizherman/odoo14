@@ -810,6 +810,67 @@ class TestPosLayawayCampaign(SavepointCase):
         self.assertEqual([self._checkout_state(folio) for folio in folios], before)
         self.assertFalse(folios.mapped("sale_id"))
 
+    def test_installment_from_participant_preserves_stock_and_original_receipt(self):
+        campaign, partner, product = self._checkout_fixture()
+        cashier_a = self.session_a.with_user(self.cashier_a)
+        cashier_b = self.session_b.with_user(self.cashier_b)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            _, opening = self._checkout_args(cashier_a, campaign, product, 2, partner)
+            opened = cashier_a.confirm_layaway(
+                *opening, [{"method_id": self.cash_a.id, "amount": 2000}],
+            )
+            folio = self.env["pos.layaway"].browse(opened["id"])
+            picking = self.env["stock.picking"].browse(opened["picking_id"])
+            reserved_lines = picking.move_line_ids
+            self.assertEqual(reserved_lines.mapped("product_uom_qty"), [2])
+            before = self.session_b.cash_register_balance_end
+            detail = cashier_b.get_layaway_detail(folio.id)
+            self.assertIn(self.cash_b.id, [method["id"] for method in detail["installment_methods"]])
+            args = [folio.id, str(uuid4()), [
+                {"method_id": self.cash_b.id, "amount": 400, "amount_tendered": 500},
+                {"method_id": self.card_b.id, "amount": 600},
+            ]]
+            with patch("odoo.addons.pos_layaway.models.pos_layaway_payment.layaway_test_database",
+                       return_value=False), self.assertRaises(AccessError):
+                cashier_b.register_layaway_installment(*args)
+            with self.assertRaises(AccessError):
+                self.session_other.with_user(self.cashier_a).register_layaway_installment(*args)
+            result = cashier_b.register_layaway_installment(*args)
+            self.assertEqual(cashier_a.register_layaway_installment(*args), result)
+            self.assertEqual(self.session_b.cash_register_balance_end, before + 400)
+            self.assertEqual((result["amount_paid_before"], result["amount_applied"],
+                              result["amount_paid"], result["amount_due"]), (2000, 1000, 3000, 1000))
+            self.assertEqual(result["receipt"]["amount_total"], 4000)
+            self.assertEqual(result["receipt"]["cashier"], self.cashier_b.name)
+            self.assertEqual(result["receipt"]["warehouse"], self.config_b.picking_type_id.warehouse_id.display_name)
+            self.assertEqual(result["receipt"]["confirmed_at"], "2026-11-18 12:00:00-08:00")
+            self.assertEqual([(p["amount"], p["amount_change"]) for p in result["payments"]],
+                             [(400, 100), (600, 0)])
+            self.assertEqual(cashier_b._layaway_receipt(folio.id, args[1], True), (result, False))
+
+            transfer = cashier_a.register_layaway_transfer(folio.id, str(uuid4()), "installment", [
+                {"method_id": self.transfer_a.id, "amount": 250},
+            ])
+            with self.assertRaises(AccessError):
+                cashier_a._layaway_receipt(folio.id, transfer["reference"])
+            authorization = self.session_a.with_user(self.supervisor).authorize_layaway_transfer(
+                folio.id, transfer["pending_transfers"][0], "SPEI-34", "Prueba", "Extracto sintético",
+            )
+            self.assertEqual(authorization["payments"][0]["amount"], 250)
+            self.assertEqual(authorization["transfer_reference"], transfer["reference"])
+            self.assertEqual(cashier_b._layaway_receipt(folio.id, authorization["reference"]),
+                             (authorization, True))
+            self.assertEqual([row["kind"] for row in cashier_b.get_layaway_detail(folio.id)["receipts"]],
+                             ["open", "installment", "installment"])
+
+        self.assertEqual(cashier_a._layaway_receipt(folio.id, args[1]), (result, True))
+        self.assertEqual(folio.amount_due, 750)
+        self.assertEqual(picking.move_line_ids, reserved_lines)
+        self.assertEqual(reserved_lines.mapped("product_uom_qty"), [2])
+        self.assertEqual(reserved_lines.mapped("qty_done"), [0])
+        self.assertEqual(picking.state, "assigned")
+        self.assertFalse(folio.sale_id)
+
     def test_receipt_history_handles_operations_before_printing_was_available(self):
         campaign = self.campaigns.create(self.values)
         campaign.action_activate()
