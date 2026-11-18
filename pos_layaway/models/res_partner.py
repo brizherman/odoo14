@@ -20,13 +20,13 @@ class ResPartner(models.Model):
         months = company._wholesale_calendar_months(moment)
         currency = company.currency_id
         payments = self._wholesale_layaway_tenders([
-            ("paid_at", ">=", months[0]["start_utc"]),
+            ("recognition_at", ">=", months[0]["start_utc"]),
         ], moment)
         if any(payment.currency_id != currency for payment in payments):
             raise WholesaleCurrencyError()
         amounts = [0.0] * len(months)
         for payment in payments:
-            index = self._wholesale_month_index(payment.paid_at, months)
+            index = self._wholesale_month_index(payment.recognition_at, months)
             amounts[index] += payment.amount
         for row, amount in zip(rows, amounts):
             row["ordinary_amount"] = row["amount"]
@@ -42,10 +42,10 @@ class ResPartner(models.Model):
             ("move_id.state", "=", "posted"),
             "&", ("statement_line_id", "!=", False), ("move_id.state", "=", "draft"),
         ] + domain)
-        # A posted full reversal removes the original from its actual receipt month.
+        # Authorized corrections carry their own signed amounts and confirmation dates.
         return payments.filtered(lambda payment: not any(
             move.state == "posted" and move.create_date <= moment
-            for move in payment.move_id.reversal_move_id
+            for move in payment.move_id.reversal_move_id - payment.correction_ids.move_id
         ))
 
     def _wholesale_grouped_amount(self, model_name, domain):

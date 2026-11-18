@@ -194,9 +194,81 @@
                             </div>
                         </form>
                     </article>
-                    <p t-if="state.transferMessage" class="layaway-transfer-message" role="status"
-                       t-esc="state.transferMessage"/>
                 </section>
+                <details t-if="folio.payment_corrections.length || state.pendingCorrection"
+                         class="layaway-payment-corrections">
+                    <summary>Cobros y correcciones de prueba</summary>
+                    <table class="layaway-table">
+                        <thead><tr><th>Referencia</th><th>Sesión</th><th>Método</th><th>Importe</th></tr></thead>
+                        <tbody>
+                            <tr t-foreach="folio.payment_corrections" t-as="payment" t-key="payment.id">
+                                <td>
+                                    <span t-esc="payment.reference"/>
+                                    <span t-if="payment.corrects">
+                                        · <t t-if="payment.amount &lt; 0">Reversión de </t>
+                                        <t t-else="">Sustituye a </t><span t-esc="payment.corrects"/>
+                                    </span>
+                                </td>
+                                <td t-esc="payment.session"/>
+                                <td t-esc="payment.method"/>
+                                <td t-esc="money(payment.amount)"/>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <form class="layaway-correction-form" t-on-submit.prevent="submitPaymentCorrection">
+                        <t t-if="!state.pendingCorrection">
+                            <label>Cobro original
+                                <select name="payment_id" t-model="state.correctionPayment">
+                                    <option value="">Seleccionar cobro</option>
+                                    <t t-foreach="folio.payment_corrections" t-as="payment" t-key="payment.id">
+                                        <option t-if="payment.remaining > 0 &amp;&amp; (payment.can_refund || payment.methods.length)"
+                                                t-att-value="payment.id">
+                                            <t t-esc="payment.method"/> · <t t-esc="money(payment.remaining)"/>
+                                            · <t t-esc="payment.reference"/>
+                                        </option>
+                                    </t>
+                                </select>
+                            </label>
+                            <t t-set="payment" t-value="correctionPayment"/>
+                            <label t-if="payment">Tipo de corrección
+                                <select name="kind" required="required" t-model="state.correctionKind">
+                                    <option value="">Seleccionar tipo</option>
+                                    <option t-if="payment.methods.length" value="reclassify_payment">Reclasificar método</option>
+                                    <option t-if="payment.can_refund" value="refund_payment">Registrar devolución efectiva</option>
+                                </select>
+                            </label>
+                            <div t-if="payment &amp;&amp; state.correctionKind" class="layaway-transfer-form">
+                                <label t-if="state.correctionKind === 'refund_payment'">Importe devuelto
+                                    <input name="amount" type="number" step="0.01" min="0.01"
+                                           t-att-max="payment.remaining" required="required"/>
+                                </label>
+                                <t t-else="">
+                                    <label>Método correcto
+                                        <select name="method_id" required="required" t-model="state.correctionMethod">
+                                            <option value="">Seleccionar método</option>
+                                            <option t-foreach="payment.methods" t-as="method" t-key="method.id"
+                                                    t-att-value="method.id" t-esc="method.name"/>
+                                        </select>
+                                    </label>
+                                    <label t-if="correctionMethod &amp;&amp; correctionMethod.transfer">Referencia bancaria
+                                        <input name="bank_reference" maxlength="120" required="required"/>
+                                    </label>
+                                </t>
+                                <label>Motivo<input name="reason" maxlength="500" required="required"/></label>
+                                <label>Evidencia de verificación
+                                    <input name="evidence" maxlength="2000" required="required"/>
+                                </label>
+                            </div>
+                        </t>
+                        <button t-if="state.pendingCorrection || correctionPayment &amp;&amp; state.correctionKind"
+                                type="submit" class="layaway-submit" t-att-disabled="state.stale || state.transferBusy">
+                            <t t-if="state.pendingCorrection">Recuperar corrección</t>
+                            <t t-else="">Autorizar corrección de prueba</t>
+                        </button>
+                    </form>
+                </details>
+                <p t-if="state.transferMessage" class="layaway-transfer-message" role="status"
+                   t-esc="state.transferMessage"/>
                 <div class="layaway-actions" aria-label="Operaciones del apartado">
                     <button type="button" t-att-disabled="state.stale || state.transferBusy || !folio.can_add_products"
                             t-on-click="() => startCheckout(folio)">Agregar productos</button>

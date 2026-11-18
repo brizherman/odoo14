@@ -4,6 +4,7 @@ from . import pos_layaway
 from . import pos_layaway_operation
 from . import pos_layaway_payment
 from . import pos_layaway_transfer
+from . import pos_layaway_correction
 from . import pos_layaway_quote
 from . import pos_layaway_change
 from . import pos_layaway_query

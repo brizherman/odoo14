@@ -20,7 +20,7 @@ class PosLayawayTransfer(models.Model):
     kind = fields.Selection(
         [("deposit", "Anticipo"), ("installment", "Abono")], required=True,
     )
-    session_id = fields.Many2one(related="operation_id.session_id")
+    session_id = fields.Many2one("pos.session", compute="_compute_receiving_session")
     company_id = fields.Many2one("res.company", required=True, ondelete="restrict", index=True)
     currency_id = fields.Many2one("res.currency", required=True, ondelete="restrict")
     method_id = fields.Many2one(
@@ -52,6 +52,11 @@ class PosLayawayTransfer(models.Model):
          """, "La transferencia confirmada debe conservar su autorización y evidencia."),
     ]
 
+    @api.depends("operation_id.session_id", "payment_id.session_id")
+    def _compute_receiving_session(self):
+        for transfer in self:
+            transfer.session_id = transfer.payment_id.session_id or transfer.operation_id.session_id
+
     @api.model_create_multi
     def create(self, vals_list):
         if not self.env.su or not layaway_test_database(self.env):
@@ -68,11 +73,9 @@ class PosLayawayTransfer(models.Model):
         self.ensure_one()
         if authorization.session_id.company_id != self.company_id:
             raise AccessError(_("La transferencia debe verificarse en la compañía que la recibió."))
-        if self.payment_id or self.search_count([
-            ("company_id", "=", self.company_id.id),
-            ("bank_reference", "=", verification["bank_reference"]),
-        ]):
+        if self.payment_id:
             raise ValidationError(_("La referencia bancaria ya se aplicó en esta compañía."))
+        self._check_layaway_bank_reference(self.company_id, verification["bank_reference"])
         receiving = self.session_id.with_context({}, allowed_company_ids=self.company_id.ids)
         receiving._check_layaway_payment_amount(folio, self.amount, authorization.create_date)
         # The receiving session owns the payment. Authorization supplies the recognition date.
@@ -105,6 +108,26 @@ class PosLayawayTransfer(models.Model):
             })
         return folio, result
 
+    @api.model
+    def _check_layaway_bank_reference(self, company, reference):
+        if self.search_count([("company_id", "=", company.id), ("bank_reference", "=", reference)]):
+            raise ValidationError(_("La referencia bancaria ya se aplicó en esta compañía."))
+
+    @api.model
+    def _layaway_transfer_verification(self, bank_reference, reason, evidence):
+        verification = {"bank_reference": bank_reference, "reason": reason, "evidence": evidence}
+        for name, limit in (("bank_reference", 120), ("reason", 500), ("evidence", 2000)):
+            value = verification[name]
+            if not isinstance(value, str) or not value.strip() or len(value.strip()) > limit:
+                raise ValidationError(
+                    _("Indica la referencia bancaria, el motivo y la evidencia de recepción.")
+                )
+            verification[name] = value.strip()
+        verification["bank_reference"] = verification["bank_reference"].upper()
+        if not verification["bank_reference"].isprintable() or len(verification["bank_reference"]) > 120:
+            raise ValidationError(_("Indica una referencia bancaria válida."))
+        return verification
+
 
 class PosSession(models.Model):
     _inherit = "pos.session"
@@ -123,19 +146,9 @@ class PosSession(models.Model):
         ])
         if not transfer:
             raise AccessError(_("La transferencia no corresponde a este apartado."))
-        verification = {
-            "bank_reference": bank_reference, "reason": reason, "evidence": evidence,
-        }
-        for name, limit in (("bank_reference", 120), ("reason", 500), ("evidence", 2000)):
-            value = verification[name]
-            if not isinstance(value, str) or not value.strip() or len(value.strip()) > limit:
-                raise ValidationError(
-                    _("Indica la referencia bancaria, el motivo y la evidencia de recepción.")
-                )
-            verification[name] = value.strip()
-        verification["bank_reference"] = verification["bank_reference"].upper()
-        if not verification["bank_reference"].isprintable() or len(verification["bank_reference"]) > 120:
-            raise ValidationError(_("Indica una referencia bancaria válida."))
+        verification = session.env["pos.layaway.transfer"]._layaway_transfer_verification(
+            bank_reference, reason, evidence,
+        )
         reference = str(uuid5(NAMESPACE_URL, "pos_layaway/transfer/%s/%s" % (
             transfer.reference, transfer.method_id.id,
         )))

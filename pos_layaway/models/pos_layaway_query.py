@@ -81,6 +81,7 @@ class PosSession(models.Model):
                 and local_date(fields.Datetime.now(), folio.timezone) <= folio.addition_end
             ),
             "transfer_review": self._layaway_transfer_detail(folio),
+            "payment_corrections": self._layaway_correction_detail(folio),
             "changeable_lines": (
                 self._layaway_changeable_lines(folio).ids
                 if self._can_change_layaway(folio, fields.Datetime.now()) else []

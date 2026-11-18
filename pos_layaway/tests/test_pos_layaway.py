@@ -1230,6 +1230,181 @@ class TestPosLayawayCampaign(SavepointCase):
         self.assertEqual(len(folio.payment_ids), 3)
         self.assertAlmostEqual(session.cash_register_balance_end, baseline + 123.45)
 
+    def test_payment_correction_refunds_cash_and_keeps_original_receipt(self):
+        campaign, partner, product = self._checkout_fixture()
+        retail = self.retail
+        cashier = self.session_a.with_user(self.cashier_a)
+        manager = self.session_a.with_user(self.supervisor)
+        day = datetime(2026, 11, 18, 20)
+        with patch.object(fields.Datetime, "now", return_value=day):
+            _, args = self._checkout_args(cashier, campaign, product, 2, partner)
+            opened = cashier.confirm_layaway(*args, [{"method_id": self.cash_a.id, "amount": 2000}])
+        folio = self.env["pos.layaway"].browse(opened["id"])
+        original = folio.payment_ids
+        picking = self.env["stock.picking"].browse(opened["picking_id"])
+        original_lines = picking.move_line_ids
+        original_statement = self.session_a.cash_register_id
+        before = original.read(["amount", "method_id", "move_id", "statement_line_id"])
+        baseline = self.session_a.cash_register_balance_end
+        for values in ({"amount": 10}, {"method_id": self.card_a.id}):
+            with self.assertRaises(ValidationError):
+                original.with_user(self.supervisor).write(values)
+        with self.assertRaises(ValidationError):
+            original.with_user(self.supervisor).unlink()
+        self.assertEqual(original.read(list(before[0])), before)
+        self.assertEqual((folio.amount_due, self.session_a.cash_register_balance_end), (2000, baseline))
+        self.assertEqual(folio.payment_ids, original)
+
+        correction = {
+            "kind": "refund_payment", "amount": 1300, "reason": "Importe de prueba incorrecto",
+            "evidence": "Devolución sintética en efectivo",
+        }
+        reference = str(uuid4())
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 2, 20)):
+            with self.assertRaises(AccessError):
+                cashier.correct_layaway_payment(folio.id, original.id, reference, correction)
+            with self.assertRaises(AccessError):
+                self.session_b.with_user(self.supervisor_b).correct_layaway_payment(
+                    folio.id, original.id, reference, correction,
+                )
+            with patch("odoo.addons.pos_layaway.models.pos_layaway_payment.layaway_test_database",
+                       return_value=False), self.assertRaises(AccessError):
+                manager.correct_layaway_payment(folio.id, original.id, reference, correction)
+            eligibility = self._wholesale_eligibility(self.session_a, partner)
+            self.assertEqual(eligibility["previous_month_amount"], 2000)
+            result = manager.correct_layaway_payment(folio.id, original.id, reference, correction)
+            self.assertEqual(manager.correct_layaway_payment(folio.id, original.id, reference, correction), result)
+            with self.assertRaisesRegex(ValidationError, "otra operación"):
+                manager.correct_layaway_payment(folio.id, original.id, reference, dict(correction, amount=300))
+            with self.assertRaisesRegex(ValidationError, "excede"):
+                manager.correct_layaway_payment(folio.id, original.id, str(uuid4()), dict(correction, amount=701))
+            eligibility = self._wholesale_eligibility(self.session_a, partner)
+            self.assertEqual(eligibility["previous_month_amount"], 700)
+            self.assertEqual(eligibility["expected_pricelist"]["id"], retail.id)
+            self.assertEqual(cashier._layaway_receipt(folio.id, opened["reference"], True), (opened, False))
+        reversal = folio.payment_ids - original
+        self.assertEqual(result["reversal_payment_id"], reversal.id)
+        self.assertEqual((result["money_returned"], result["corrected_amount"], result["amount_due"]),
+                         (1300, 700, 3300))
+        self.assertEqual(reversal.amount, -1300)
+        self.assertEqual(reversal.corrects_payment_id, original)
+        self.assertEqual(reversal.authorization_id.user_id, self.supervisor)
+        self.assertEqual(reversal.move_id.reversed_entry_id, original.move_id)
+        self.assertEqual(reversal.statement_line_id.statement_id, original_statement)
+        self.assertEqual(reversal.statement_line_id.amount, -1300)
+        self.assertEqual(original.read(list(before[0])), before)
+        self.assertEqual(self.session_a.cash_register_balance_end, baseline - 1300)
+        self.assertEqual((folio.amount_paid, folio.amount_due), (700, 3300))
+        self.assertEqual(picking.move_line_ids, original_lines)
+        self.assertEqual(original_lines.mapped("qty_done"), [0])
+        self.assertEqual(picking.state, "assigned")
+        original_statement.balance_end_real = baseline - 1300
+        self.session_a.action_pos_session_closing_control()
+        self.session_a.action_pos_session_validate()
+        self.assertEqual((self.session_a.state, self.session_a.cash_real_difference), ("closed", 0))
+        self.assertEqual(reversal.move_id.state, "posted")
+        history = partner._wholesale_monthly_totals(self.company_a, datetime(2026, 11, 19, 20))
+        self.assertEqual(history[-1]["amount"], 2000)
+
+    def test_payment_correction_reclassifies_closed_session_with_linked_sale(self):
+        campaign = self.campaigns.create(self.values)
+        campaign.action_activate()
+        folio = self._make_folio(campaign)
+        self._payment(self.session_a, folio, "deposit", [{"method_id": self.cash_a.id, "amount": 2000}])
+        initial = self._payment(self.session_b, folio, "installment", [{"method_id": self.card_b.id, "amount": 1000}])
+        original = folio.payment_ids.filtered(lambda payment: payment.company_id == self.company_b)
+        self.session_b.action_pos_session_closing_control()
+        self.session_b.action_pos_session_validate()
+        self.assertEqual(self.session_b.state, "closed")
+        closed_cash = self.session_b.cash_register_id.line_ids
+        total_cash = self.session_b.cash_real_expected
+        settlement_at = datetime(2026, 11, 18, 22)
+        session_a = self.session_a.with_user(self.cashier_a)
+        tender = {"method_id": self.cash_a.id, "amount": 1000, "amount_tendered": 1000, "amount_change": 0}
+
+        def stage_settlement(operation):
+            accounting = session_a.sudo().with_company(self.company_a)
+            accounting.env["pos.layaway.payment"]._record_tender(
+                operation, accounting, folio, "installment", tender,
+            )
+            return folio, {}
+
+        # Stage the settled state using the payment ledger while the finalization flow is pending.
+        with patch.object(fields.Datetime, "now", return_value=settlement_at):
+            self.env["pos.layaway.operation"]._confirm(
+                session_a, str(uuid4()), "test_settlement", tender, stage_settlement, folio, pass_operation=True,
+            )
+            folio.sale_id = self._wholesale_history_order(folio.partner_id, 4000, settlement_at)
+        self.assertEqual((folio.amount_due, folio.payment_state), (0, "paid"))
+        self.assertEqual(folio.sale_id.layaway_ids, folio)
+        sale_snapshot = folio.sale_id.read(["amount_total", "state", "lines", "payment_ids"])
+        next_session = self._create_session(self.config_b, self.cashier_b)
+        manager = next_session.with_user(self.supervisor_b)
+        correction = {
+            "kind": "reclassify_payment", "method_id": self.transfer_b.id, "reason": "Método de prueba",
+            "evidence": "Extracto sintético verificado", "bank_reference": "spei-35-test",
+        }
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 2, 20)):
+            with self.assertRaisesRegex(UserError, "venta liquidada"):
+                manager.correct_layaway_payment(folio.id, original.id, str(uuid4()), {
+                    "kind": "refund_payment", "amount": 500, "reason": "Prueba", "evidence": "Prueba",
+                })
+            with self.assertRaisesRegex(ValidationError, "referencia bancaria"):
+                manager.correct_layaway_payment(folio.id, original.id, str(uuid4()),
+                                                dict(correction, bank_reference=""))
+            reference = str(uuid4())
+            result = manager.correct_layaway_payment(folio.id, original.id, reference, correction)
+            self.assertEqual(manager.correct_layaway_payment(folio.id, original.id, reference, correction), result)
+            with self.assertRaisesRegex(ValidationError, "excede"):
+                manager.correct_layaway_payment(folio.id, original.id, str(uuid4()), correction)
+            self.assertEqual(manager._layaway_receipt(folio.id, initial["reference"]), (initial, True))
+        reversal = self.env["pos.layaway.payment"].browse(result["reversal_payment_id"])
+        replacement = self.env["pos.layaway.payment"].browse(result["replacement_payment_id"])
+        self.assertEqual(reversal.move_id.reversed_entry_id, original.move_id)
+        self.assertEqual((reversal | replacement).corrects_payment_id, original)
+        self.assertEqual((reversal | replacement).session_id, self.session_b)
+        self.assertEqual((reversal | replacement).operation_id.session_id, next_session)
+        self.assertEqual((reversal.amount, replacement.amount, result["money_returned"]), (-1000, 1000, 0))
+        self.assertEqual(result["sale_id"], folio.sale_id.id)
+        self.assertEqual(folio.sale_id.read(list(sale_snapshot[0])), sale_snapshot)
+        self.assertEqual((folio.amount_due, folio.payment_state), (0, "paid"))
+        self.assertEqual(original.amount, 1000)
+        self.assertEqual(self.session_b.cash_register_id.line_ids, closed_cash)
+        self.assertEqual(self.session_b.cash_real_expected, total_cash)
+        self.assertFalse(next_session.cash_register_id.line_ids)
+        self.assertEqual(self.session_b.state, "closed")
+        self.assertEqual(folio.transfer_ids.bank_reference, "SPEI-35-TEST")
+        journal_lines = (original | reversal | replacement).move_id.line_ids
+        for account, balance in (
+            (self.card_b.layaway_card_clearing_account_id, 0),
+            (self.transfer_b.layaway_transfer_clearing_account_id, 1000),
+            (self.config_b.layaway_liability_account_id, -1000),
+        ):
+            self.assertEqual(sum(journal_lines.filtered(lambda line: line.account_id == account).mapped("balance")),
+                             balance)
+
+    def test_payment_correction_refunds_card_in_current_session(self):
+        campaign = self.campaigns.create(self.values)
+        campaign.action_activate()
+        folio = self._make_folio(campaign)
+        self._payment(self.session_a, folio, "deposit", [{"method_id": self.card_a.id, "amount": 2000}])
+        original = folio.payment_ids
+        self.session_a.action_pos_session_closing_control()
+        self.session_a.action_pos_session_validate()
+        receiving = self._create_session(self.config_a, self.cashier_a).with_user(self.supervisor)
+        correction = {"kind": "refund_payment", "amount": 125, "reason": "Importe", "evidence": "Prueba"}
+        result = receiving.correct_layaway_payment(folio.id, original.id, str(uuid4()), correction)
+        reversal = self.env["pos.layaway.payment"].browse(result["reversal_payment_id"])
+        self.assertEqual((folio.amount_paid, folio.amount_due), (1875, 2125))
+        self.assertEqual(reversal.session_id.id, receiving.id)
+        self.assertEqual(reversal.move_id.reversed_entry_id, original.move_id)
+        self.assertFalse(reversal.statement_line_id)
+        self.assertEqual(self.session_a.state, "closed")
+        self.assertEqual(reversal.move_id.state, "posted")
+        clearing = self.card_a.layaway_card_clearing_account_id
+        movements = (original | reversal).move_id.line_ids.filtered(lambda line: line.account_id == clearing)
+        self.assertEqual(sorted(movements.mapped("balance")), [-125, 2000])
+
     def test_mixed_transfer_requires_manual_confirmation_and_confirmed_coverage(self):
         campaign = self.campaigns.create(self.values)
         campaign.action_activate()

@@ -30,6 +30,8 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                 canOpen: false, draft: null, checkoutBusy: false, checkoutMessage: '',
                 originalReceipt: null,
                 pendingConfirmation: JSON.parse(sessionStorage.getItem(this.confirmationKey)),
+                pendingCorrection: null, correctionPayment: '', correctionMethod: '',
+                correctionKind: '',
                 filters: { query: '', campaign: '', store: '', from: '', to: '',
                     payment_state: '', pickup_state: '', expiry: '' },
             });
@@ -117,6 +119,7 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                     result.transfer_review && result.transfer_review.methods
                     && sessionStorage.getItem(this.transferKey)
                 );
+                this.state.pendingCorrection = JSON.parse(sessionStorage.getItem(this.correctionKey));
             }
         }
 
@@ -126,6 +129,9 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
             this.state.detail = null;
             this.state.originalReceipt = null;
             this.state.transferMessage = '';
+            this.state.correctionPayment = '';
+            this.state.correctionKind = '';
+            this.state.correctionMethod = '';
             if (!this.state.stale) {
                 this.loadPage(0);
             }
@@ -377,7 +383,9 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                 sessionStorage.setItem(key, JSON.stringify(pending));
             }
             const { reference, kind, tenders } = pending;
-            const result = await this.changeTransfer('register_layaway_transfer', [detail.id, reference, kind, tenders]);
+            const result = await this.submitLayawayOperation(
+                'register_layaway_transfer', [detail.id, reference, kind, tenders],
+            );
             if (result !== null) {
                 sessionStorage.removeItem(key);
                 this.state.transferRetry = false;
@@ -396,7 +404,7 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
 
         async authorizeTransfer(event, transferId) {
             const data = new FormData(event.currentTarget);
-            const result = await this.changeTransfer('authorize_layaway_transfer', [
+            const result = await this.submitLayawayOperation('authorize_layaway_transfer', [
                 this.state.detail.id, transferId, data.get('bank_reference'),
                 data.get('reason'), data.get('evidence'),
             ]);
@@ -408,7 +416,58 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
             }
         }
 
-        async changeTransfer(method, args) {
+        get correctionKey() {
+            return this.transferKey + ':correction';
+        }
+
+        get correctionPayment() {
+            return this.state.detail.payment_corrections.find(
+                payment => payment.id === Number(this.state.correctionPayment),
+            );
+        }
+
+        get correctionMethod() {
+            const payment = this.correctionPayment;
+            return payment && payment.methods.find(
+                method => method.id === Number(this.state.correctionMethod),
+            );
+        }
+
+        async submitPaymentCorrection(event) {
+            if (this.state.stale || this.state.transferBusy || !navigator.onLine) {
+                return;
+            }
+            let pending = this.state.pendingCorrection;
+            const key = this.correctionKey;
+            if (!pending) {
+                const data = new FormData(event.currentTarget);
+                const correction = {
+                    kind: data.get('kind'), reason: data.get('reason'), evidence: data.get('evidence'),
+                };
+                if (correction.kind === 'refund_payment') {
+                    correction.amount = Number(data.get('amount'));
+                } else {
+                    correction.method_id = Number(data.get('method_id'));
+                    correction.bank_reference = data.get('bank_reference') || '';
+                }
+                pending = [this.state.detail.id, this.correctionPayment.id, operationReference(), correction];
+                sessionStorage.setItem(key, JSON.stringify(pending));
+                this.state.pendingCorrection = pending;
+            }
+            const result = await this.submitLayawayOperation('correct_layaway_payment', pending);
+            if (result !== null) {
+                sessionStorage.removeItem(key);
+                this.state.pendingCorrection = null;
+            }
+            if (result) {
+                this.state.correctionPayment = '';
+                this.state.correctionKind = '';
+                this.state.correctionMethod = '';
+                this.state.transferMessage = this.env._t('Corrección confirmada.');
+            }
+        }
+
+        async submitLayawayOperation(method, args) {
             if (this.state.stale || this.state.transferBusy || !navigator.onLine) {
                 return null;
             }
