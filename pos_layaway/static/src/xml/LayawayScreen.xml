@@ -28,6 +28,7 @@
             </main>
             <main t-elif="state.draft" class="layaway-content layaway-checkout">
                 <t t-if="state.draft.relocate" t-call="pos_layaway.LayawayRelocation"/>
+                <t t-elif="state.draft.expiryReview" t-call="pos_layaway.LayawayExpiryReview"/>
                 <t t-elif="state.draft.installment || state.draft.pickup" t-call="pos_layaway.LayawayInstallment"/>
                 <t t-else="" t-call="pos_layaway.LayawayCheckout"/>
             </main>
@@ -35,6 +36,9 @@
                 <button t-if="state.canOpen" type="button" class="layaway-open-new"
                         t-att-disabled="state.stale || state.loading"
                         t-on-click="() => startCheckout(null)">Abrir apartado de prueba</button>
+                <button t-if="state.canReviewExpired" type="button" class="layaway-open-new"
+                        t-att-disabled="state.stale || state.loading"
+                        t-on-click="showExpired">Revisar vencidos</button>
                 <form class="layaway-filters" t-on-submit.prevent="search">
                     <label class="layaway-search">Folio, nombre o teléfono
                         <input type="search" name="query" t-model="state.filters.query"/>
@@ -92,7 +96,9 @@
                     <tbody>
                         <tr t-foreach="state.rows" t-as="row" t-key="row.id">
                             <td><button class="layaway-open" t-on-click="() => openDetail(row.id)"
-                                        t-att-disabled="state.stale" t-esc="row.folio"/></td>
+                                        t-att-disabled="state.stale" t-esc="row.folio"/>
+                                <span t-if="row.expired" class="layaway-expired"> · Vencido</span>
+                            </td>
                             <td t-esc="row.customer"/><td t-esc="row.campaign"/><td t-esc="row.opened_on"/>
                             <td t-esc="paymentLabels[row.payment_state]"/>
                             <td t-esc="pickupLabels[row.pickup_state]"/>
@@ -143,6 +149,20 @@
                     <div><dt>Restante</dt><dd t-esc="money(folio.amount_due)"/></div>
                 </dl>
                 <t t-call="pos_layaway.LayawayStockTable"/>
+                <section t-if="folio.expiry_review.can_review || folio.expiry_review.history.length"
+                         class="layaway-expiry-review">
+                    <h3>Revisión de vencimiento</h3>
+                    <article t-foreach="folio.expiry_review.history" t-as="review" t-key="review.reference">
+                        <p><strong t-esc="expiryResolutionLabels[review.resolution]"/>
+                            · <span t-esc="review.reviewer"/> · <time t-esc="review.reviewed_at"/></p>
+                        <p t-esc="review.notes"/>
+                    </article>
+                    <button t-if="folio.expiry_review.can_review" type="button" class="layaway-submit"
+                            t-on-click="() => startExpiryReview(folio)"
+                            t-att-disabled="state.stale || state.loading || state.transferBusy">
+                        Registrar revisión de prueba
+                    </button>
+                </section>
                 <details t-if="folio.receipts.length" class="layaway-receipts">
                     <summary>Comprobantes</summary>
                     <ul>
@@ -323,6 +343,27 @@
                 <p t-if="!state.stale" class="layaway-status">Operaciones pendientes de habilitación.</p>
             </main>
         </div>
+    </t>
+
+    <t t-name="pos_layaway.LayawayExpiryReview" owl="1">
+        <h2>Revisar apartado vencido <span t-esc="state.draft.folio.folio"/></h2>
+        <form class="layaway-transfer-form" t-on-submit.prevent="confirmCheckout">
+            <label>Resolución
+                <select name="resolution" required="required">
+                    <option value="">Seleccionar resolución</option>
+                    <option value="keep_reserved" t-esc="expiryResolutionLabels.keep_reserved"/>
+                    <option t-if="state.draft.folio.sale_name &amp;&amp; state.draft.folio.payment_state === 'paid'"
+                            value="authorize_late_pickup" t-esc="expiryResolutionLabels.authorize_late_pickup"/>
+                </select>
+            </label>
+            <label>Motivo y observaciones
+                <textarea name="notes" maxlength="500" required="required"/>
+            </label>
+            <button type="submit" class="layaway-submit" t-att-disabled="state.stale || state.checkoutBusy">
+                Guardar revisión
+            </button>
+        </form>
+        <button type="button" t-on-click="cancelCheckout" t-att-disabled="state.checkoutBusy">Volver al folio</button>
     </t>
 
     <t t-name="pos_layaway.LayawayTenderFields" owl="1">

@@ -2079,6 +2079,127 @@ class TestPosLayawayCampaign(SavepointCase):
                 with self.assertRaises(AccessError):
                     picking.move_line_ids.qty_done = qty + 1
 
+    def test_expiry_review_preserves_paid_reservations_and_authorizes_late_pickups(self):
+        campaign, partner, product = self._settlement_fixture()
+        a = self.session_a.with_user(self.cashier_a)
+        b = self.session_b.with_user(self.cashier_b)
+        manager = self.session_a.with_user(self.supervisor)
+        holder = {"kind": "holder", "identity_verified": True}
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            _, opening = self._checkout_args(a, campaign, product, 2, partner)
+            opened = a.confirm_layaway(*opening, [{"method_id": self.cash_a.id, "amount": 2000}])
+            folio = self.env["pos.layaway"].browse(opened["id"])
+            _, addition = self._checkout_args(b, campaign, product, 1, folio=folio)
+            added = b.confirm_layaway(*addition, [{"method_id": self.cash_b.id, "amount": 1000}])
+            a.settle_layaway(folio.id, str(uuid4()), [{"method_id": self.cash_a.id, "amount": 3000}])
+        remote = self.env["stock.picking"].browse(added["picking_id"])
+        sale = folio.sale_id
+        before = self._checkout_state(folio)
+        keep = (folio.id, str(uuid4()), "keep_reserved", "Revisadas ambas tiendas.")
+        authorize = (folio.id, str(uuid4()), "authorize_late_pickup", "Reserva completa verificada.")
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 16, 7, 59, 59)):
+            self.assertFalse(manager.get_layaways({"expiry": "expired"})["rows"])
+            self.assertTrue(a.get_layaway_detail(folio.id)["pickup"]["available"])
+            with self.assertRaisesRegex(UserError, "vencido"):
+                manager.review_expired_layaway(*keep)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 16, 8)):
+            expired = manager.get_layaways({"expiry": "expired"})
+            self.assertTrue(expired["can_review_expired"])
+            self.assertEqual([row["id"] for row in expired["rows"]], folio.ids)
+            detail = a.get_layaway_detail(folio.id)
+            self.assertFalse(detail["expiry_review"]["can_review"])
+            self.assertFalse(detail["pickup"]["available"])
+            lines = detail["pickup"]["lines"]
+            with self.assertRaises(AccessError):
+                a.review_expired_layaway(*keep)
+            with self.assertRaises(AccessError):
+                self.session_other.with_user(self.supervisor).review_expired_layaway(*keep)
+            with patch("odoo.addons.pos_layaway.models.pos_layaway_pickup.layaway_test_database",
+                       return_value=False), self.assertRaises(AccessError):
+                manager.review_expired_layaway(*keep)
+            with self.assertRaisesRegex(ValidationError, "observaciones"):
+                manager.review_expired_layaway(*keep[:3], "  ")
+            review = manager.review_expired_layaway(*keep)
+            self.assertEqual(manager.review_expired_layaway(*keep), review)
+            self.assertEqual((review["reviewer"], review["reviewed_at"], review["notes"], review["resolution"]),
+                             (self.supervisor.name, "2026-12-16 00:00:00-08:00", keep[3], keep[2]))
+            with self.assertRaisesRegex(UserError, "requiere autorización"):
+                a.confirm_layaway_pickup(folio.id, str(uuid4()), holder, lines)
+            with self.assertRaisesRegex(UserError, "reserva"), self.cr.savepoint():
+                remote.do_unreserve()
+                manager.review_expired_layaway(*authorize)
+            self.assertEqual(self._checkout_state(folio), before)
+            authorization = manager.review_expired_layaway(*authorize)
+            revoked = manager.review_expired_layaway(
+                folio.id, str(uuid4()), "keep_reserved", "Revisión posterior.",
+            )
+            self.assertFalse(a.get_layaway_detail(folio.id)["pickup"]["available"])
+            with self.assertRaisesRegex(UserError, "requiere autorización"):
+                a.confirm_layaway_pickup(folio.id, str(uuid4()), holder, lines)
+            self.assertEqual(manager.review_expired_layaway(*authorize), authorization)
+            new_args = (folio.id, str(uuid4()), *authorize[2:])
+            new_auth = manager.review_expired_layaway(*new_args)
+            with self.assertRaisesRegex(UserError, "reserva"), self.cr.savepoint():
+                remote.do_unreserve()
+                a.confirm_layaway_pickup(folio.id, str(uuid4()), holder, lines)
+            self.assertEqual(self._checkout_state(folio), before)
+            first_args = (folio.id, str(uuid4()), holder, lines)
+            first = a.confirm_layaway_pickup(*first_args)
+            self.assertEqual((first["pickup_state"], first["late_authorization"]), ("partial", new_args[1]))
+            self.assertEqual(b.confirm_layaway_pickup(*first_args), first)
+            second = b.confirm_layaway_pickup(folio.id, str(uuid4()), holder, first["pending"])
+            self.assertEqual((second["pickup_state"], second["late_authorization"]), ("done", new_args[1]))
+            self.assertFalse(manager.get_layaways({"expiry": "expired"})["rows"])
+            self.assertEqual(manager.get_layaway_detail(folio.id)["expiry_review"], {
+                "can_review": False, "history": [review, authorization, revoked, new_auth],
+            })
+            self.assertEqual(manager.review_expired_layaway(*new_args), new_auth)
+            with self.assertRaisesRegex(UserError, "pendiente"):
+                manager.review_expired_layaway(folio.id, str(uuid4()), *keep[2:])
+            snapshot, _ = b._layaway_receipt(folio.id, first["reference"], pickup=True)
+            self.assertEqual(snapshot["late_authorization"], new_args[1])
+        self.assertEqual(folio.sale_id, sale)
+        self.assertEqual(folio.payment_ids.ids, before[1])
+        self.assertEqual(self._checkout_state(folio)[4:], before[4:])
+
+    def test_expiry_rejects_debt_and_voluntary_cancellation_before_and_after_payment(self):
+        campaign, partner, product = self._settlement_fixture()
+        cashier = self.session_a.with_user(self.cashier_a)
+        manager = self.session_a.with_user(self.supervisor)
+        unpaid, paid = self.env["pos.layaway"], self.env["pos.layaway"]
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            for liquidate in (False, True):
+                _, opening = self._checkout_args(cashier, campaign, product, 2, partner)
+                opened = cashier.confirm_layaway(*opening, [{"method_id": self.cash_a.id, "amount": 2000}])
+                folio = self.env["pos.layaway"].browse(opened["id"])
+                if liquidate:
+                    cashier.settle_layaway(folio.id, str(uuid4()), [{"method_id": self.cash_a.id, "amount": 2000}])
+                    paid = folio
+                else:
+                    unpaid = folio
+                before = self._checkout_state(folio)
+                with self.assertRaisesRegex(ValidationError, "conservar mercancía"):
+                    manager.quote_layaway_change(folio.id, folio.line_ids.ids, [])
+                with self.assertRaisesRegex(ValidationError, "conserva el historial"):
+                    folio.with_user(self.supervisor).unlink()
+                self.assertEqual(self._checkout_state(folio), before)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 16, 8)):
+            before = {folio.id: self._checkout_state(folio) for folio in unpaid | paid}
+            for folio in unpaid | paid:
+                with self.assertRaisesRegex(ValidationError, "resolución"):
+                    manager.review_expired_layaway(folio.id, str(uuid4()), "cancel", "Lo solicitó el titular.")
+                manager.review_expired_layaway(folio.id, str(uuid4()), "keep_reserved", "Consulta del titular.")
+                self.assertEqual(self._checkout_state(folio), before[folio.id])
+            with self.assertRaisesRegex(ValidationError, "después de liquidar"):
+                manager.review_expired_layaway(
+                    unpaid.id, str(uuid4()), "authorize_late_pickup", "Aún tiene deuda.",
+                )
+            self.assertEqual((unpaid.amount_due, paid.amount_due), (2000, 0))
+            self.assertFalse(unpaid.sale_id)
+            self.assertTrue(paid.sale_id)
+            for folio in unpaid | paid:
+                self.assertEqual(len(manager.get_layaway_detail(folio.id)["expiry_review"]["history"]), 1)
+
     def test_settle_and_pickup_is_atomic_and_snapshots_only_the_local_delivery(self):
         campaign, partner, product = self._settlement_fixture()
         a = self.session_a.with_user(self.cashier_a)

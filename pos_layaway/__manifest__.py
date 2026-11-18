@@ -1,7 +1,7 @@
 {
     "name": "Apartados en Punto de Venta",
     "summary": "Gestiona campañas, folios y reservas de apartados por tienda",
-    "version": "14.0.1.12.0",
+    "version": "14.0.1.13.0",
     "author": "Factor Fiesta",
     "license": "LGPL-3",
     "category": "Sales/Point of Sale",

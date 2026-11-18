@@ -26,6 +26,54 @@ class PosSession(models.Model):
             ("layaway_id", "=", folio.id), ("kind", "in", kinds), ("result", "!=", False),
         ])
 
+    def review_expired_layaway(self, folio_id, reference, resolution, notes):
+        """Record a supervisor's decision on an overdue folio."""
+        session = self.sudo(False)
+        session._check_layaway_pickup_test()
+        if not session.env.user.has_group("point_of_sale.group_pos_manager"):
+            raise AccessError(_("El encargado debe revisar el apartado vencido."))
+        folio = session._find_layaway(folio_id, require_open=False)
+        if resolution not in ("keep_reserved", "authorize_late_pickup"):
+            raise ValidationError(_("Selecciona una resolución de vencimiento válida."))
+        if not isinstance(notes, str) or not notes.strip() or len(notes.strip()) > 500:
+            raise ValidationError(_("Registra el motivo y las observaciones de la revisión (hasta 500 caracteres)."))
+        notes = notes.strip()
+
+        def apply(operation):
+            session._lock_layaway_stock_session()
+            if session.rescue or not folio._layaway_pickup_overdue(operation.create_date):
+                raise UserError(_("La revisión requiere un apartado vencido con mercancía pendiente."))
+            if resolution == "authorize_late_pickup":
+                session._check_layaway_late_pickup_reservations(folio)
+            return folio, {
+                "id": folio.id, "folio": folio.folio, "reference": operation.reference,
+                "resolution": resolution, "notes": notes, "reviewer": operation.user_id.name,
+                "reviewed_at": operation._receipt_identification(
+                    folio, operation.create_date,
+                )["confirmed_at"],
+            }
+
+        return session.env["pos.layaway.operation"].sudo()._confirm(
+            session, reference, "review_expiry", {"resolution": resolution, "notes": notes},
+            apply, layaway=folio, pass_operation=True,
+        )
+
+    def _check_layaway_late_pickup_reservations(self, folio):
+        folio._check_pickup_payment()
+        pending = folio.line_ids.filtered("qty_pending")
+        for source in pending.location_id.sorted("id"):
+            lines = pending.filtered(lambda line: line.location_id == source)
+            if source.usage != "internal" or any(
+                line.warehouse_id.company_id != source.company_id for line in lines
+            ):
+                raise LayawayStockError(_("La ubicación de la reserva ya no es válida."))
+            self._checked_layaway_block_moves(folio, lines, source)
+
+    def _layaway_latest_expiry_review(self, folio):
+        return self.env["pos.layaway.operation"].sudo().search([
+            ("layaway_id", "=", folio.id), ("kind", "=", "review_expiry"), ("result", "!=", False),
+        ], order="id desc", limit=1)
+
     def register_layaway_pickup_authorization(self, folio_id, reference, partner_id):
         """Register an identified recipient in a separate operation before collection."""
         session = self.sudo(False)
@@ -112,13 +160,19 @@ class PosSession(models.Model):
                 raise ValidationError(_("Las cantidades de recogida no son válidas."))
             quantities[line_id] = float(qty)
         return sorted(quantities.items())
+
     def _apply_layaway_pickup(self, operation, folio, pickup):
         self._lock_layaway_stock_session()
         if self.rescue:
             raise UserError(_("La recogida requiere una sesión ordinaria."))
         folio._check_pickup_payment()
+        late_authorization = False
         if local_date(operation.create_date, folio.timezone) > folio.pickup_end:
-            raise UserError(_("Terminó el plazo de recogida del apartado."))
+            review = self._layaway_latest_expiry_review(folio)
+            if not review or json.loads(review.result)["resolution"] != "authorize_late_pickup":
+                raise UserError(_("Terminó el plazo de recogida. Se requiere autorización del encargado."))
+            self._check_layaway_late_pickup_reservations(folio)
+            late_authorization = review.reference
         recipient = {"partner_id": folio.partner_id.id, "name": folio.contact_name}
         kind = pickup["recipient"]
         if kind == "authorized":
@@ -148,6 +202,7 @@ class PosSession(models.Model):
             "warehouse": operation.warehouse_id.display_name,
             "campaign_name": folio.campaign_name, "contact_name": folio.contact_name,
             "phone": folio.phone,
+            "late_authorization": late_authorization,
             **operation._receipt_identification(folio, operation.create_date),
             "recipient": dict(recipient, kind=kind, identity_verified=True),
             "picking_ids": pickings.ids, "delivered": delivered,
@@ -169,7 +224,7 @@ class PosSession(models.Model):
 
     def _checked_layaway_block_moves(self, folio, lines, source):
         stock_model = self.env["stock.move"].sudo().with_context(
-            {}, allowed_company_ids=self.company_id.ids,
+            {}, allowed_company_ids=source.company_id.ids,
         )
         moves = stock_model._layaway_reserved_moves(folio, lines)
         pickings = moves.picking_id
@@ -225,19 +280,22 @@ class PosSession(models.Model):
     def _layaway_pickup_detail(self, folio):
         block = self._layaway_pickup_block(folio)
         source = self.config_id.picking_type_id.default_location_src_id
-        can_pickup = bool(
+        can_pickup_here = bool(
             layaway_test_database(self.env) and not self.rescue and block
             and source.usage == "internal" and source.company_id == self.company_id
             and all(line.location_id == source for line in block)
-            and local_date(fields.Datetime.now(), folio.timezone) <= folio.pickup_end
         )
+        in_time = local_date(fields.Datetime.now(), folio.timezone) <= folio.pickup_end
+        latest_review = self._layaway_latest_expiry_review(folio)
+        late_authorized = latest_review and json.loads(latest_review.result)["resolution"] == "authorize_late_pickup"
         return {
-            "available": bool(can_pickup and folio.sale_id and folio.payment_state == "paid"),
-            "can_settle": can_pickup and folio.amount_due > 0,
+            "available": bool(can_pickup_here and (in_time or late_authorized)
+                              and folio.sale_id and folio.payment_state == "paid"),
+            "can_settle": can_pickup_here and in_time and folio.amount_due > 0,
             "lines": [self._layaway_pickup_line(line) for line in block],
             "destinations": [{
                 "id": config.id, "name": config.picking_type_id.default_location_src_id.complete_name,
-            } for config in self._layaway_relocation_destinations(folio, block)] if can_pickup else [],
+            } for config in self._layaway_relocation_destinations(folio, block)] if can_pickup_here and in_time else [],
             "relocations": [
                 json.loads(operation.result)
                 for operation in self._layaway_pickup_operations(folio, ("relocate_block",))

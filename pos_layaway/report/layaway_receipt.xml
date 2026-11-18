@@ -196,6 +196,10 @@
                 <dd class="col-8" t-esc="pickup['cashier']"/>
                 <dt class="col-4">Fecha y hora</dt>
                 <dd class="col-8"><time t-esc="pickup['confirmed_at']"/> · <span t-esc="pickup['timezone']"/></dd>
+                <t t-if="pickup.get('late_authorization')">
+                    <dt class="col-4">Autorización de recogida tardía</dt>
+                    <dd class="col-8" t-esc="pickup['late_authorization']"/>
+                </t>
             </dl>
             <h4>Mercancía entregada</h4>
             <t t-call="pos_layaway.layaway_pickup_lines">

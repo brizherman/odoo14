@@ -107,6 +107,17 @@ class PosSession(models.Model):
             ),
             "sale_adjustments": folio._layaway_adjustment_history(),
             "pickup": self._layaway_pickup_detail(folio),
+            "expiry_review": {
+                "can_review": bool(
+                    layaway_test_database(self.env) and not self.rescue
+                    and self.env.user.has_group("point_of_sale.group_pos_manager")
+                    and folio._layaway_pickup_overdue(fields.Datetime.now())
+                ),
+                "history": [
+                    json.loads(review.result)
+                    for review in self._layaway_pickup_operations(folio, ("review_expiry",))
+                ],
+            },
             "transfer_review": self._layaway_transfer_detail(folio),
             "payment_corrections": self._layaway_correction_detail(folio),
             "changeable_lines": (
@@ -130,12 +141,17 @@ class PosSession(models.Model):
             "rows": [folio._pos_layaway_values() for folio in page[:page_size]],
             "has_more": len(page) > page_size,
             "can_open_layaway": layaway_test_database(self.env),
+            "can_review_expired": self.env.user.has_group("point_of_sale.group_pos_manager"),
             **scope_filters,
         }
 
 
 class PosLayaway(models.Model):
     _inherit = "pos.layaway"
+
+    def _layaway_pickup_overdue(self, now):
+        self.ensure_one()
+        return self.pickup_state != "done" and self.pickup_end < local_date(now, self.timezone)
 
     def _pos_layaway_filter_options(self, scope):
         campaigns = self.read_group(scope, ["campaign_id"], ["campaign_id"])
@@ -207,9 +223,7 @@ class PosLayaway(models.Model):
             "opened_on": fields.Date.to_string(self.opened_on),
             "pickup_end": fields.Date.to_string(self.pickup_end),
             "payment_state": self.payment_state, "pickup_state": self.pickup_state,
-            "expired": self.pickup_state != "done" and (
-                self.pickup_end < local_date(fields.Datetime.now(), self.timezone)
-            ),
+            "expired": self._layaway_pickup_overdue(fields.Datetime.now()),
             "amount_total": self.amount_total, "amount_due": self.amount_due,
         }
         if detail:

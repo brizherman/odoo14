@@ -27,7 +27,7 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                 rows: [], campaigns: [], stores: [], detail: null,
                 stale: !navigator.onLine, loaded: false, loading: false, hasMore: false,
                 transferBusy: false, transferMessage: '', transferRetry: false,
-                canOpen: false, draft: null, checkoutBusy: false, checkoutMessage: '',
+                canOpen: false, canReviewExpired: false, draft: null, checkoutBusy: false, checkoutMessage: '',
                 originalReceipt: null,
                 pendingConfirmation: JSON.parse(sessionStorage.getItem(this.confirmationKey)),
                 pendingCorrection: null, correctionPayment: '', correctionMethod: '',
@@ -99,6 +99,11 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
             await this.loadPage(0);
         }
 
+        showExpired() {
+            this.state.filters.expiry = 'expired';
+            return this.search();
+        }
+
         async loadPage(offset) {
             const result = await this.request('get_layaways', [this.filters, offset]);
             if (result) {
@@ -107,6 +112,7 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                 this.state.stores = result.stores;
                 this.state.hasMore = result.has_more;
                 this.state.canOpen = result.can_open_layaway;
+                this.state.canReviewExpired = result.can_review_expired;
                 this.state.loaded = true;
             }
         }
@@ -153,6 +159,11 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
 
         get confirmationKey() {
             return ['pos_layaway_checkout', session.db, session.uid, this.env.pos.pos_session.id].join(':');
+        }
+
+        startExpiryReview(folio) {
+            this.state.checkoutMessage = '';
+            this.state.draft = { folio, expiryReview: true };
         }
 
         async startCheckout(folio, change = false) {
@@ -290,7 +301,9 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                 return;
             }
             if (!this.state.pendingConfirmation) {
-                const { quote, proposal, change, installment, folio, settle, pickup, relocate } = this.state.draft;
+                const {
+                    quote, proposal, change, installment, folio, settle, pickup, relocate, expiryReview,
+                } = this.state.draft;
                 const data = new FormData(event.currentTarget);
                 const reference = operationReference();
                 let pending;
@@ -299,7 +312,12 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                     authorization_reference: data.get('recipient') === 'holder' ? false : data.get('recipient'),
                     identity_verified: data.get('identity_verified') === 'on',
                 };
-                if (relocate) {
+                if (expiryReview) {
+                    pending = {
+                        method: 'review_expired_layaway',
+                        args: [folio.id, reference, data.get('resolution'), data.get('notes')],
+                    };
+                } else if (relocate) {
                     pending = {
                         method: 'relocate_layaway_block',
                         args: [folio.id, reference, Number(data.get('destination')), folio.pickup.lines],
@@ -351,6 +369,7 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                     confirm_layaway_pickup: this.env._t('Recogida confirmada'),
                     settle_and_pickup_layaway: this.env._t('Liquidación y recogida confirmadas'),
                     relocate_layaway_block: this.env._t('Traslado registrado'),
+                    review_expired_layaway: this.env._t('Revisión de vencimiento registrada'),
                 };
                 const pickupConfirmed = result.pickup || result.recipient;
                 const message = pickupConfirmed ? messages[pending.method]
@@ -539,6 +558,13 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
         get pickupLabels() {
             return { pending: this.env._t('Pendiente'), partial: this.env._t('Parcial'),
                 done: this.env._t('Entregado') };
+        }
+
+        get expiryResolutionLabels() {
+            return {
+                keep_reserved: this.env._t('Mantener en revisión y conservar la reserva'),
+                authorize_late_pickup: this.env._t('Autorizar recogida tardía'),
+            };
         }
 
         money(amount) {
