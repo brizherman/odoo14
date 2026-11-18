@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_layaway_label" model="ir.actions.report">
+        <field name="name">Etiqueta de apartado</field>
+        <field name="model">pos.layaway</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">pos_layaway.layaway_label</field>
+        <field name="binding_model_id" ref="model_pos_layaway"/>
+        <field name="groups_id" eval="[(4, ref('group_layaway_campaign_manager'))]"/>
+        <field name="print_report_name">'Etiqueta - %s' % object.folio</field>
+    </record>
+
+    <template id="layaway_label">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="folio">
+                <div class="page">
+                    <h2 t-field="folio.folio"/>
+                    <p><strong>Campaña</strong> <span t-field="folio.campaign_name"/></p>
+                    <p><strong>Cliente</strong> <span t-field="folio.contact_name"/></p>
+                    <p><strong>Teléfono</strong> <span t-field="folio.phone"/></p>
+                    <p><strong>Fecha límite de recogida</strong> <span t-field="folio.pickup_end"/></p>
+                </div>
+            </t>
+        </t>
+    </template>
+</odoo>

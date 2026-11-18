@@ -1,0 +1,126 @@
+.pos .o_pos_layaway_screen {
+    display: flex;
+    flex-direction: column;
+    background: #f7f7f7;
+}
+
+.pos .layaway-header, .pos .layaway-detail-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 12px 20px;
+    border-bottom: 1px solid #d2d2d2;
+}
+
+.pos .layaway-header h1, .pos .layaway-detail h2 {
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+.pos .layaway-detail-header {
+    padding-left: 0;
+    margin-bottom: 1rem;
+}
+
+.pos .layaway-content {
+    overflow: auto;
+    flex: 1;
+    padding: 16px 20px;
+}
+
+.pos .layaway-filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+    align-items: end;
+    gap: 12px;
+    margin-bottom: 1rem;
+}
+
+.pos .layaway-filters > label {
+    display: grid;
+    gap: 4px;
+}
+
+.pos .layaway-filters input, .pos .layaway-filters select,
+.pos .o_pos_layaway_screen button {
+    box-sizing: border-box;
+    min-width: 0;
+    min-height: 38px;
+    padding: 6px 10px;
+    font: inherit;
+    color: inherit;
+    border: 1px solid #b8b8b8;
+    border-radius: 3px;
+    background: white;
+}
+
+.pos .o_pos_layaway_screen button:not(:disabled) {
+    cursor: pointer;
+}
+
+.pos .o_pos_layaway_screen button:disabled {
+    opacity: .59;
+}
+
+.pos .o_pos_layaway_screen .layaway-submit {
+    background: #376f66;
+    border-color: #376f66;
+    color: white;
+}
+
+.pos .layaway-search {
+    grid-column: span 2;
+}
+
+.pos .layaway-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+}
+
+.pos .layaway-table th, .pos .layaway-table td {
+    padding: 9px 10px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+.pos .layaway-table th {
+    background: #e6e8e7;
+}
+
+.pos .layaway-totals {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(115px, 1fr));
+    gap: 8px;
+}
+
+.pos .layaway-totals > div {
+    padding: 12px;
+    background: white;
+    border: 1px solid #ddd;
+}
+
+.pos .layaway-totals dd {
+    margin: 4px 0 0;
+    font-weight: bold;
+}
+
+.pos .layaway-stale, .pos .layaway-expired {
+    color: #703c00;
+}
+
+.pos .layaway-stale {
+    padding: 12px 20px;
+    background: #fff1d8;
+}
+
+.pos .layaway-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 1rem;
+}
+
+.pos .layaway-status {
+    color: #474747;
+}

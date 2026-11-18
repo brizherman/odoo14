@@ -2,7 +2,7 @@ from datetime import datetime
 from unittest.mock import patch
 
 from odoo import fields
-from odoo.exceptions import AccessError, ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests import tagged
 from odoo.tests.common import SavepointCase
 
@@ -170,3 +170,218 @@ class TestPosLayawayCampaign(SavepointCase):
         second.action_archive()
         with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 25, 12)):
             self.assertEqual([row["id"] for row in session_a.get_layaway_campaigns()], first.ids)
+
+    def _make_folio(self, campaign):
+        partner = self.env["res.partner"].create({"name": "Beneficiario Identificado"})
+        product = self.env["product.product"].create({"name": "Producto de prueba", "type": "product"})
+        picking_type = self.config_a.picking_type_id
+        folio = self.env["pos.layaway"].sudo()._create_folio(
+            self.session_a.with_user(self.cashier_a), campaign, partner, partner.name,
+            "664 123 4567", datetime(2026, 11, 18, 8),
+            [{
+                "product_id": product.id, "product_name": product.name, "qty": 2,
+                "price_unit": 2000, "amount_total": 4000, "amount_tax": 0,
+                "warehouse_id": picking_type.warehouse_id.id,
+                "location_id": picking_type.default_location_src_id.id,
+            }],
+        )
+        return folio
+
+    def test_folio_snapshots_original_agreement(self):
+        campaign = self.campaigns.create(self.values)
+        campaign.action_activate()
+        folio = self._make_folio(campaign)
+        another = self._make_folio(campaign)
+        self.assertNotEqual(folio.folio, another.folio)
+        self.assertEqual(folio.opened_on.isoformat(), "2026-11-18")
+        self.assertEqual(folio.user_id, self.cashier_a)
+        self.assertEqual(folio.warehouse_id, self.config_a.picking_type_id.warehouse_id)
+        self.assertEqual(folio.payment_state, "unpaid")
+        self.assertEqual(folio.pickup_state, "pending")
+        campaign.write({"name": "Nuevo nombre", "minimum_amount": 5000, "deposit_percentage": 80})
+        campaign.action_archive()
+        self.assertEqual(folio.campaign_name, self.values["name"])
+        self.assertEqual(folio.minimum_amount, 3000)
+        self.assertEqual(folio.deposit_percentage, 50)
+        self.assertEqual(folio.amount_due, 4000)
+        self.assertEqual(folio.pickup_end.isoformat(), self.values["pickup_end"])
+        with self.assertRaises(Exception) as raised, self.cr.savepoint():
+            campaign.sudo().unlink()
+        self.assertEqual(getattr(raised.exception, "pgcode", None), "23503")
+        with self.assertRaises(AccessError):
+            folio.with_user(self.cashier_a).write({"amount_deposit": 4000})
+        with self.assertRaises(ValidationError):
+            folio.write({"deposit_percentage": 80})
+
+    def test_operation_replays_result_and_rolls_back_failure(self):
+        campaign = self.campaigns.create(self.values)
+        campaign.action_activate()
+        folio = self._make_folio(campaign)
+        operations = self.env["pos.layaway.operation"].sudo()
+        session = self.session_a.with_user(self.cashier_a)
+        other = self.session_b.with_user(self.cashier_b)
+        reference = "e68952d7-95dc-465a-924c-ffa33572ac95"
+        calls = []
+
+        def fail():
+            folio.line_ids.qty_picked_up = 1
+            raise ValidationError("Simulated failure")
+
+        def confirm():
+            calls.append(True)
+            folio.line_ids.qty_picked_up = 1
+            return folio, {"folio": folio.folio, "pending": folio.line_ids.qty_pending}
+
+        with self.assertRaises(ValidationError):
+            operations._confirm(session, reference, "fixture", {}, fail, folio)
+        self.assertEqual(folio.line_ids.qty_picked_up, 0)
+        self.assertFalse(operations.search([("reference", "=", reference)]))
+        result = operations._confirm(session, reference, "fixture", {}, confirm, folio)
+        self.assertEqual(operations._confirm(other, reference, "fixture", {}, confirm, folio), result)
+        self.assertEqual(calls, [True])
+        operation = operations.search([("reference", "=", reference)])
+        self.assertEqual(operation.user_id, self.cashier_a)
+        self.assertEqual(operation.session_id, self.session_a)
+        self.assertEqual(operation.warehouse_id, folio.warehouse_id)
+        self.assertEqual(folio.pickup_state, "partial")
+        self.assertEqual(folio.payment_state, "unpaid")
+        with self.assertRaises(ValidationError):
+            operations._confirm(other, reference, "fixture", {"changed": True}, confirm, folio)
+        with self.assertRaises(ValidationError):
+            operation.unlink()
+
+    def test_server_quote_dates_minimum_and_contact(self):
+        first = self.campaigns.create(self.values)
+        second = first.copy({"minimum_amount": 5000})
+        (first | second).action_activate()
+        self.company_a.wholesale_pricelist_id = self.pricelist
+        product = self.env["product.product"].create({
+            "name": "Quote Product", "type": "product", "available_in_pos": True,
+            "taxes_id": [(5, 0, 0)],
+        })
+        customer = self.env["res.partner"].create({
+            "name": "Client with name", "phone": "664 123 4567",
+            "customer_type": "publico_general",
+        })
+        generic = self.env["res.partner"].create({"name": "Público en general"})
+        session = self.session_a.with_user(self.cashier_a)
+        lines = [{"product_id": product.id, "qty": 1}]
+
+        def quote(moment, campaign, partner=customer, phone=False):
+            with patch.object(fields.Datetime, "now", return_value=moment):
+                return session.quote_layaway(lines, campaign.id, partner.id, phone)
+
+        start = datetime(2026, 11, 18, 8)
+        end = datetime(2026, 12, 1, 7, 59)
+        for campaign, minimum in ((first, 3000), (second, 5000)):
+            for total in (minimum - 0.01, minimum, minimum + 0.01):
+                product.lst_price = total
+                with self.subTest(campaign=minimum, total=total):
+                    if total <= minimum:
+                        with self.assertRaisesRegex(ValidationError, "superar el mínimo"):
+                            quote(start, campaign)
+                    else:
+                        for moment in (start, end):
+                            result = quote(moment, campaign)
+                            self.assertEqual(result["amount_total"], total)
+                            self.assertEqual(result["required_deposit"], minimum / 2 + 0.01)
+        for moment in (datetime(2026, 11, 18, 7, 59), datetime(2026, 12, 1, 8)):
+            with self.assertRaisesRegex(ValidationError, "no está abierta"):
+                quote(moment, first)
+        with self.assertRaisesRegex(ValidationError, "beneficiario"):
+            quote(start, first, generic, "664 123 4567")
+        with self.assertRaisesRegex(ValidationError, "teléfono"):
+            quote(start, first, customer, "invalid")
+        for customer_type in ("mayorista_dormido", "distribuidores"):
+            customer.customer_type = customer_type
+            customer.active = False
+            self.assertEqual(quote(start, first)["partner_id"], customer.id)
+
+    def test_server_quotes_addition_using_only_current_price_on_new_lines(self):
+        campaign = self.campaigns.create(self.values)
+        campaign.action_activate()
+        self.company_b.wholesale_pricelist_id = self.pricelist
+        folio = self._make_folio(campaign)
+        folio.amount_deposit = 2000
+        campaign.write({"deposit_percentage": 80})
+        campaign.action_archive()
+        product = folio.line_ids.product_id
+        tax = self.env["account.tax"].with_company(self.company_b).create({
+            "name": "Tax test 16%", "amount": 16, "type_tax_use": "sale",
+            "company_id": self.company_b.id,
+        })
+        product.write({"lst_price": 2000, "available_in_pos": True, "taxes_id": [(6, 0, tax.ids)]})
+        lines = [{"product_id": product.id, "qty": 1}]
+        session = self.session_b.with_user(self.cashier_b)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 16, 7, 59)):
+            result = session.quote_layaway(lines, campaign.id, layaway_id=folio.id)
+        self.assertEqual(result["amount_previous"], 4000)
+        self.assertEqual(result["lines"][0]["amount_tax"], 320)
+        self.assertEqual(result["amount_new"], 2320)
+        self.assertEqual(result["amount_total"], 6320)
+        self.assertEqual(result["required_deposit"], 1160)
+        self.assertEqual(result["pickup_end"], "2026-12-15")
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 16, 8)):
+            with self.assertRaisesRegex(ValidationError, "Terminó el plazo"):
+                session.quote_layaway(lines, campaign.id, layaway_id=folio.id)
+        self.assertEqual(folio.line_ids.price_unit, 2000)
+        self.assertEqual(folio.amount_total, 4000)
+
+    def test_shop_reservation_keeps_last_unit_and_releases_it(self):
+        campaign = self.campaigns.create(self.values)
+        campaign.action_activate()
+        folio = self._make_folio(campaign)
+        line = folio.line_ids
+        quant_model = self.env["stock.quant"]
+        quant_model._update_available_quantity(line.product_id, line.location_id, line.qty)
+        session = self.session_a.with_user(self.cashier_a)
+        picking = self.env["stock.picking"].sudo()._reserve_layaway_lines(folio, session, line)
+        self.assertEqual(picking.state, "assigned")
+        self.assertEqual(picking.move_lines.reserved_availability, line.qty)
+        self.assertEqual(picking.move_lines.quantity_done, 0)
+        self.assertEqual(quant_model._get_available_quantity(line.product_id, line.location_id), 0)
+        with self.assertRaisesRegex(UserError, "ya tiene una reserva"):
+            self.env["stock.picking"].sudo()._reserve_layaway_lines(folio, session, line)
+        with self.assertRaises(UserError):
+            self.env["stock.picking"].sudo()._reserve_layaway_lines(
+                folio, self.session_b.with_user(self.cashier_b), line,
+            )
+        picking.action_cancel()
+        self.assertEqual(quant_model._get_available_quantity(line.product_id, line.location_id), 2)
+
+    def test_folio_search_filters_and_other_store_access(self):
+        campaign = self.campaigns.create(self.values)
+        campaign.action_activate()
+        folio = self._make_folio(campaign)
+        folio.amount_deposit = 2000
+        folio.amount_installments = 500
+        folio.line_ids.qty_picked_up = 1
+        campaign.action_archive()
+        a = self.session_a.with_user(self.cashier_a)
+        b = self.session_b.with_user(self.cashier_b)
+        filters = {
+            "campaign": campaign.id, "store": folio.warehouse_id.id,
+            "from": "2026-11-18", "to": "2026-11-18", "payment_state": "partial",
+            "pickup_state": "partial", "expiry": "current",
+        }
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 16, 7, 59)):
+            for key in (folio.folio, "identificado", "664-123-4567"):
+                for session in (a, b):
+                    table = session.get_layaways(dict(filters, query=key))
+                    self.assertEqual([entry["id"] for entry in table["rows"]], [folio.id])
+                    self.assertIn(campaign.id, [entry["id"] for entry in table["campaigns"]])
+                    self.assertIn(folio.warehouse_id.id, [entry["id"] for entry in table["stores"]])
+            self.assertFalse(a.get_layaways(dict(filters, query="A_FOLIO_%"))["rows"])
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 16, 8)):
+            self.assertFalse(a.get_layaways(filters)["rows"])
+            self.assertEqual(len(a.get_layaways(dict(filters, expiry="expired"))["rows"]), 1)
+            detail = b.get_layaway_detail(folio.id)
+        self.assertEqual(detail["lines"][0]["pending"], 1)
+        self.assertEqual(detail["amount_total"], 4000)
+        self.assertEqual(detail["amount_deposit"], 2000)
+        self.assertEqual(detail["amount_installments"], 500)
+        self.assertEqual(detail["amount_due"], 1500)
+        other = self.session_other.with_user(self.cashier_a)
+        self.assertFalse(other.get_layaways()["rows"])
+        with self.assertRaises(AccessError):
+            other.get_layaway_detail(folio.id)

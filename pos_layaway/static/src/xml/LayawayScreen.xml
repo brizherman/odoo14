@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="pos_layaway.LayawayScreenButton" owl="1">
+        <span class="control-button o_pos_layaway_screen_button">
+            <i class="fa fa-bookmark-o" role="img" aria-hidden="true"/>
+            Apartados
+        </span>
+    </t>
+
+    <t t-name="pos_layaway.LayawayScreen" owl="1">
+        <div class="screen o_pos_layaway_screen">
+            <header class="layaway-header">
+                <button type="button" class="layaway-back" t-on-click="close">Volver a venta</button>
+                <h1>Apartados</h1>
+            </header>
+            <div t-if="state.stale" class="layaway-stale" role="status">
+                La información puede estar desactualizada. No se pudo actualizar desde el servidor.
+            </div>
+
+            <main t-if="!state.detail" class="layaway-content">
+                <form class="layaway-filters" t-on-submit.prevent="search">
+                    <label class="layaway-search">Folio, nombre o teléfono
+                        <input type="search" name="query" t-model="state.filters.query"/>
+                    </label>
+                    <label>Campaña
+                        <select name="campaign" t-model="state.filters.campaign">
+                            <option value="">Todas</option>
+                            <option t-foreach="state.campaigns" t-as="campaign" t-key="campaign.id"
+                                    t-att-value="campaign.id" t-esc="campaign.name"/>
+                        </select>
+                    </label>
+                    <label>Tienda
+                        <select name="store" t-model="state.filters.store">
+                            <option value="">Todas</option>
+                            <option t-foreach="state.stores" t-as="store" t-key="store.id"
+                                    t-att-value="store.id" t-esc="store.name"/>
+                        </select>
+                    </label>
+                    <label>Desde
+                        <input type="date" name="from" t-model="state.filters.from"/>
+                    </label>
+                    <label>Hasta
+                        <input type="date" name="to" t-model="state.filters.to"/>
+                    </label>
+                    <label>Pago
+                        <select name="payment_state" t-model="state.filters.payment_state">
+                            <option value="">Todos</option>
+                            <option t-foreach="Object.keys(paymentLabels)" t-as="key" t-key="key"
+                                    t-att-value="key" t-esc="paymentLabels[key]"/>
+                        </select>
+                    </label>
+                    <label>Entrega
+                        <select name="pickup_state" t-model="state.filters.pickup_state">
+                            <option value="">Todas</option>
+                            <option t-foreach="Object.keys(pickupLabels)" t-as="key" t-key="key"
+                                    t-att-value="key" t-esc="pickupLabels[key]"/>
+                        </select>
+                    </label>
+                    <label>Vencimiento
+                        <select name="expiry" t-model="state.filters.expiry">
+                            <option value="">Todos</option>
+                            <option value="expired">Vencidos</option>
+                            <option value="current">Sin vencimiento pendiente</option>
+                        </select>
+                    </label>
+                    <button type="submit" class="layaway-submit"
+                            t-att-disabled="state.loading">Buscar</button>
+                </form>
+                <p t-if="!state.rows.length &amp;&amp; state.loaded &amp;&amp; !state.loading">No hay apartados para esta búsqueda.</p>
+                <table t-if="state.rows.length" class="layaway-table">
+                    <thead><tr>
+                        <th>Folio</th><th>Cliente</th><th>Campaña</th><th>Apertura</th>
+                        <th>Pago</th><th>Entrega</th><th>Restante</th>
+                    </tr></thead>
+                    <tbody>
+                        <tr t-foreach="state.rows" t-as="row" t-key="row.id">
+                            <td><button class="layaway-open" t-on-click="() => openDetail(row.id)"
+                                        t-att-disabled="state.stale" t-esc="row.folio"/></td>
+                            <td t-esc="row.customer"/><td t-esc="row.campaign"/><td t-esc="row.opened_on"/>
+                            <td t-esc="paymentLabels[row.payment_state]"/>
+                            <td t-esc="pickupLabels[row.pickup_state]"/>
+                            <td t-esc="money(row.amount_due)"/>
+                        </tr>
+                    </tbody>
+                </table>
+                <button t-if="state.hasMore" type="button" t-att-disabled="state.loading || state.stale"
+                        t-on-click="() => loadPage(state.rows.length)">Cargar más</button>
+            </main>
+
+            <main t-else="" class="layaway-content layaway-detail">
+                <t t-set="folio" t-value="state.detail"/>
+                <div class="layaway-detail-header">
+                    <button type="button" t-on-click="backToSearch">Volver a la búsqueda</button>
+                    <a t-if="!state.stale" t-att-href="labelUrl" target="_blank" rel="noopener">Imprimir etiqueta</a>
+                </div>
+                <h2 t-esc="folio.folio"/>
+                <p><strong t-esc="folio.customer"/> · <span t-esc="folio.phone"/></p>
+                <p><span t-esc="folio.campaign"/> · Recogida hasta <time t-esc="folio.pickup_end"/>
+                    <strong t-if="folio.expired" class="layaway-expired"> · Vencido</strong>
+                </p>
+                <p><span t-esc="paymentLabels[folio.payment_state]"/> · <span t-esc="pickupLabels[folio.pickup_state]"/></p>
+                <dl class="layaway-totals">
+                    <div><dt>Total</dt><dd t-esc="money(folio.amount_total)"/></div>
+                    <div><dt>Anticipo</dt><dd t-esc="money(folio.amount_deposit)"/></div>
+                    <div><dt>Abonos</dt><dd t-esc="money(folio.amount_installments)"/></div>
+                    <div><dt>Restante</dt><dd t-esc="money(folio.amount_due)"/></div>
+                </dl>
+                <table class="layaway-table">
+                    <thead><tr>
+                        <th>Producto</th><th>Tienda</th><th>Ubicación</th><th>Cantidad</th><th>Pendiente</th>
+                    </tr></thead>
+                    <tbody>
+                        <tr t-foreach="folio.lines" t-as="line" t-key="line.id">
+                            <td t-esc="line.name"/><td t-esc="line.store"/><td t-esc="line.location"/>
+                            <td t-esc="line.qty"/><td t-esc="line.pending"/>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="layaway-actions" aria-label="Operaciones del apartado">
+                    <button type="button" disabled="disabled">Agregar productos</button>
+                    <button type="button" disabled="disabled">Registrar abono</button>
+                    <button type="button" disabled="disabled">Liquidar</button>
+                    <button type="button" disabled="disabled">Registrar recogida</button>
+                    <button type="button" disabled="disabled">Liquidar y entregar</button>
+                </div>
+                <p t-if="!state.stale" class="layaway-status">Operaciones pendientes de habilitación.</p>
+            </main>
+        </div>
+    </t>
+</templates>

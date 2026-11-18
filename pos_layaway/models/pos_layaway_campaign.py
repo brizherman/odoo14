@@ -6,6 +6,11 @@ from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, ValidationError
 
 
+def local_date(now, timezone):
+    utc_now = pytz.utc.localize(fields.Datetime.to_datetime(now))
+    return utc_now.astimezone(pytz.timezone(timezone)).date()
+
+
 class PosLayawayCampaign(models.Model):
     _name = "pos.layaway.campaign"
     _description = "Campaña de apartados POS"
@@ -172,9 +177,8 @@ class PosLayawayCampaign(models.Model):
             ("pos_config_ids", "in", config.ids),
             ("currency_id", "=", config.currency_id.id),
         ])
-        utc_now = pytz.utc.localize(fields.Datetime.to_datetime(now))
         return campaigns.filtered(
             lambda campaign: campaign.opening_start
-            <= utc_now.astimezone(pytz.timezone(campaign.timezone)).date()
+            <= local_date(now, campaign.timezone)
             <= campaign.opening_end
         )
