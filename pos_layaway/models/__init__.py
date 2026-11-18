@@ -8,3 +8,4 @@ from . import pos_layaway_quote
 from . import pos_layaway_query
 from . import stock_picking
 from . import pos_order
+from . import res_partner

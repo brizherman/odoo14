@@ -13,14 +13,18 @@ class TestPosLayawayCampaign(SavepointCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.company_a = cls.env.company
-        cls.company_b = cls.env["res.company"].create({
-            "name": "Layaway Company B", "currency_id": cls.company_a.currency_id.id,
-        })
+        cls.company_a, cls.company_b = cls.env["res.company"].create([
+            {"name": "Layaway Company " + label, "currency_id": cls.env.company.currency_id.id}
+            for label in ("A", "B")
+        ])
         cls.company_ids = (cls.company_a | cls.company_b).ids
         cls.pricelist = cls.env["product.pricelist"].create({
             "name": "Layaway Test Pricelist", "currency_id": cls.company_a.currency_id.id,
         })
+        cls.retail, cls.distributor = cls.env["product.pricelist"].create([
+            {"name": name, "currency_id": cls.company_a.currency_id.id}
+            for name in ("Retail 3.3", "Distributor 3.3")
+        ])
         cls.config_a, cls.cash_a, cls.card_a, cls.transfer_a = cls._create_payment_config(cls.company_a, "A")
         cls.config_b, cls.cash_b, cls.card_b, cls.transfer_b = cls._create_payment_config(cls.company_b, "B")
         cls.config_other = cls._create_config(cls.company_a, "Nonparticipating POS")
@@ -79,7 +83,8 @@ class TestPosLayawayCampaign(SavepointCase):
             "company_id": company.id,
             "picking_type_id": warehouse.pos_type_id.id,
             "pricelist_id": cls.pricelist.id,
-            "available_pricelist_ids": [(6, 0, cls.pricelist.ids)],
+            "available_pricelist_ids": [(6, 0, (cls.pricelist | cls.retail | cls.distributor).ids)],
+            "use_pricelist": True,
             "payment_method_ids": [(5, 0, 0)],
             "journal_id": False,
             "invoice_journal_id": False,
@@ -240,6 +245,191 @@ class TestPosLayawayCampaign(SavepointCase):
             return session.with_user(session.user_id)._register_layaway_payment(
                 folio.id, reference or str(uuid4()), kind, tenders,
             )
+
+    def _wholesale_setup(self):
+        for company in self.company_a | self.company_b:
+            self.env["pos.wholesale.pricelist.mapping"].create({
+                "company_id": company.id, "customer_type": "distribuidores",
+                "pricelist_id": self.distributor.id,
+            })
+            company.write({
+                "wholesale_retail_pricelist_id": self.retail.id, "wholesale_pricelist_id": self.pricelist.id,
+                "wholesale_previous_month_min": 800, "wholesale_current_order_min": 1500,
+                "wholesale_distributor_min": 10000, "wholesale_timezone": "America/Tijuana",
+                "wholesale_control_active": True,
+            })
+        return self.retail, self.distributor
+
+    def _wholesale_history_order(self, partner, amount, moment):
+        return self.env["pos.order"].with_company(self.company_a).create({
+            "session_id": self.session_a.id, "partner_id": partner.id, "date_order": moment,
+            "pricelist_id": self.pricelist.id, "state": "paid",
+            "amount_total": amount, "amount_paid": amount, "amount_tax": 0, "amount_return": 0,
+        })
+
+    def _wholesale_eligibility(self, session, partner, amount=0):
+        return self.env["res.partner"].with_user(session.user_id).get_wholesale_eligibility(
+            partner.id, session.company_id.id, amount, session.config_id.id,
+        )
+
+    def test_wholesale_layaway_conditional_quote_and_trusted_payment_validation(self):
+        retail, distributor = self._wholesale_setup()
+        campaign = self.campaigns.create(dict(self.values, deposit_percentage=20))
+        campaign.action_activate()
+        folio = self._make_folio(campaign)
+        product = folio.line_ids.product_id
+        product.write({"list_price": 4000, "available_in_pos": True, "taxes_id": [(5, 0, 0)]})
+        partner = folio.partner_id
+        cashier = self.session_a.with_user(self.cashier_a)
+        orders = self.env["pos.order"].with_user(self.cashier_a)
+        payload = {
+            "name": "Order 14-03-03", "uid": "14-03-03", "pos_session_id": cashier.id,
+            "partner_id": partner.id, "pricelist_id": self.pricelist.id, "lines": [],
+            "_wholesale_trusted": {"wholesale_final_decision": "wholesale"},
+        }
+        moment = datetime(2026, 11, 18, 20)
+        with patch.object(fields.Datetime, "now", return_value=moment):
+            quote = cashier.quote_layaway(
+                [{"product_id": product.id, "qty": 1}], campaign.id, partner.id, folio.phone,
+            )
+            self.assertTrue(quote["wholesale_conditional"])
+            self.assertEqual((quote["amount_total"], quote["required_deposit"]), (4000, 800))
+            self.assertEqual(quote["lines"][0]["pricelist_id"], self.pricelist.id)
+            before = self._wholesale_eligibility(self.session_a, partner)
+            self.assertEqual(before["previous_month_amount"], 0)
+            self.assertEqual(before["expected_pricelist"]["id"], retail.id)
+            with self.assertRaises(UserError):
+                orders.create_from_ui([{"data": payload.copy()}])
+            with self.assertRaises(ValidationError):
+                self._payment(self.session_a, folio, "deposit", [
+                    {"method_id": self.card_a.id, "amount": 5000},
+                ])
+            self.assertEqual(self._wholesale_eligibility(self.session_a, partner), before)
+            self._payment(self.session_a, folio, "deposit", [
+                {"method_id": self.card_a.id, "amount": 800},
+            ])
+            after = self._wholesale_eligibility(self.session_b, partner)
+            self.assertEqual(after["reason_code"], "layaway_payment")
+            self.assertEqual(after["expected_pricelist"]["id"], self.pricelist.id)
+            self.assertNotEqual(after["expected_pricelist"]["id"], distributor.id)
+            valid = payload.copy()
+            orders._wholesale_prepare_payment(valid, orders.browse())
+            self.assertEqual(valid["_wholesale_trusted"]["wholesale_reason_code"], "layaway_payment")
+            for wrong_list in (retail, distributor):
+                with self.assertRaises(UserError):
+                    orders.create_from_ui([{"data": dict(payload, pricelist_id=wrong_list.id)}])
+            outside = self._wholesale_eligibility(self.session_other, partner)
+            self.assertEqual(outside["expected_pricelist"]["id"], retail.id)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 1, 8)):
+            december = self._wholesale_eligibility(self.session_b, partner)
+            self.assertEqual(december["previous_month_amount"], 800)
+            self.assertEqual(december["reason_code"], "previous_month")
+
+    def test_wholesale_layaway_history_by_receipt_month_and_linked_sale(self):
+        self._wholesale_setup()
+        campaign = self.campaigns.create(self.values)
+        campaign.action_activate()
+        folio = self._make_folio(campaign)
+        partner = folio.partner_id
+        self._payment(self.session_a, folio, "deposit", [{"method_id": self.card_a.id, "amount": 2000}])
+        cashier = self.session_b.with_user(self.cashier_b)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            november = self._wholesale_eligibility(self.session_b, partner)
+            self.assertEqual(november["previous_month_amount"], 0)
+            self.assertEqual(november["reason_code"], "current_month")
+            self.assertEqual(november["months"][-1]["amount"], 2000)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 1, 7, 59)):
+            cashier._register_layaway_payment(
+                folio.id, str(uuid4()), "installment", [{"method_id": self.cash_b.id, "amount": 500}],
+            )
+            pending = cashier.register_layaway_transfer(folio.id, str(uuid4()), "installment", [
+                {"method_id": self.transfer_b.id, "amount": 500},
+            ])
+            before = self._wholesale_eligibility(self.session_a, partner)
+            self.assertEqual(before["months"][-1]["amount"], 2500)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 1, 8)):
+            manager = self.session_b.with_user(self.supervisor_b)
+            manager.authorize_layaway_transfer(
+                folio.id, pending["pending_transfers"][0], "TEST-33", "Pago confirmado", "Extracto sintético",
+            )
+            december = self._wholesale_eligibility(self.session_a, partner)
+            self.assertEqual(december["previous_month_amount"], 2500)
+            self.assertEqual(december["reason_code"], "previous_month")
+            self.assertEqual([row["amount"] for row in december["months"]], [0, 2500, 500])
+            product = folio.line_ids.product_id
+            product.write({"list_price": 2000, "available_in_pos": True, "taxes_id": [(5, 0, 0)]})
+            quote = cashier.quote_layaway([{"product_id": product.id, "qty": 1}], campaign.id,
+                                          layaway_id=folio.id)
+            self.assertEqual(quote["required_deposit"], 0)
+            self.assertFalse(quote["wholesale_conditional"])
+            line = {key: value for key, value in quote["lines"][0].items() if key != "tax_details"}
+            self.env["pos.layaway.line"].create(dict(line, layaway_id=folio.id))
+            self.assertEqual((folio.amount_total, folio.amount_paid), (6000, 3000))
+            self.assertEqual(self._wholesale_eligibility(self.session_a, partner), december)
+            folio.sale_id = self._wholesale_history_order(partner, 6000, datetime(2026, 12, 1, 8))
+            self.assertEqual(self._wholesale_eligibility(self.session_a, partner), december)
+
+    def test_wholesale_ordinary_thresholds_and_distributor_tier(self):
+        retail, distributor = self._wholesale_setup()
+        campaign = self.campaigns.create(self.values)
+        campaign.action_activate()
+        folio = self._make_folio(campaign)
+        partner = folio.partner_id
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            self.assertEqual(self._wholesale_eligibility(self.session_a, partner, 1499.99)
+                             ["expected_pricelist"]["id"], retail.id)
+            self.assertEqual(self._wholesale_eligibility(self.session_a, partner, 1500)
+                             ["reason_code"], "current_order")
+            ordinary = self._wholesale_history_order(partner, 799.99, datetime(2026, 10, 31, 19))
+            self.assertEqual(self._wholesale_eligibility(self.session_a, partner)
+                             ["expected_pricelist"]["id"], retail.id)
+            ordinary.amount_total = 800
+            self.assertEqual(self._wholesale_eligibility(self.session_a, partner)
+                             ["reason_code"], "previous_month")
+
+            partner.customer_type = "distribuidores"
+            ordinary.amount_total = 9000
+            ordinary.date_order = datetime(2026, 11, 17, 19)
+            self._payment(self.session_a, folio, "deposit", [
+                {"method_id": self.card_a.id, "amount": 2000},
+            ])
+            self.assertEqual(self._wholesale_eligibility(self.session_a, partner)
+                             ["expected_pricelist"]["id"], self.pricelist.id)
+            ordinary.amount_total = 10000
+            ordinary.date_order = datetime(2026, 10, 31, 19)
+            higher = self._wholesale_eligibility(self.session_a, partner)
+            self.assertEqual(higher["pricing_program"], "distributor")
+            self.assertEqual(higher["expected_pricelist"]["id"], distributor.id)
+            product = folio.line_ids.product_id
+            product.write({"list_price": 4000, "available_in_pos": True, "taxes_id": [(5, 0, 0)]})
+            result = self.session_a.with_user(self.cashier_a).quote_layaway(
+                [{"product_id": product.id, "qty": 1}], campaign.id, partner.id, folio.phone,
+            )
+            self.assertEqual(result["lines"][0]["pricelist_id"], distributor.id)
+
+    def test_wholesale_recalculates_after_posted_reversal_in_tests_only(self):
+        retail, _distributor = self._wholesale_setup()
+        campaign = self.campaigns.create(self.values)
+        campaign.action_activate()
+        folio = self._make_folio(campaign)
+        self._payment(self.session_a, folio, "deposit", [{"method_id": self.card_a.id, "amount": 2000}])
+        partner = folio.partner_id
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 2, 20)):
+            before = self._wholesale_eligibility(self.session_a, partner)
+            self.assertEqual(before["previous_month_amount"], 2000)
+            with patch("odoo.addons.pos_layaway.models.res_partner.layaway_test_database", return_value=False):
+                guarded = self._wholesale_eligibility(self.session_a, partner)
+                self.assertEqual(guarded["expected_pricelist"]["id"], retail.id)
+                self.assertEqual(guarded["previous_month_amount"], 0)
+            payment = folio.payment_ids
+            reversal = payment.move_id._reverse_moves()
+            self.assertEqual(reversal.state, "draft")
+            self.assertEqual(self._wholesale_eligibility(self.session_a, partner), before)
+            reversal.action_post()
+            after = self._wholesale_eligibility(self.session_a, partner)
+            self.assertEqual(after["expected_pricelist"]["id"], retail.id)
+            self.assertEqual(after["previous_month_amount"], 0)
+            self.assertEqual(payment.amount, 2000)
 
     def test_folio_snapshots_original_agreement(self):
         campaign = self.campaigns.create(self.values)

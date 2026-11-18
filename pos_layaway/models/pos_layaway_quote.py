@@ -62,6 +62,7 @@ class PosSession(models.Model):
             "currency_id": currency.id, "lines": quoted, "amount_new": addition,
             "amount_previous": previous_total, "amount_total": total,
             "amount_paid": paid, "required_deposit": max(0.0, currency.round(target - paid)),
+            "wholesale_conditional": not layaway_id,
             "pickup_end": fields.Date.to_string(agreement.pickup_end),
         }
 
@@ -89,7 +90,10 @@ class PosSession(models.Model):
         pricelist = company.wholesale_pricelist_id
         if partners._wholesale_pricing_program(partner) == "distributor":
             eligibility = partners.get_wholesale_eligibility(partner.id, company.id, 0, config.id)
-            if eligibility["automatic_decision"] == "wholesale" and not eligibility["error"]:
+            if (
+                eligibility["pricing_program"] == "distributor"
+                and eligibility["automatic_decision"] == "wholesale" and not eligibility["error"]
+            ):
                 pricelist = self.env["product.pricelist"].browse(
                     eligibility["expected_pricelist"]["id"]
                 )

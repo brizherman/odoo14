@@ -1,10 +1,16 @@
-from odoo import _, models
+from odoo import _, fields, models
 
 from .stock_picking import LayawayStockError
 
 
 class PosOrder(models.Model):
     _inherit = "pos.order"
+
+    layaway_ids = fields.One2many("pos.layaway", "sale_id", string="Apartado", readonly=True)
+    wholesale_reason_code = fields.Selection(
+        selection_add=[("layaway_payment", "Cobro confirmado de apartado")],
+        ondelete={"layaway_payment": "set null"},
+    )
 
     def _process_payment_lines(self, pos_order, order, pos_session, draft):
         picking_type = order.config_id.picking_type_id
