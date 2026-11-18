@@ -125,6 +125,7 @@ class TestPosLayawayCampaign(SavepointCase):
         ])
         config = cls._create_config(
             company, "Layaway " + label, cash_control=True, journal_id=sale_journal.id,
+            layaway_enabled=True,
             payment_method_ids=[(6, 0, (cash | card | transfer).ids)],
             layaway_liability_account_id=liability.id, layaway_card_journal_id=card_journal.id,
             layaway_transfer_journal_id=transfer_journal.id,
@@ -3028,3 +3029,95 @@ class TestPosLayawayCampaign(SavepointCase):
         self.assertEqual((snapshot["paid"], snapshot["reserved"], snapshot["due"]), (2000, 0, None))
         row, = snapshot["rows"]
         self.assertEqual((row["store"], row["delivered"], row["context"]), (row_b["store"], 1, False))
+
+    def test_register_switch_pauses_new_openings_and_preserves_existing_folios(self):
+        campaign, partner, product = self._settlement_fixture()
+        self.assertFalse(self.config_other.layaway_enabled)
+        self.assertFalse(self.config_other.layaway_menu_available)
+        self.config_b.layaway_enabled = False
+        for user in (self.cashier_a, self.supervisor):
+            with self.assertRaises(AccessError):
+                self.config_a.with_user(user).write({"layaway_enabled": False})
+        a = self.session_a.with_user(self.cashier_a)
+        b = self.session_b.with_user(self.cashier_b)
+        now = datetime(2026, 11, 18, 20)
+        tenders = [{"method_id": self.cash_a.id, "amount": 2000}]
+        with patch.object(fields.Datetime, "now", return_value=now):
+            self.assertTrue(a.get_layaways()["can_open_layaway"])
+            self.assertFalse(b.get_layaways()["can_open_layaway"])
+            self.assertEqual(a.get_layaway_campaigns()[0]["id"], campaign.id)
+            self.assertFalse(b.get_layaway_campaigns())
+            self.assertFalse(self.config_b.layaway_menu_available)
+            with self.assertRaisesRegex(UserError, "apagada"):
+                self._checkout_args(b, campaign, product, 2, partner)
+
+            _, opening = self._checkout_args(a, campaign, product, 2, partner)
+            _, stale_opening = self._checkout_args(a, campaign, product, 2, partner)
+            opened = a.confirm_layaway(*opening, tenders)
+            self.config_a.layaway_enabled = False
+            folio = self.env["pos.layaway"].browse(opened["id"])
+            self.assertFalse(a.get_layaways()["can_open_layaway"])
+            self.assertEqual(b.get_layaway_detail(folio.id)["amount_due"], 2000)
+            # On the next POS load, a paused register still shows existing folios.
+            self.config_b.invalidate_cache(["layaway_menu_available"])
+            self.assertTrue(self.config_a.layaway_menu_available)
+            self.assertTrue(self.config_b.layaway_menu_available)
+            before = self._checkout_state(folio)
+            with self.assertRaisesRegex(UserError, "apagada"):
+                a.confirm_layaway(*stale_opening, tenders)
+            self.assertEqual(a.confirm_layaway(*opening, tenders), opened)
+            self.assertEqual(self._checkout_state(folio), before)
+            pickings = self.env["stock.picking"]
+            self.assertTrue(pickings._layaway_stock_location(self.config_a.picking_type_id))
+            b.register_layaway_installment(folio.id, str(uuid4()), [
+                {"method_id": self.cash_b.id, "amount": 500},
+            ])
+            self.assertEqual(folio.amount_due, 1500)
+            a.settle_layaway(folio.id, str(uuid4()), [
+                {"method_id": self.cash_a.id, "amount": 1500},
+            ])
+            a.confirm_layaway_pickup(
+                folio.id, str(uuid4()), {"kind": "holder", "identity_verified": True},
+                a.get_layaway_detail(folio.id)["pickup"]["lines"],
+            )
+            self.assertEqual(folio.pickup_state, "done")
+            self.assertFalse(pickings._layaway_stock_location(self.config_a.picking_type_id))
+
+    def test_register_switch_leaves_ordinary_stock_and_close_on_native_path(self):
+        campaign, partner, product = self._settlement_fixture()
+        self.assertEqual(campaign.state, "active")
+        (self.config_a | self.config_b).layaway_enabled = False
+        (self.company_a | self.company_b).wholesale_control_active = False
+        product.taxes_id = [(5, 0, 0)]
+        (self.config_a | self.config_b).picking_type_id.use_existing_lots = False
+        pickings = self.env["stock.picking"]
+        for session, method in ((self.session_a, self.cash_a), (self.session_b, self.cash_b)):
+            self.assertFalse(pickings._layaway_stock_location(session.config_id.picking_type_id))
+            orders = self.env["pos.order"].with_user(session.user_id).with_company(session.company_id)
+            with patch.object(type(session), "_lock_layaway_stock_session") as lock:
+                for index, quantity in enumerate((1, -1), start=1):
+                    reference = "%05d-001-%04d" % (session.id, index)
+                    total = quantity * 100
+                    moment = fields.Datetime.now()
+                    payload = {
+                        "name": "Order " + reference, "uid": reference,
+                        "pos_session_id": session.id, "user_id": session.user_id.id,
+                        "sequence_number": index, "creation_date": moment.isoformat(),
+                        "partner_id": partner.id, "pricelist_id": session.config_id.pricelist_id.id,
+                        "amount_total": total, "amount_paid": total, "amount_tax": 0,
+                        "amount_return": 0, "fiscal_position_id": False,
+                        "lines": [(0, 0, {
+                            "product_id": product.id, "qty": quantity, "price_unit": 100,
+                            "price_subtotal": total, "price_subtotal_incl": total,
+                        })],
+                        "statement_ids": [(0, 0, {
+                            "amount": total, "name": moment, "payment_method_id": method.id,
+                        })],
+                    }
+                    self.assertEqual(len(orders.create_from_ui([{"id": reference, "data": payload}])), 1)
+                self._close_layaway_session(session, 0)
+                lock.assert_not_called()
+            self.assertFalse(pickings.search([
+                ("layaway_hold_order_id", "in", session.order_ids.ids),
+            ]))
+            self.assertEqual(set(session.picking_ids.mapped("state")), {"done"})

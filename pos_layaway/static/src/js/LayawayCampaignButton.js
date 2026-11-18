@@ -79,7 +79,7 @@ odoo.define('pos_layaway.LayawayCampaignButton', function (require) {
     ProductScreen.addControlButton({
         component: LayawayCampaignButton,
         condition: function () {
-            return Boolean(this.env.pos.pos_session);
+            return Boolean(this.env.pos.config.layaway_enabled);
         },
     });
     Registries.Component.add(LayawayCampaignButton);

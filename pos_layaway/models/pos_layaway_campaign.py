@@ -172,6 +172,8 @@ class PosLayawayCampaign(models.Model):
 
     @api.model
     def _available_for_opening(self, config, now):
+        if not config.layaway_enabled:
+            return self.browse()
         campaigns = self.search([
             ("state", "=", "active"),
             ("pos_config_ids", "in", config.ids),

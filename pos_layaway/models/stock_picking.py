@@ -59,8 +59,9 @@ class StockPicking(models.Model):
             "|", ("id", "child_of", source.id), ("id", "parent_of", source.id),
         ])
         if self.sudo().search_count([
-            ("layaway_id", "!=", False), ("state", "not in", ("done", "cancel")),
+            ("state", "not in", ("done", "cancel")),
             ("location_id", "in", overlapping.ids),
+            "|", ("layaway_id", "!=", False), ("layaway_hold_order_id", "!=", False),
         ]):
             return True
         if self.env["pos.layaway"].sudo().search_count([
@@ -68,11 +69,14 @@ class StockPicking(models.Model):
             ("participant_config_ids.picking_type_id.default_location_src_id", "in", overlapping.ids),
         ]):
             return True
+        if not layaway_test_database(self.env):
+            return False
         configs = self.env["pos.layaway.campaign"].sudo().search([
             ("state", "=", "active"),
         ]).pos_config_ids
         return any(
-            config.picking_type_id.default_location_src_id in overlapping for config in configs
+            config.layaway_enabled and config.picking_type_id.default_location_src_id in overlapping
+            for config in configs
         )
 
     def _require_stock_reserved(self):

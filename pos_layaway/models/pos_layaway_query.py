@@ -163,7 +163,7 @@ class PosSession(models.Model):
         return {
             "rows": [folio._pos_layaway_values(reserved) for folio in visible],
             "has_more": len(page) > page_size,
-            "can_open_layaway": layaway_test_database(self.env),
+            "can_open_layaway": self.config_id.layaway_enabled and layaway_test_database(self.env),
             "can_review_expired": self.env.user.has_group("point_of_sale.group_pos_manager"),
             **scope_filters,
         }

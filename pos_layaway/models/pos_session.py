@@ -42,7 +42,8 @@ class PosSession(models.Model):
         self.invalidate_cache(["write_date"])
 
     def _validate_session(self):
-        self._lock_layaway_stock_session()
+        if self.env["stock.picking"]._layaway_stock_location(self.config_id.picking_type_id):
+            self._lock_layaway_stock_session()
         return super()._validate_session()
 
     def _get_split_receivable_vals(self, payment, amount, amount_converted):

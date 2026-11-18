@@ -71,6 +71,8 @@ class PosSession(models.Model):
 
     def _apply_layaway_quote(self, operation, proposal, confirmation, tenders, folio):
         self._lock_layaway_stock_session()
+        if not folio:
+            self.config_id._lock_layaway_opening()
         quote = self._quote_layaway(**proposal, now=operation.create_date)
         if self._layaway_quote_digest(quote) != confirmation:
             raise ValidationError(_("Cambió la cotización. Vuelve a cotizar antes de confirmar."))
@@ -138,6 +140,8 @@ class PosSession(models.Model):
             name, phone = agreement.contact_name, agreement.phone
             previous_total, paid = agreement.amount_total, agreement.amount_paid
         else:
+            if not config.layaway_enabled:
+                raise UserError(_("La apertura de apartados está apagada en esta caja."))
             agreement = campaign_model._available_for_opening(config, now).filtered(
                 lambda campaign: campaign.id == campaign_id
             )

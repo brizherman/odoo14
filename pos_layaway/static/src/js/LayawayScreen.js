@@ -11,6 +11,7 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
     const { useState } = owl.hooks;
 
     models.load_fields('product.product', ['type']);
+    models.load_fields('pos.config', ['layaway_enabled', 'layaway_menu_available']);
 
     function operationReference() {
         const bytes = window.crypto.getRandomValues(new Uint8Array(16));
@@ -650,7 +651,7 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
     ProductScreen.addControlButton({
         component: LayawayScreenButton,
         condition: function () {
-            return Boolean(this.env.pos.pos_session);
+            return Boolean(this.env.pos.config.layaway_menu_available);
         },
     });
     Registries.Component.add(LayawayScreen);
