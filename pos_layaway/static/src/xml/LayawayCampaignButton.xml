@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates xml:space="preserve">
+    <t t-name="pos_layaway.LayawayCampaignButton" owl="1">
+        <span class="control-button o_pos_layaway_campaign">
+            <i class="fa fa-calendar" aria-hidden="true"/>
+            <t t-if="selection.campaign" t-esc="selection.campaign.name"/>
+            <t t-else="">Campañas de apartados</t>
+        </span>
+    </t>
+</templates>

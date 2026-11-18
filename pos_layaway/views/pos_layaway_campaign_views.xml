@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_pos_layaway_campaign_tree" model="ir.ui.view">
+        <field name="name">pos.layaway.campaign.tree</field>
+        <field name="model">pos.layaway.campaign</field>
+        <field name="arch" type="xml">
+            <tree>
+                <field name="code"/>
+                <field name="name"/>
+                <field name="state"/>
+                <field name="warehouse_ids" widget="many2many_tags"/>
+                <field name="opening_start"/>
+                <field name="opening_end"/>
+                <field name="currency_id" invisible="1"/>
+                <field name="minimum_amount"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_pos_layaway_campaign_form" model="ir.ui.view">
+        <field name="name">pos.layaway.campaign.form</field>
+        <field name="model">pos.layaway.campaign</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_activate" type="object" string="Activar" class="oe_highlight"
+                            attrs="{'invisible': [('state', '!=', 'draft')]}"/>
+                    <button name="action_archive" type="object" string="Archivar"
+                            attrs="{'invisible': [('state', '=', 'archived')]}"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group string="Participación">
+                            <field name="name"/>
+                            <field name="code" readonly="1"/>
+                            <field name="pos_config_ids" widget="many2many_tags"
+                                   options="{'no_create': True, 'no_open': True}"/>
+                            <field name="warehouse_ids" widget="many2many_tags"/>
+                            <field name="company_ids" widget="many2many_tags" groups="base.group_multi_company"/>
+                        </group>
+                        <group string="Importes">
+                            <field name="currency_id"/>
+                            <field name="minimum_amount"/>
+                            <field name="deposit_percentage"/>
+                        </group>
+                    </group>
+                    <group string="Plazos inclusivos">
+                        <group>
+                            <field name="timezone"/>
+                            <field name="opening_start"/>
+                            <field name="opening_end"/>
+                        </group>
+                        <group>
+                            <field name="addition_end"/>
+                            <field name="pickup_end"/>
+                            <field name="credit_end"/>
+                        </group>
+                    </group>
+                    <group string="Condiciones de mayoreo y operación">
+                        <div colspan="2">
+                            <p>Se admite a cualquier cliente con beneficiario identificado. Aplica el precio de mayoreo sin descuento adicional ni concesión automática de nivel distribuidor. El mínimo se compara con el total de mercancía con impuestos. El porcentaje de anticipo cubre también las adiciones.</p>
+                            <p>Las tiendas participantes reciben pagos en efectivo, tarjeta y transferencia combinables. El encargado confirma la recepción de transferencias. Cada tienda conserva y entrega la mercancía a su cargo. La liquidación puede realizarse antes de recoger.</p>
+                            <p>Dentro de plazo, los cambios autorizados solo afectan la mercancía pendiente. Al quedar deuda se bloquean todas las recogidas. La entrega tardía requiere autorización y reserva completa de lo pendiente. La cancelación voluntaria está prohibida.</p>
+                            <p>Al vencer, el encargado revisa las reservas. Un apartado con deuda y sin entregas puede convertirse en saldo de un solo uso. La mercancía pagada pendiente se conserva reservada hasta que el encargado documente la resolución.</p>
+                        </div>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_pos_layaway_campaign" model="ir.actions.act_window">
+        <field name="name">Campañas de apartados</field>
+        <field name="res_model">pos.layaway.campaign</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <menuitem id="menu_pos_layaway_campaign" name="Campañas de apartados"
+              parent="point_of_sale.menu_point_config_product" action="action_pos_layaway_campaign"
+              groups="pos_layaway.group_layaway_campaign_manager" sequence="25"/>
+</odoo>

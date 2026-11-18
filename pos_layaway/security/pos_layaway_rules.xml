@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="group_layaway_campaign_manager" model="res.groups">
+        <field name="name">Gestionar campañas de apartados</field>
+        <field name="category_id" ref="base.module_category_extra"/>
+        <field name="implied_ids" eval="[(4, ref('point_of_sale.group_pos_manager'))]"/>
+        <field name="comment">Autoriza la configuración y activación de campañas de apartados en las compañías asignadas.</field>
+    </record>
+
+    <record id="rule_layaway_campaign_company" model="ir.rule">
+        <field name="name">Campañas de apartados en compañías habilitadas</field>
+        <field name="model_id" ref="model_pos_layaway_campaign"/>
+        <field name="domain_force">[('company_ids', 'in', company_ids)]</field>
+    </record>
+
+    <record id="rule_layaway_campaign_pos_user" model="ir.rule">
+        <field name="name">Campañas activas para usuarios de POS</field>
+        <field name="model_id" ref="model_pos_layaway_campaign"/>
+        <field name="groups" eval="[(4, ref('point_of_sale.group_pos_user'))]"/>
+        <field name="domain_force">[('state', '=', 'active')]</field>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+
+    <record id="rule_layaway_campaign_manager" model="ir.rule">
+        <field name="name">Consulta de todos los estados para gestores de campañas</field>
+        <field name="model_id" ref="model_pos_layaway_campaign"/>
+        <field name="groups" eval="[(4, ref('group_layaway_campaign_manager'))]"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+</odoo>
