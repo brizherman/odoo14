@@ -1,36 +1,155 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <template id="layaway_report_amount">
+        <span style="white-space: nowrap;">
+            <span t-esc="amount" t-options="{'widget': 'float', 'precision': campaign['precision']}"/>
+            <span t-esc="campaign['currency']"/>
+        </span>
+    </template>
+
+    <template id="layaway_report_cash_row">
+        <tr t-att-class="'font-weight-bold' if row['subtotal'] else ''" style="page-break-inside: avoid;">
+            <td>
+                <div t-if="row['session']" t-esc="row['session']"/>
+                <span t-esc="row['label']"/>
+                <t t-if="row['method']"> · <span t-esc="row['method']"/></t>
+            </td>
+            <td t-foreach="('collected', 'reversal', 'replacement', 'net')" t-as="column" class="text-right">
+                <t t-call="pos_layaway.layaway_report_amount">
+                    <t t-set="amount" t-value="row[column]"/>
+                </t>
+            </td>
+        </tr>
+    </template>
+
     <template id="report_saledetails_layaway" inherit_id="point_of_sale.report_saledetails">
         <xpath expr="//div[hasclass('page')]/strong" position="after">
             <section t-if="layaway_campaigns" id="layaway_sales_details" class="mt-4">
                 <h3>Apartados</h3>
                 <t t-foreach="layaway_campaigns" t-as="campaign">
                     <h4 t-esc="campaign['name']"/>
+                    <h5>Movimientos del periodo</h5>
                     <table class="table table-sm">
                         <thead>
                             <tr>
-                                <th>Fecha y hora</th>
-                                <th>Folio</th>
-                                <th>Caja y sesión</th>
-                                <th>Método</th>
-                                <th class="text-right">Importe</th>
+                                <th>Fecha y hora · Tienda · Caja · Sesión</th>
+                                <th>Operación · Folio · Cliente · Cajero</th>
+                                <th class="text-right">Método e importe</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr t-foreach="campaign['movements']" t-as="movement">
-                                <td t-esc="movement['date']" t-options="{'widget': 'datetime'}"/>
-                                <td t-esc="movement['folio']"/>
+                            <tr t-foreach="campaign['movements']" t-as="movement" style="page-break-inside: avoid;">
                                 <td>
-                                    <span t-esc="movement['config']"/>
+                                    <span t-esc="movement['date']" t-options="{'widget': 'datetime'}"/>
                                     <br/>
-                                    <span t-esc="movement['session']"/>
+                                    <span t-esc="movement['store']"/>
+                                    <br/>
+                                    <span t-esc="movement['config']"/> · <span t-esc="movement['session']"/>
                                 </td>
-                                <td t-esc="movement['method'] or ''"/>
-                                <td class="text-right" t-if="movement['amount'] is not None">
-                                    <span t-esc="movement['amount']" t-options="{'widget': 'float', 'precision': movement['precision']}"/>
-                                    <span t-esc="movement['currency']"/>
+                                <td>
+                                    <strong t-esc="movement['label']"/>
+                                    <br/>
+                                    <span t-esc="movement['folio']"/> · <span t-esc="movement['customer']"/>
+                                    <br/>
+                                    Cajero <span t-esc="movement['cashier']"/>
+                                    <div t-if="movement['authorizer']">
+                                        Autorizó <span t-esc="movement['authorizer']"/>
+                                    </div>
+                                    <div class="small">Ref. <span t-esc="movement['reference']"/></div>
+                                    <div t-if="movement['original_reference']" class="small">
+                                        Ref. de origen <span t-esc="movement['original_reference']"/>
+                                    </div>
+                                    <div t-if="movement['sale_name']">Venta <span t-esc="movement['sale_name']"/></div>
                                 </td>
-                                <td t-else=""/>
+                                <td class="text-right">
+                                    <div t-foreach="movement['breakdown']" t-as="line">
+                                        <span t-esc="line['method']"/>
+                                        <span t-if="line['effect'] == 'reversal'">(reversión)</span>
+                                        <span t-if="line['effect'] == 'replacement'">(reclasificación)</span>
+                                        <t t-call="pos_layaway.layaway_report_amount">
+                                            <t t-set="amount" t-value="line['amount']"/>
+                                        </t>
+                                    </div>
+                                    <div t-if="movement['breakdown']">
+                                        <strong>Neto de la operación</strong>
+                                        <t t-call="pos_layaway.layaway_report_amount">
+                                            <t t-set="amount" t-value="movement['amount']"/>
+                                        </t>
+                                    </div>
+                                    <div t-if="not movement['breakdown']">Sin dinero nuevo</div>
+                                    <div t-if="movement['previous']">
+                                        Pagos previos aplicados
+                                        <t t-call="pos_layaway.layaway_report_amount">
+                                            <t t-set="amount" t-value="movement['previous']"/>
+                                        </t>
+                                    </div>
+                                    <div t-if="movement['credit_applied']">
+                                        Saldo aplicado
+                                        <t t-call="pos_layaway.layaway_report_amount">
+                                            <t t-set="amount" t-value="movement['credit_applied']"/>
+                                        </t>
+                                    </div>
+                                    <div t-if="movement['credit_issued']">
+                                        Saldo emitido
+                                        <t t-call="pos_layaway.layaway_report_amount">
+                                            <t t-set="amount" t-value="movement['credit_issued']"/>
+                                        </t>
+                                    </div>
+                                    <div t-if="movement['linked_sale'] is not None">
+                                        Valor de venta vinculada
+                                        <t t-call="pos_layaway.layaway_report_amount">
+                                            <t t-set="amount" t-value="movement['linked_sale']"/>
+                                        </t>
+                                    </div>
+                                    <div t-if="movement['adjustment']">
+                                        Ajuste <span t-esc="movement['adjustment']['name']"/>
+                                        <t t-call="pos_layaway.layaway_report_amount">
+                                            <t t-set="amount" t-value="movement['adjustment']['amount']"/>
+                                        </t>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h5>Resumen de caja por sesión receptora</h5>
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Tienda · Caja · Sesión / Tipo · Método</th>
+                                <th class="text-right">Cobros nuevos</th>
+                                <th class="text-right">Reversiones</th>
+                                <th class="text-right">Reposiciones por reclasificación</th>
+                                <th class="text-right">Neto</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <t t-foreach="campaign['cash_by_session']" t-as="row">
+                                <t t-call="pos_layaway.layaway_report_cash_row"/>
+                            </t>
+                            <t t-call="pos_layaway.layaway_report_cash_row">
+                                <t t-set="row" t-value="campaign['cash_total']"/>
+                            </t>
+                        </tbody>
+                    </table>
+
+                    <h5>Importes fuera del neto de caja</h5>
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Pagos previos aplicados</th>
+                                <th>Saldo emitido</th>
+                                <th>Saldo aplicado</th>
+                                <th>Valor de ventas vinculadas</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td t-foreach="('previous', 'credit_issued', 'credit_applied', 'linked_sale')" t-as="column">
+                                    <t t-call="pos_layaway.layaway_report_amount">
+                                        <t t-set="amount" t-value="campaign['other_totals'][column]"/>
+                                    </t>
+                                </td>
                             </tr>
                         </tbody>
                     </table>

@@ -1305,6 +1305,16 @@ class TestPosLayawayCampaign(SavepointCase):
         self.session_a.action_pos_session_validate()
         self.assertEqual((self.session_a.state, self.session_a.cash_real_difference), ("closed", 0))
         self.assertEqual(reversal.move_id.state, "posted")
+        report = self.env["report.point_of_sale.report_saledetails"].with_user(self.supervisor)
+        refunded, = report._get_layaway_campaigns({
+            "date_start": reversal.paid_at, "date_stop": reversal.paid_at, "config_ids": self.config_a.ids,
+        })
+        self.assertEqual(refunded["cash_total"]["net"], -1300)
+        self.assertEqual(refunded["cash_total"]["reversal"], -1300)
+        movement, = refunded["movements"]
+        self.assertEqual(movement["breakdown"], [{
+            "method": self.cash_a.name, "effect": "reversal", "amount": -1300,
+        }])
         history = partner._wholesale_monthly_totals(self.company_a, datetime(2026, 11, 19, 20))
         self.assertEqual(history[-1]["amount"], 2000)
 
@@ -1490,6 +1500,22 @@ class TestPosLayawayCampaign(SavepointCase):
             picking.button_validate()
         self.assertEqual(picking.state, "assigned")
         self.assertFalse(folio.sale_id)
+        report = self.env["report.point_of_sale.report_saledetails"].with_user(self.supervisor)
+        group, = report._get_layaway_campaigns({
+            "date_start": registered_at, "date_stop": verified_at, "config_ids": self.config_a.ids,
+        })
+        submitted, approved = group["movements"]
+        self.assertEqual((submitted["date"], submitted["amount"]), (registered_at, 1000))
+        self.assertCountEqual(
+            [(line["method"], line["amount"]) for line in submitted["breakdown"]],
+            [(self.cash_a.name, 400), (self.card_a.name, 600)],
+        )
+        self.assertEqual((approved["date"], approved["amount"]), (verified_at, 1000))
+        self.assertEqual((approved["original_reference"], approved["authorizer"]), (
+            reference, self.supervisor.name,
+        ))
+        self.assertEqual(approved["cashier"], self.cashier_a.name)
+        self.assertEqual(group["cash_total"]["net"], 2000)
 
     def test_transfer_cannot_reuse_bank_reference_or_apply_stale_amount(self):
         campaign = self.campaigns.create(self.values)
@@ -1868,6 +1894,17 @@ class TestPosLayawayCampaign(SavepointCase):
             self.assertEqual((difference.amount_total, difference.amount_tax), (2000, 275.86))
             self.assertEqual((difference.invoice_origin, difference.company_id), (sale.name, self.company_a))
             self.assertEqual((folio.amount_due, difference.amount_residual), (2000, 2000))
+            report = self.env["report.point_of_sale.report_saledetails"].with_user(self.supervisor_b)
+            adjustment_date = datetime(2026, 12, 15, 20)
+            adjusted, = report._get_layaway_campaigns({
+                "date_start": adjustment_date, "date_stop": adjustment_date, "config_ids": self.config_b.ids,
+            })
+            self.assertEqual(adjusted["cash_total"]["net"], 0)
+            self.assertEqual(adjusted["other_totals"]["linked_sale"], 0)
+            movement, = adjusted["movements"]
+            self.assertEqual(movement["kind"], "add_products")
+            self.assertEqual(movement["adjustment"]["amount"], 2000)
+            self.assertFalse(movement["breakdown"])
             with self.assertRaisesRegex(ValidationError, "Cambió la cotización"):
                 b.confirm_layaway(str(uuid4()), *addition[1:], [])
             with self.assertRaisesRegex(UserError, "desde el apartado"):
@@ -2091,6 +2128,16 @@ class TestPosLayawayCampaign(SavepointCase):
             self.assertEqual(second["recipient"], dict(registration, kind="authorized", identity_verified=True))
             self.assertEqual(second["pickup_state"], "done")
             self.assertFalse(second["pending"])
+            report = self.env["report.point_of_sale.report_saledetails"].with_user(self.supervisor_b)
+            group, = report._get_layaway_campaigns({
+                "date_start": datetime(2026, 11, 18, 20), "date_stop": datetime(2026, 11, 18, 20),
+                "config_ids": self.config_b.ids,
+            })
+            collected, = [row for row in group["movements"] if row["kind"] == "pickup"]
+            self.assertEqual(collected["reference"], second["reference"])
+            self.assertEqual(collected["amount"], 0)
+            self.assertFalse(collected["breakdown"])
+            self.assertEqual(group["other_totals"]["linked_sale"], 0)
             self.assertEqual(b.confirm_layaway_pickup(*a_args), first)
             with self.assertRaisesRegex(ValidationError, "bloque pendiente"):
                 a.confirm_layaway_pickup(a_args[0], str(uuid4()), *a_args[2:])
@@ -2429,6 +2476,29 @@ class TestPosLayawayCampaign(SavepointCase):
                 self.assertEqual(credit.order_id, sale)
             history = partner._wholesale_monthly_totals(self.company_b, moment)
             self.assertEqual([row["amount"] for row in history][-3:], [4000, 0, 1200])
+            report = self.env["report.point_of_sale.report_saledetails"].with_user(self.manager).with_context(
+                allowed_company_ids=self.company_ids,
+            )
+            issued, = report._get_layaway_campaigns({
+                "date_start": datetime(2026, 12, 16, 8), "date_stop": datetime(2026, 12, 16, 8),
+                "config_ids": self.config_a.ids,
+            })
+            applied, = report._get_layaway_campaigns({
+                "date_start": moment, "date_stop": moment, "config_ids": self.config_b.ids,
+            })
+            self.assertEqual(issued["cash_total"]["net"], 0)
+            self.assertEqual(issued["other_totals"]["credit_issued"], 4000)
+            self.assertTrue(all(not movement["breakdown"] for movement in issued["movements"]))
+            self.assertEqual(applied["cash_total"]["net"], 1200)
+            self.assertEqual(applied["other_totals"], {
+                "previous": 0, "credit_issued": 0, "credit_applied": 4000, "linked_sale": 5200,
+            })
+            exact_movement, greater_movement = applied["movements"]
+            self.assertFalse(exact_movement["breakdown"])
+            self.assertCountEqual(
+                [(line["method"], line["amount"]) for line in greater_movement["breakdown"]],
+                [(self.cash_b.name, 1000), (self.card_b.name, 200)],
+            )
             self._close_layaway_session(self.session_a, 4000)
             self._close_layaway_session(self.session_b, 1000)
             for folio, reference, payload, result in stored:
@@ -2742,5 +2812,28 @@ class TestPosLayawayCampaign(SavepointCase):
                 "evidence": "Prueba dirigida de Sales Details",
             })
         corrections = render_values(data, date_start=correction_day, date_stop=correction_day)
-        self.assertEqual([row["amount"] for row in movements(corrections)], [-1000, 1000])
+        correction, = movements(corrections)
+        self.assertEqual(correction["amount"], 0)
+        self.assertEqual(correction["original_reference"], original.reference)
+        self.assertEqual(correction["cashier"], self.supervisor_b.name)
+        self.assertCountEqual(
+            [(line["effect"], line["amount"], line["method"]) for line in correction["breakdown"]],
+            [("reversal", -1000, self.card_b.name), ("replacement", 1000, self.transfer_b.name)],
+        )
+        corrected_group, = corrections["layaway_campaigns"]
+        self.assertEqual(
+            [corrected_group["cash_total"][key] for key in ("collected", "reversal", "replacement", "net")],
+            [0, -1000, 1000, 0],
+        )
         self.assertEqual(movements(render_values(data)), movements(values))
+
+        closing, = final_day["layaway_campaigns"]
+        settlement, = closing["movements"]
+        self.assertEqual((settlement["folio"], settlement["customer"]), (folio.folio, partner.name))
+        self.assertEqual((settlement["store"], settlement["cashier"], settlement["config"]), (
+            self.config_a.picking_type_id.warehouse_id.display_name, self.cashier_a.name, self.config_a.name,
+        ))
+        self.assertEqual(closing["cash_total"]["net"], 2000)
+        self.assertEqual(closing["other_totals"], {
+            "previous": 4000, "credit_issued": 0, "credit_applied": 0, "linked_sale": 6000,
+        })
