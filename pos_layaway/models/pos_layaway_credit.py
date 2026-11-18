@@ -1,8 +1,24 @@
+from copy import deepcopy
+
 from odoo import _, api, fields, models
-from odoo.exceptions import AccessError, UserError
+from odoo.exceptions import AccessError, UserError, ValidationError
 
 from .pos_layaway_campaign import local_date
+from .pos_layaway_payment import layaway_test_database
 from .stock_picking import LayawayStockError
+
+
+class PosConfig(models.Model):
+    _inherit = "pos.config"
+
+    layaway_credit_test = fields.Boolean(compute="_compute_layaway_credit_test")
+
+    @api.depends("layaway_application_method_id")
+    def _compute_layaway_credit_test(self):
+        for config in self:
+            config.layaway_credit_test = bool(
+                layaway_test_database(self.env) and config.sudo().layaway_application_method_id
+            )
 
 
 class PosLayawayCredit(models.Model):
@@ -18,22 +34,47 @@ class PosLayawayCredit(models.Model):
     reason = fields.Char(required=True)
     amount = fields.Monetary(required=True)
     expires_on = fields.Date(related="layaway_id.credit_end", store=True)
+    order_id = fields.Many2one("pos.order", readonly=True, copy=False, ondelete="restrict")
+    consumption_id = fields.Many2one(
+        "pos.layaway.operation", readonly=True, copy=False, ondelete="restrict",
+    )
+    closure_id = fields.Many2one(
+        "pos.layaway.operation", readonly=True, copy=False, ondelete="restrict",
+    )
     state = fields.Selection(
-        [("available", "Disponible"), ("expired", "Caducado")], compute="_compute_state",
+        [("available", "Disponible"), ("consumed", "Consumido"), ("expired", "Caducado")],
+        compute="_compute_state",
     )
 
     _sql_constraints = [
         ("layaway_unique", "UNIQUE(layaway_id)", "El apartado ya tiene un saldo por vencimiento."),
         ("operation_unique", "UNIQUE(operation_id)", "La operación ya tiene un saldo por vencimiento."),
         ("positive_amount", "CHECK(amount > 0)", "El saldo debe ser positivo."),
+        ("order_unique", "UNIQUE(order_id)", "El pedido ya tiene un saldo aplicado."),
+        ("one_resolution", "CHECK((order_id IS NULL) = (consumption_id IS NULL) "
+         "AND (closure_id IS NULL OR order_id IS NULL))", "La resolución del saldo no es válida."),
     ]
 
-    @api.depends("expires_on", "layaway_id.timezone")
+    @api.depends("expires_on", "layaway_id.timezone", "order_id", "closure_id")
     def _compute_state(self):
         now = fields.Datetime.now()
         for credit in self:
-            expired = local_date(now, credit.layaway_id.timezone) > credit.expires_on
-            credit.state = "expired" if expired else "available"
+            credit.state = credit._state_at(now)
+
+    def _state_at(self, now):
+        if self.order_id:
+            return "consumed"
+        if self.closure_id or local_date(now, self.layaway_id.timezone) > self.expires_on:
+            return "expired"
+        return "available"
+
+    def _record_resolution(self, operation, order=None):
+        self.ensure_one()
+        if not self.env.su or not layaway_test_database(self.env):
+            raise AccessError(_("La resolución del saldo solo está disponible para pruebas."))
+        values = ({"order_id": order.id, "consumption_id": operation.id} if order
+                  else {"closure_id": operation.id})
+        return super().write(values)
 
     def write(self, vals):
         raise AccessError(_("El saldo conserva las condiciones de su emisión."))
@@ -65,6 +106,90 @@ class PosLayaway(models.Model):
 
 class PosSession(models.Model):
     _inherit = "pos.session"
+
+    def preview_layaway_credit(self, folio_number, partner_id):
+        self._check_layaway_payment_test()
+        scope = self._layaway_query_domain()
+        if not isinstance(folio_number, str) or not folio_number.strip():
+            raise ValidationError(_("Indica el folio del apartado."))
+        folio = self.env["pos.layaway"].sudo().search(
+            scope + [("folio", "=", folio_number.strip().upper())],
+            limit=1,
+        )
+        credit = self._check_credit_purchase(folio, partner_id, fields.Datetime.now())
+        return dict(credit._pos_layaway_credit_values(), folio=folio.folio, folio_id=folio.id)
+
+    def _check_credit_purchase(self, folio, partner_id, moment):
+        credit = folio.expiry_credit_id
+        if not credit or type(partner_id) is not int or partner_id != credit.partner_id.id:
+            raise UserError(_("No hay un saldo de este folio para el titular seleccionado."))
+        if self.rescue or not self.currency_id == credit.currency_id == self.company_id.currency_id:
+            raise UserError(_("El saldo requiere una sesión ordinaria en la moneda del apartado."))
+        if credit._state_at(moment) != "available":
+            raise UserError(_("El saldo está consumido o caducado."))
+        return credit
+
+    def confirm_layaway_credit_order(self, folio_id, reference, ui_order):
+        self._check_layaway_payment_test()
+        folio = self._find_layaway(folio_id, require_open=False)
+        if not isinstance(ui_order, dict) or ui_order.get("pos_session_id") != self.id:
+            raise ValidationError(_("El pedido no corresponde a esta caja."))
+        if ui_order.get("to_invoice"):
+            raise UserError(_("La compra con saldo de prueba se confirma sin facturación."))
+
+        def apply(operation):
+            self._lock_layaway_stock_session()
+            confirmed_at = fields.Datetime.now()
+            credit = self._check_credit_purchase(folio, ui_order.get("partner_id"), confirmed_at)
+            session = self.sudo().with_context({}, allowed_company_ids=self.company_id.ids)
+            method = session._layaway_application_method()
+            orders = self.env["pos.order"].with_company(self.company_id)
+            payload = deepcopy(ui_order)
+            payload.update(creation_date=fields.Datetime.to_string(confirmed_at), user_id=self.env.uid)
+            order = orders._confirm_credit_purchase(payload, credit, method)
+            moves = session._apply_layaway_liabilities(
+                folio.with_env(session.env), folio.payment_ids.with_env(session.env),
+                method.receivable_account_id, local_date(confirmed_at, folio.timezone),
+                "%s · %s" % (folio.folio, operation.reference),
+            )
+            credit._record_resolution(operation, order)
+            order.sudo().layaway_application_move_ids = moves
+            return folio, {
+                "id": order.id, "pos_reference": order.pos_reference, "order_name": order.name,
+                "reference": operation.reference, "credit_id": credit.id, "credit_amount": credit.amount,
+                "amount_new": order.currency_id.round(order.amount_paid - credit.amount),
+                "move_ids": moves.ids,
+            }
+
+        return self.env["pos.layaway.operation"].sudo()._confirm(
+            self, reference, "apply_expiry_credit", ui_order, apply, folio, pass_operation=True,
+        )
+
+    def close_expired_layaway_credit(self, folio_id, reference, notes):
+        self._check_layaway_payment_test()
+        folio = self._find_layaway(folio_id, require_open=False)
+        if self.rescue or not self.env.user.has_group("point_of_sale.group_pos_manager"):
+            raise AccessError(_("El cierre del saldo requiere un encargado en una sesión ordinaria."))
+        if not isinstance(notes, str) or not notes.strip() or len(notes.strip()) > 1000:
+            raise ValidationError(_("Indica las observaciones del cierre (hasta 1000 caracteres)."))
+        notes = notes.strip()
+
+        def apply(operation):
+            credit = folio.expiry_credit_id
+            if not credit or credit._state_at(fields.Datetime.now()) != "expired":
+                raise UserError(_("Solo se puede cerrar un saldo caducado sin consumo."))
+            if credit.closure_id:
+                raise UserError(_("El saldo ya tiene un cierre administrativo."))
+            credit._record_resolution(operation)
+            return folio, {
+                "id": folio.id, "folio": folio.folio, "reference": operation.reference,
+                "notes": notes, "reviewer": operation.user_id.name,
+                "closed_at": operation._receipt_identification(folio, operation.create_date)["confirmed_at"],
+            }
+
+        return self.env["pos.layaway.operation"].sudo()._confirm(
+            self, reference, "close_expiry_credit", {"notes": notes}, apply, folio, pass_operation=True,
+        )
 
     def _convert_layaway_to_credit(self, folio, operation, reason):
         if not folio._can_convert_layaway_to_credit():

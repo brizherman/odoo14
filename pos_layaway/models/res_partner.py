@@ -49,9 +49,16 @@ class ResPartner(models.Model):
         ))
 
     def _wholesale_grouped_amount(self, model_name, domain):
-        if model_name == "pos.order" and layaway_test_database(self.env):
-            domain = domain + [("layaway_ids", "=", False)]
-        return super()._wholesale_grouped_amount(model_name, domain)
+        if model_name != "pos.order" or not layaway_test_database(self.env):
+            return super()._wholesale_grouped_amount(model_name, domain)
+        ordinary = super()._wholesale_grouped_amount(
+            model_name, domain + [("layaway_ids", "=", False), ("layaway_credit_amount", "=", 0)],
+        )
+        credit_sales = self.env[model_name].sudo().read_group(
+            domain + [("layaway_credit_amount", ">", 0)],
+            ["amount_paid:sum", "layaway_credit_amount:sum"], ["partner_id"], lazy=False,
+        )
+        return ordinary + sum(row["amount_paid"] - row["layaway_credit_amount"] for row in credit_sales)
 
     def _wholesale_pos_refund_originals(self, refunds):
         originals = super()._wholesale_pos_refund_originals(refunds)

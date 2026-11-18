@@ -46,12 +46,15 @@ class PosPayment(models.Model):
         if (self - applications).pos_order_id.sudo().layaway_application_move_ids:
             raise AccessError(_("La aplicación de cobros conserva su registro original."))
         for payment in applications:
+            order = payment.pos_order_id
+            credit = order._purchase_credit()
+            expected = credit.amount if credit else order.amount_total
             if (
                 not self.env.su or not layaway_test_database(self.env)
-                or not payment.pos_order_id.layaway_ids
-                or payment.pos_order_id.layaway_application_move_ids
+                or not (order.layaway_ids or credit)
+                or order.layaway_application_move_ids
                 or payment.payment_method_id != payment.session_id.config_id.layaway_application_method_id
-                or payment.currency_id.compare_amounts(payment.amount, payment.pos_order_id.amount_total)
+                or payment.currency_id.compare_amounts(payment.amount, expected)
             ):
                 raise AccessError(_("El método de aplicación está reservado a liquidaciones de prueba."))
         return super(PosPayment, self - applications)._check_payment_method_id()
@@ -65,6 +68,12 @@ class PosPayment(models.Model):
         if self.pos_order_id.sudo().layaway_application_move_ids:
             raise AccessError(_("La aplicación de cobros conserva su registro original."))
         return super().unlink()
+
+    def _export_for_ui(self, payment):
+        values = super()._export_for_ui(payment)
+        if payment.payment_method_id.sudo().layaway_application and payment.pos_order_id.sudo().layaway_credit_ids:
+            values["payment_method_id"] = -1
+        return values
 
 
 class PosSession(models.Model):
@@ -105,7 +114,7 @@ class PosSession(models.Model):
             },
         }
 
-    def _create_layaway_sale(self, folio, operation):
+    def _layaway_application_method(self):
         company = self.company_id
         method = self.config_id.layaway_application_method_id
         bridge = method.receivable_account_id
@@ -118,7 +127,12 @@ class PosSession(models.Model):
             raise UserError(_("Configura el método contable de liquidación de prueba de esta caja."))
         if not self.config_id.journal_id:
             raise UserError(_("Configura el diario de ventas de esta caja."))
+        return method
 
+    def _create_layaway_sale(self, folio, operation):
+        company = self.company_id
+        method = self._layaway_application_method()
+        bridge = method.receivable_account_id
         product_companies = folio.line_ids.product_id.company_id - company
         if product_companies or folio.partner_id.company_id - company:
             raise UserError(_("La venta de prueba requiere mercancía y cliente disponibles en su compañía."))

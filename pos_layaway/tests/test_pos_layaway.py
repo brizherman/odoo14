@@ -2317,6 +2317,140 @@ class TestPosLayawayCampaign(SavepointCase):
                 self.assertEqual(self._checkout_state(folio), before)
                 self.assertFalse(folio.expiry_credit_id)
 
+    def _expiry_credit_to_spend(self, campaign, product, partner):
+        source = self.session_a.with_user(self.cashier_a)
+        manager = source.with_user(self.supervisor)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            _, args = self._checkout_args(source, campaign, product, 2, partner)
+            opened = source.confirm_layaway(*args, [{"method_id": self.cash_a.id, "amount": 2000}])
+        folio = self.env["pos.layaway"].browse(opened["id"])
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 16, 8)):
+            manager.review_expired_layaway(
+                folio.id, str(uuid4()), "convert_to_credit", "Vencimiento de prueba",
+            )
+        return folio
+
+    def _credit_purchase_payload(self, session, partner, product, total, tenders=(), change=0):
+        return {
+            "name": "Order " + str(uuid4()), "sequence_number": 1, "server_id": False,
+            "pos_session_id": session.id, "partner_id": partner.id, "pricelist_id": self.retail.id,
+            "fiscal_position_id": False, "to_invoice": False, "amount_paid": total,
+            "amount_total": total, "amount_tax": 0, "amount_return": change,
+            "lines": [(0, 0, {
+                "product_id": product.id, "qty": 1, "discount": 0, "price_unit": total,
+                "price_subtotal": total, "price_subtotal_incl": total,
+            })],
+            "statement_ids": [(0, 0, {
+                "payment_method_id": method.id, "amount": amount, "name": "2027-01-31 20:00:00",
+            }) for method, amount in tenders],
+        }
+
+    def test_credit_purchase_exact_and_greater_only_recognizes_new_tender(self):
+        campaign, partner, product = self._checkout_fixture()
+        self._configure_layaway_settlement(product, taxes=False)
+        exact = self._expiry_credit_to_spend(campaign, product, partner)
+        greater = self._expiry_credit_to_spend(campaign, product, partner)
+        destination = self.session_b.with_user(self.cashier_b)
+        moment = datetime(2027, 2, 1, 7, 59, 59)
+        with patch.object(fields.Datetime, "now", return_value=moment):
+            initial = partner._wholesale_monthly_totals(self.company_b, moment)
+            self.assertEqual([row["amount"] for row in initial][-3:], [4000, 0, 0])
+            stored = []
+            for folio, total, payments, change, difference in (
+                (exact, 2000, (), 0, 0),
+                (greater, 3200, ((self.cash_b, 1100), (self.card_b, 200)), 100, 1200),
+            ):
+                preview = destination.preview_layaway_credit(folio.folio.lower(), partner.id)
+                self.assertEqual((preview["state"], preview["amount"]), ("available", 2000))
+                self.assertFalse(folio.expiry_credit_id.order_id)
+                payload = self._credit_purchase_payload(destination, partner, product, total, payments, change)
+                reference = str(uuid4())
+                result = destination.confirm_layaway_credit_order(folio.id, reference, payload)
+                self.assertEqual(result, destination.confirm_layaway_credit_order(folio.id, reference, payload))
+                self.assertEqual(result["amount_new"], difference)
+                credit = folio.expiry_credit_id
+                sale = credit.order_id
+                stored.append((folio, reference, payload, result))
+                self.assertEqual((credit.state, sale.state, sale.amount_paid), ("consumed", "paid", total))
+                self.assertEqual((sale.amount_total, sale.amount_tax, sale.date_order), (total, 0, moment))
+                self.assertEqual(sale.session_id, self.session_b)
+                self.assertFalse(sale.layaway_ids or folio.sale_id)
+                method = self.config_b.layaway_application_method_id
+                tender = sale.payment_ids.filtered(lambda line: line.payment_method_id == method)
+                self.assertEqual(tender.amount, 2000)
+                self.assertEqual(credit.consumption_id.user_id, self.cashier_b)
+                self.assertEqual(sale.wholesale_reason_code, "below_threshold")
+                self.assertEqual(sale.layaway_application_move_ids.company_id, self.company_a | self.company_b)
+                self.assertEqual(sum((sale.payment_ids - tender).mapped("amount")), difference)
+                with self.assertRaisesRegex(UserError, "consumido"):
+                    destination.confirm_layaway_credit_order(folio.id, str(uuid4()), payload)
+                with self.assertRaises(UserError):
+                    sale.lines.write({"qty": 2})
+                with self.assertRaises(UserError):
+                    sale.refund()
+                self.assertEqual(credit.order_id, sale)
+            history = partner._wholesale_monthly_totals(self.company_b, moment)
+            self.assertEqual([row["amount"] for row in history][-3:], [4000, 0, 1200])
+            self._close_layaway_session(self.session_a, 4000)
+            self._close_layaway_session(self.session_b, 1000)
+            for folio, reference, payload, result in stored:
+                self.assertEqual(destination.confirm_layaway_credit_order(folio.id, reference, payload), result)
+                sale = folio.expiry_credit_id.order_id
+                bridge = self.config_b.layaway_application_method_id.receivable_account_id
+                self.assertTrue(sale.layaway_application_move_ids.line_ids.filtered_domain([
+                    ("account_id", "=", bridge.id),
+                ]).reconciled)
+
+    def test_credit_abandoned_rejected_and_administratively_closed_after_january(self):
+        campaign, partner, product = self._checkout_fixture()
+        self._configure_layaway_settlement(product, taxes=False)
+        folio = self._expiry_credit_to_spend(campaign, product, partner)
+        destination = self.session_b.with_user(self.cashier_b)
+        supervisor = destination.with_user(self.supervisor_b)
+        outsider = self.session_other.with_user(self.cashier_a)
+        credit = folio.expiry_credit_id
+        before = (folio.payment_ids.ids, credit.operation_id, self.session_b.cash_register_balance_end)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2027, 2, 1, 7, 59, 59)):
+            preview = destination.preview_layaway_credit(folio.folio, partner.id)
+            self.assertEqual(preview, destination.preview_layaway_credit(folio.folio, partner.id))
+            self.assertFalse(credit.order_id or credit.consumption_id)
+            payload = self._credit_purchase_payload(destination, partner, product, 1999)
+            with self.assertRaisesRegex(ValidationError, "cubrir todo"):
+                destination.confirm_layaway_credit_order(folio.id, str(uuid4()), payload)
+            payload = self._credit_purchase_payload(destination, partner, product, 2200)
+            with self.assertRaisesRegex(ValidationError, "cobro neto"):
+                destination.confirm_layaway_credit_order(folio.id, str(uuid4()), payload)
+            with self.assertRaisesRegex(UserError, "titular"):
+                destination.confirm_layaway_credit_order(folio.id, str(uuid4()), dict(payload, partner_id=False))
+            with self.assertRaises(AccessError):
+                outsider.confirm_layaway_credit_order(folio.id, str(uuid4()), payload)
+            with self.assertRaisesRegex(UserError, "caducado"):
+                supervisor.close_expired_layaway_credit(folio.id, str(uuid4()), "Todavía disponible")
+            with patch("odoo.addons.pos_layaway.models.pos_layaway_payment.layaway_test_database",
+                       return_value=False):
+                with self.assertRaises(AccessError):
+                    destination.confirm_layaway_credit_order(folio.id, str(uuid4()), payload)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2027, 2, 1, 8)):
+            with self.assertRaisesRegex(UserError, "caducado"):
+                destination.confirm_layaway_credit_order(folio.id, str(uuid4()), payload)
+            self.assertEqual(supervisor.get_layaways({"expiry": "expired_credit"})["rows"][0]["id"], folio.id)
+            self.assertTrue(supervisor.get_layaway_detail(folio.id)["expiry_credit"]["can_close"])
+            self.assertNotIn("can_close", destination.get_layaway_detail(folio.id)["expiry_credit"])
+            args = (folio.id, str(uuid4()), "Sin compra confirmada al caducar")
+            with self.assertRaises(AccessError):
+                destination.close_expired_layaway_credit(*args)
+            accounting = self.env["account.move"].search_count([])
+            result = supervisor.close_expired_layaway_credit(*args)
+            self.assertEqual(result, supervisor.close_expired_layaway_credit(*args))
+            self.assertEqual(result["closed_at"], "2027-02-01 00:00:00-08:00")
+            self.assertEqual((credit.closure_id.user_id, result["notes"]), (self.supervisor_b, args[-1]))
+            with self.assertRaisesRegex(UserError, "ya tiene"):
+                supervisor.close_expired_layaway_credit(folio.id, str(uuid4()), "Otro cierre")
+            self.assertEqual(self.env["account.move"].search_count([]), accounting)
+            self.assertEqual((credit.state, credit.order_id.id), ("expired", False))
+            self.assertFalse(supervisor.get_layaways({"expiry": "expired_credit"})["rows"])
+        self.assertEqual((folio.payment_ids.ids, credit.operation_id, self.session_b.cash_register_balance_end), before)
+
     def test_settle_and_pickup_is_atomic_and_snapshots_only_the_local_delivery(self):
         campaign, partner, product = self._settlement_fixture()
         a = self.session_a.with_user(self.cashier_a)

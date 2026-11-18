@@ -56,7 +56,7 @@ class PosSession(models.Model):
         data = super()._reconcile_account_move_lines(data)
         # Native POS creates one receivable line per split payment.
         for order in self.order_ids.filtered("layaway_application_move_ids"):
-            payment = order.payment_ids
+            payment = order.payment_ids.filtered(lambda line: line.payment_method_id.layaway_application)
             bridge = payment.payment_method_id.receivable_account_id
             entry = order.layaway_application_move_ids.line_ids.filtered_domain([
                 ("account_id", "=", bridge.id), ("reconciled", "=", False),
@@ -65,7 +65,7 @@ class PosSession(models.Model):
                 ("account_id", "=", bridge.id), ("reconciled", "=", False),
                 ("name", "=", "%s · %s" % (order.pos_reference, order.name)),
             ])
-            if len(entry) != 1 or len(counterpart) != 1 or self.currency_id.compare_amounts(
+            if len(payment) != 1 or len(entry) != 1 or len(counterpart) != 1 or self.currency_id.compare_amounts(
                 entry.credit, counterpart.debit,
             ):
                 raise UserError(_("No cuadra la aplicación de cobros de %s.") % order.pos_reference)

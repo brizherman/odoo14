@@ -56,6 +56,19 @@ class PosSession(models.Model):
     def get_layaway_detail(self, record_id):
         folio = self._find_layaway(record_id)
         now = fields.Datetime.now()
+        credit = folio.expiry_credit_id
+        credit_status = False
+        if credit:
+            credit_status = credit._pos_layaway_credit_values()
+            if credit.closure_id:
+                credit_status["closure"] = json.loads(credit.closure_id.result)
+            elif credit.consumption_id:
+                credit_status["consumption"] = json.loads(credit.consumption_id.result)
+            elif (
+                layaway_test_database(self.env) and not self.rescue and credit._state_at(now) == "expired"
+                and self.env.user.has_group("point_of_sale.group_pos_manager")
+            ):
+                credit_status["can_close"] = True
         can_review_expired = bool(
             layaway_test_database(self.env) and not self.rescue
             and self.env.user.has_group("point_of_sale.group_pos_manager") and folio._layaway_pickup_overdue(now)
@@ -121,7 +134,7 @@ class PosSession(models.Model):
                     for review in self._layaway_pickup_operations(folio, ("review_expiry", "convert_expiry_credit"))
                 ],
             },
-            "expiry_credit": folio.expiry_credit_id._pos_layaway_credit_values() if folio.expiry_credit_id else False,
+            "expiry_credit": credit_status,
             "transfer_review": self._layaway_transfer_detail(folio),
             "payment_corrections": self._layaway_correction_detail(folio),
             "changeable_lines": (
@@ -203,14 +216,17 @@ class PosLayaway(models.Model):
             if filters.get(state):
                 domain.append((state, "=", filters[state]))
         expiry = filters.get("expiry")
-        if expiry in ("expired", "current"):
+        if expiry in ("expired", "current", "expired_credit"):
             timezones = self.read_group(scope, ["timezone"], ["timezone"])
             now = fields.Datetime.now()
+            credit_expiry = expiry == "expired_credit"
             overdue = expression.AND([
-                [("pickup_state", "in", ("pending", "partial"))],
+                [("expiry_credit_id", "!=", False), ("expiry_credit_id.order_id", "=", False),
+                 ("expiry_credit_id.closure_id", "=", False)]
+                if credit_expiry else [("pickup_state", "in", ("pending", "partial"))],
                 expression.OR([
                     [("timezone", "=", row["timezone"]),
-                     ("pickup_end", "<", local_date(now, row["timezone"]))]
+                     ("credit_end" if credit_expiry else "pickup_end", "<", local_date(now, row["timezone"]))]
                     for row in timezones
                 ]),
             ])

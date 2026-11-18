@@ -29,6 +29,16 @@
             <main t-elif="state.draft" class="layaway-content layaway-checkout">
                 <t t-if="state.draft.relocate" t-call="pos_layaway.LayawayRelocation"/>
                 <t t-elif="state.draft.expiryReview" t-call="pos_layaway.LayawayExpiryReview"/>
+                <form t-elif="state.draft.creditClosure" t-on-submit.prevent="confirmCheckout">
+                    <h3>Cerrar saldo caducado de prueba</h3>
+                    <p t-esc="state.draft.folio.folio"/>
+                    <label>Observaciones del cierre
+                        <textarea name="notes" rows="3" maxlength="1000" required="required"/>
+                    </label>
+                    <button type="submit" class="layaway-submit" t-att-disabled="state.stale || state.checkoutBusy">
+                        Confirmar cierre
+                    </button>
+                </form>
                 <t t-elif="state.draft.installment || state.draft.pickup" t-call="pos_layaway.LayawayInstallment"/>
                 <t t-else="" t-call="pos_layaway.LayawayCheckout"/>
             </main>
@@ -81,6 +91,7 @@
                         <select name="expiry" t-model="state.filters.expiry">
                             <option value="">Todos</option>
                             <option value="expired">Vencidos</option>
+                            <option t-if="state.canReviewExpired" value="expired_credit">Saldos caducados por cerrar</option>
                             <option value="current">Sin vencimiento pendiente</option>
                         </select>
                     </label>
@@ -149,11 +160,28 @@
                     <div><dt>Restante</dt><dd t-esc="money(folio.amount_due)"/></div>
                 </dl>
                 <t t-if="!folio.expiry_credit" t-call="pos_layaway.LayawayStockTable"/>
-                <p t-else="" class="layaway-expiry-credit">
-                    <strong>Saldo por vencimiento</strong> · <span t-esc="money(folio.expiry_credit.amount)"/>
-                    · Fecha límite <time t-esc="folio.expiry_credit.expires_on"/>
-                    · <span t-if="folio.expiry_credit.state === 'available'">Disponible</span><span t-else="">Caducado</span>
-                </p>
+                <section t-else="" class="layaway-expiry-credit">
+                    <p><strong>Saldo por vencimiento</strong> · <span t-esc="money(folio.expiry_credit.amount)"/>
+                        · Fecha límite <time t-esc="folio.expiry_credit.expires_on"/>
+                        · <span t-if="folio.expiry_credit.state === 'available'">Disponible</span>
+                        <span t-elif="folio.expiry_credit.state === 'consumed'">Consumido</span>
+                        <span t-else="">Caducado</span>
+                    </p>
+                    <p t-if="folio.expiry_credit.consumption">
+                        Compra <strong t-esc="folio.expiry_credit.consumption.order_name"/>
+                        · Dinero nuevo <span t-esc="money(folio.expiry_credit.consumption.amount_new)"/>
+                    </p>
+                    <t t-if="folio.expiry_credit.closure">
+                        <p>Cierre administrativo · <span t-esc="folio.expiry_credit.closure.reviewer"/>
+                            · <time t-esc="folio.expiry_credit.closure.closed_at"/></p>
+                        <p t-esc="folio.expiry_credit.closure.notes"/>
+                    </t>
+                    <button t-if="folio.expiry_credit.can_close" type="button" class="layaway-submit"
+                            t-on-click="() => startCreditClosure(folio)"
+                            t-att-disabled="state.stale || state.loading">
+                        Cerrar saldo caducado de prueba
+                    </button>
+                </section>
                 <section t-if="folio.expiry_review.can_review || folio.expiry_review.history.length"
                          class="layaway-expiry-review">
                     <h3>Revisión de vencimiento</h3>

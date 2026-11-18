@@ -1,7 +1,7 @@
 {
     "name": "Apartados en Punto de Venta",
     "summary": "Gestiona campañas, folios y reservas de apartados por tienda",
-    "version": "14.0.1.14.0",
+    "version": "14.0.1.15.0",
     "author": "Factor Fiesta",
     "license": "LGPL-3",
     "category": "Sales/Point of Sale",
@@ -16,5 +16,8 @@
         "report/layaway_label.xml",
         "report/layaway_receipt.xml",
     ],
-    "qweb": ["static/src/xml/LayawayCampaignButton.xml", "static/src/xml/LayawayScreen.xml"],
+    "qweb": [
+        "static/src/xml/LayawayCampaignButton.xml", "static/src/xml/LayawayScreen.xml",
+        "static/src/xml/LayawayCreditPayment.xml",
+    ],
 }

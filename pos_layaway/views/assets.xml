@@ -6,6 +6,7 @@
             <script type="text/javascript" src="/pos_layaway/static/src/js/LayawayStockPayment.js"/>
             <script type="text/javascript" src="/pos_layaway/static/src/js/LayawayWholesale.js"/>
             <script type="text/javascript" src="/pos_layaway/static/src/js/LayawayScreen.js"/>
+            <script type="text/javascript" src="/pos_layaway/static/src/js/LayawayCreditPayment.js"/>
             <link rel="stylesheet" href="/pos_layaway/static/src/css/layaway.css"/>
         </xpath>
     </template>

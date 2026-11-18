@@ -46,6 +46,14 @@
                         <field name="folio"/>
                     </tree>
                 </field>
+                <field name="layaway_credit_ids" groups="point_of_sale.group_pos_manager"
+                       attrs="{'invisible': [('layaway_credit_ids', '=', [])]}">
+                    <tree>
+                        <field name="layaway_id"/>
+                        <field name="amount"/>
+                        <field name="currency_id" invisible="1"/>
+                    </tree>
+                </field>
             </xpath>
         </field>
     </record>

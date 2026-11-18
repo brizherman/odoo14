@@ -167,6 +167,11 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
             this.state.draft = { folio, expiryReview: true };
         }
 
+        startCreditClosure(folio) {
+            this.state.checkoutMessage = '';
+            this.state.draft = { folio, creditClosure: true };
+        }
+
         async startCheckout(folio, change = false) {
             if (this.state.stale || this.state.transferBusy || this.state.checkoutBusy || !navigator.onLine) {
                 return;
@@ -303,7 +308,7 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
             }
             if (!this.state.pendingConfirmation) {
                 const {
-                    quote, proposal, change, installment, folio, settle, pickup, relocate, expiryReview,
+                    quote, proposal, change, installment, folio, settle, pickup, relocate, expiryReview, creditClosure,
                 } = this.state.draft;
                 const data = new FormData(event.currentTarget);
                 const reference = operationReference();
@@ -313,7 +318,12 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                     authorization_reference: data.get('recipient') === 'holder' ? false : data.get('recipient'),
                     identity_verified: data.get('identity_verified') === 'on',
                 };
-                if (expiryReview) {
+                if (creditClosure) {
+                    pending = {
+                        method: 'close_expired_layaway_credit',
+                        args: [folio.id, reference, data.get('notes')],
+                    };
+                } else if (expiryReview) {
                     pending = {
                         method: 'review_expired_layaway',
                         args: [folio.id, reference, data.get('resolution'), data.get('notes')],
@@ -370,6 +380,7 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                     confirm_layaway_pickup: this.env._t('Recogida confirmada'),
                     settle_and_pickup_layaway: this.env._t('Liquidación y recogida confirmadas'),
                     relocate_layaway_block: this.env._t('Traslado registrado'),
+                    close_expired_layaway_credit: this.env._t('Cierre administrativo registrado'),
                     review_expired_layaway: result.credit ? this.env._t('Saldo por vencimiento emitido')
                         : this.env._t('Revisión de vencimiento registrada'),
                 };
@@ -632,4 +643,5 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
     });
     Registries.Component.add(LayawayScreen);
     Registries.Component.add(LayawayScreenButton);
+    return { operationReference };
 });

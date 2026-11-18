@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-inherit="point_of_sale.PaymentScreen" t-inherit-mode="extension" owl="1">
+        <xpath expr="//div[hasclass('paymentmethods')]" position="inside">
+            <button t-if="env.pos.config.layaway_credit_test &amp;&amp; !currentOrder.layawayCredit"
+                    type="button" class="button paymentmethod layaway-select-credit"
+                    t-on-click="selectLayawayCredit">Aplicar saldo de prueba</button>
+        </xpath>
+        <xpath expr="//div[hasclass('main-content')]" position="before">
+            <div t-if="currentOrder.layawayCreditPending" class="layaway-credit-pending">
+                <p>El servidor debe confirmar la compra antes de continuar.</p>
+                <button type="button" class="button layaway-submit"
+                        t-on-click="lockedValidateOrder(false)">Recuperar confirmación</button>
+            </div>
+        </xpath>
+        <xpath expr="//div[hasclass('main-content')]" position="attributes">
+            <attribute name="t-if">!currentOrder.layawayCreditPending</attribute>
+        </xpath>
+    </t>
+</templates>
