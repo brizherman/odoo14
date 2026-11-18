@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="report_saledetails_layaway" inherit_id="point_of_sale.report_saledetails">
+        <xpath expr="//div[hasclass('page')]/strong" position="after">
+            <section t-if="layaway_campaigns" id="layaway_sales_details" class="mt-4">
+                <h3>Apartados</h3>
+                <t t-foreach="layaway_campaigns" t-as="campaign">
+                    <h4 t-esc="campaign['name']"/>
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Fecha y hora</th>
+                                <th>Folio</th>
+                                <th>Caja y sesión</th>
+                                <th>Método</th>
+                                <th class="text-right">Importe</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="campaign['movements']" t-as="movement">
+                                <td t-esc="movement['date']" t-options="{'widget': 'datetime'}"/>
+                                <td t-esc="movement['folio']"/>
+                                <td>
+                                    <span t-esc="movement['config']"/>
+                                    <br/>
+                                    <span t-esc="movement['session']"/>
+                                </td>
+                                <td t-esc="movement['method'] or ''"/>
+                                <td class="text-right" t-if="movement['amount'] is not None">
+                                    <span t-esc="movement['amount']" t-options="{'widget': 'float', 'precision': movement['precision']}"/>
+                                    <span t-esc="movement['currency']"/>
+                                </td>
+                                <td t-else=""/>
+                            </tr>
+                        </tbody>
+                    </table>
+                </t>
+            </section>
+        </xpath>
+    </template>
+</odoo>

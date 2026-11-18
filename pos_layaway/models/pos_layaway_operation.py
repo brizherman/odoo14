@@ -27,6 +27,7 @@ class PosLayawayOperation(models.Model):
     warehouse_id = fields.Many2one("stock.warehouse", required=True, ondelete="restrict")
     user_id = fields.Many2one("res.users", required=True, ondelete="restrict")
     result = fields.Text()
+    payment_ids = fields.One2many("pos.layaway.payment", "operation_id")
 
     _sql_constraints = [
         ("reference_unique", "UNIQUE(reference)", "La referencia de operación ya existe."),

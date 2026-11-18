@@ -2648,3 +2648,99 @@ class TestPosLayawayCampaign(SavepointCase):
             self.assertEqual(added["sale_id"], opening["sale_id"])
             self.assertEqual(folio._layaway_adjustment_moves().amount_residual, 5000)
             self.assertEqual(self.session_b.cash_register_balance_end, 1000)
+
+    def test_sales_details_layaway_period_campaigns_and_permissions(self):
+        campaign, partner, product = self._settlement_fixture()
+        other_campaign = campaign.copy({"name": "Segunda campaña de corte"})
+        other_campaign.action_activate()
+        a = self.session_a.with_user(self.cashier_a)
+        b = self.session_b.with_user(self.cashier_b)
+        day_a, day_b, day_final = (datetime(2026, 11, day, 8) for day in (18, 19, 20))
+        with patch.object(fields.Datetime, "now", return_value=day_a):
+            _, args = self._checkout_args(a, campaign, product, 2, partner)
+            opened = a.confirm_layaway(*args, [{"method_id": self.cash_a.id, "amount": 2000}])
+            _, args = self._checkout_args(a, other_campaign, product, 2, partner)
+            second = a.confirm_layaway(*args, [{"method_id": self.card_a.id, "amount": 2500}])
+        folio, other_folio = self.env["pos.layaway"].browse([opened["id"], second["id"]])
+        with patch.object(fields.Datetime, "now", return_value=day_b):
+            _, args = self._checkout_args(b, campaign, product, 1, folio=folio)
+            b.confirm_layaway(*args, [{"method_id": self.cash_b.id, "amount": 1000}])
+            b.register_layaway_installment(folio.id, str(uuid4()), [
+                {"method_id": self.card_b.id, "amount": 1000},
+            ])
+        with patch.object(fields.Datetime, "now", return_value=day_final):
+            a.settle_layaway(folio.id, str(uuid4()), [{"method_id": self.cash_a.id, "amount": 2000}])
+        self.assertFalse(other_folio.sale_id)
+        self.assertEqual(folio.sale_id.amount_total, 6000)
+
+        report_action = self.env.ref("point_of_sale.sale_details_report")
+        report_model = self.env[report_action.model]
+        configs = (self.config_a | self.config_b).ids
+        wizard = self.env["pos.details.wizard"].with_user(self.manager).with_context(
+            allowed_company_ids=self.company_ids,
+        ).create({
+            "start_date": day_a, "end_date": day_final,
+            "pos_config_ids": [(6, 0, configs)],
+        })
+        report = report_model.with_env(wizard.env)
+
+        def render_values(action_data, **filters):
+            return report._get_report_values([], data=dict(action_data, **filters))
+
+        def movements(values):
+            return [row for group in values["layaway_campaigns"] for row in group["movements"]]
+
+        action = wizard.generate_report()
+        self.assertEqual(action["report_name"], report_action.report_name)
+        data = action["data"]
+        self.assertFalse(data["layaway_campaign_id"])
+        values = render_values(data)
+        self.assertEqual([group["name"] for group in values["layaway_campaigns"]],
+                         [campaign.name, other_campaign.name])
+        self.assertEqual([row["amount"] for row in values["layaway_campaigns"][0]["movements"]],
+                         [2000, 1000, 1000, 2000])
+        self.assertEqual([(row["folio"], row["amount"]) for row in
+                          values["layaway_campaigns"][1]["movements"]], [(other_folio.folio, 2500)])
+
+        html = report_action.with_env(wizard.env)._render_qweb_html([], data=data)[0].decode()
+        self.assertIn('id="layaway_sales_details"', html)
+        self.assertIn(other_folio.folio, html)
+
+        wizard.layaway_campaign_id = campaign
+        filtered = render_values(wizard.generate_report()["data"])
+        self.assertEqual(filtered["layaway_campaigns"], values["layaway_campaigns"][:1])
+        native = report.get_sale_details(day_a, day_final, configs)
+        for key, expected in native.items():
+            self.assertEqual(values[key], expected, key)
+            self.assertEqual(filtered[key], expected, key)
+        self.assertEqual(native["total_paid"], 6000)
+        self.assertEqual(native["payments"], [{"name": "Aplicación de cobros de prueba", "total": 6000}])
+
+        b_day = render_values(data, date_start=day_b, date_stop=day_b, config_ids=self.config_b.ids)
+        self.assertEqual([row["amount"] for row in movements(b_day)], [1000, 1000])
+        self.assertTrue(all(row["session"] == self.session_b.name for row in movements(b_day)))
+        final_day = render_values(data, date_start=day_final, config_ids=self.config_a.ids)
+        self.assertEqual([row["amount"] for row in movements(final_day)], [2000])
+        wrong_box = render_values(data, config_ids=self.config_other.ids)
+        self.assertFalse(movements(wrong_box))
+
+        b_report = report_model.with_user(self.supervisor_b).with_context(
+            allowed_company_ids=self.company_b.ids,
+        )
+        self.assertEqual(movements(b_report._get_report_values([], data)), movements(b_day))
+        self.assertFalse(movements(b_report._get_report_values([], dict(data, config_ids=self.config_a.ids))))
+        self.assertFalse(report_model.with_user(self.cashier_b)._get_layaway_campaigns(data))
+        with self.assertRaises(AccessError):
+            render_values(data, layaway_campaign_id=999999999)
+
+        correction_day = datetime(2026, 11, 21, 8)
+        original = folio.payment_ids.filtered(lambda payment: payment.method_id == self.card_b)
+        with patch.object(fields.Datetime, "now", return_value=correction_day):
+            b.with_user(self.supervisor_b).correct_layaway_payment(folio.id, original.id, str(uuid4()), {
+                "kind": "reclassify_payment", "method_id": self.transfer_b.id,
+                "bank_reference": "TEST-SALES-DETAILS", "reason": "Corrección sintética",
+                "evidence": "Prueba dirigida de Sales Details",
+            })
+        corrections = render_values(data, date_start=correction_day, date_stop=correction_day)
+        self.assertEqual([row["amount"] for row in movements(corrections)], [-1000, 1000])
+        self.assertEqual(movements(render_values(data)), movements(values))
