@@ -36,6 +36,10 @@ class PosSession(models.Model):
                 and local_date(fields.Datetime.now(), folio.timezone) <= folio.addition_end
             ),
             "transfer_review": self._layaway_transfer_detail(folio),
+            "changeable_lines": (
+                self._layaway_changeable_lines(folio).ids
+                if self._can_change_layaway(folio, fields.Datetime.now()) else []
+            ),
         }
 
     def get_layaways(self, filters=None, offset=0):
@@ -63,7 +67,9 @@ class PosLayaway(models.Model):
     def _pos_layaway_filter_options(self, scope):
         campaigns = self.read_group(scope, ["campaign_id"], ["campaign_id"])
         shops = self.env["pos.layaway.line"].read_group(
-            [("layaway_id." + field, operator, value) for field, operator, value in scope],
+            [("released_by_id", "=", False)] + [
+                ("layaway_id." + field, operator, value) for field, operator, value in scope
+            ],
             ["warehouse_id"], ["warehouse_id"],
         )
         return {
@@ -84,10 +90,15 @@ class PosLayaway(models.Model):
             if digits and all(char.isdecimal() or char in " +().-" for char in query):
                 search.append([("phone_digits", "like", digits)])
             domain += expression.OR(search)
-        for key, field in (("campaign", "campaign_id"), ("store", "line_ids.warehouse_id")):
-            if filters.get(key):
-                value = self.env["res.partner"]._wholesale_record_id(filters[key])
-                domain.append((field, "=", value))
+        record_id = self.env["res.partner"]._wholesale_record_id
+        if filters.get("campaign"):
+            domain.append(("campaign_id", "=", record_id(filters["campaign"])))
+        if filters.get("store"):
+            lines = self.env["pos.layaway.line"].search([
+                ("warehouse_id", "=", record_id(filters["store"])),
+                ("released_by_id", "=", False),
+            ])
+            domain.append(("line_ids", "in", lines.ids))
         for key, operator in (("from", ">="), ("to", "<=")):
             if filters.get(key):
                 try:

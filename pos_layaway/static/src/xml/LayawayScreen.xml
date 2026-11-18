@@ -22,7 +22,7 @@
                t-esc="state.checkoutMessage"/>
 
             <main t-if="state.pendingConfirmation" class="layaway-content">
-                <p>Consulta el resultado de la última confirmación antes de volver a cobrar.</p>
+                <p>Consulta el resultado de la última confirmación antes de realizar otra operación.</p>
                 <button type="button" class="layaway-submit" t-on-click="confirmCheckout"
                         t-att-disabled="state.stale || state.checkoutBusy">Recuperar confirmación</button>
             </main>
@@ -181,6 +181,9 @@
                 <div class="layaway-actions" aria-label="Operaciones del apartado">
                     <button type="button" t-att-disabled="state.stale || state.transferBusy || !folio.can_add_products"
                             t-on-click="() => startCheckout(folio)">Agregar productos</button>
+                    <button t-if="folio.changeable_lines.length" type="button"
+                            t-att-disabled="state.stale || state.transferBusy"
+                            t-on-click="() => startCheckout(folio, true)">Retirar o sustituir productos</button>
                     <button type="button" disabled="disabled">Registrar abono</button>
                     <button type="button" disabled="disabled">Liquidar</button>
                     <button type="button" disabled="disabled">Registrar recogida</button>
@@ -195,10 +198,26 @@
         <t t-set="draft" t-value="state.draft"/>
         <t t-set="blocked" t-value="state.stale || state.checkoutBusy"/>
         <button type="button" t-on-click="cancelCheckout" t-att-disabled="state.checkoutBusy">Volver a apartados</button>
-        <h2 t-if="draft.folio">Agregar productos a <span t-esc="draft.folio.folio"/></h2>
+        <h2 t-if="draft.change">Cambiar mercancía de prueba · <span t-esc="draft.folio.folio"/></h2>
+        <h2 t-elif="draft.folio">Agregar productos a <span t-esc="draft.folio.folio"/></h2>
         <h2 t-else="">Abrir apartado de prueba</h2>
         <form t-if="!draft.quote" t-on-submit.prevent="quoteCheckout">
             <fieldset t-att-disabled="blocked">
+                <div t-if="draft.change">
+                    <h3>Líneas a retirar</h3>
+                    <table class="layaway-table">
+                        <thead><tr><th>Retirar</th><th>Producto</th><th>Tienda</th><th>Cantidad</th></tr></thead>
+                        <tbody>
+                            <tr t-foreach="changeableLines" t-as="line" t-key="line.id">
+                                <td><input type="checkbox" name="remove_line"
+                                           t-att-aria-label="'Retirar ' + line.name"
+                                           t-att-checked="draft.removeIds.includes(line.id)"
+                                           t-on-change="toggleRemoval(line.id)"/></td>
+                                <td t-esc="line.name"/><td t-esc="line.store"/><td t-esc="line.qty"/>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
                 <div t-if="!draft.folio" class="layaway-filters">
                     <label>Campaña
                         <select name="opening_campaign" required="required"
@@ -245,20 +264,31 @@
                     </tbody>
                 </table>
                 <button type="submit" class="layaway-submit"
-                        t-att-disabled="!draft.lines.length || !draft.folio &amp;&amp; (!draft.campaign || !draft.partner)">
+                        t-att-disabled="draft.change ? !draft.removeIds.length : !draft.lines.length || !draft.folio &amp;&amp; (!draft.campaign || !draft.partner)">
                     Cotizar
                 </button>
             </fieldset>
         </form>
         <t t-else="">
             <t t-set="quote" t-value="draft.quote"/>
-            <p><strong t-esc="quote.contact_name"/> · <span t-esc="quote.phone"/> ·
+            <p t-if="!draft.change"><strong t-esc="quote.contact_name"/> · <span t-esc="quote.phone"/> ·
                 <span t-esc="quote.campaign_name"/>
             </p>
-            <p>Aparta en <span t-esc="quote.warehouse"/> · Agrega hasta <time t-esc="quote.addition_end"/>
+            <p t-if="!draft.change">Aparta en <span t-esc="quote.warehouse"/> · Agrega hasta <time t-esc="quote.addition_end"/>
                 · Recoge hasta <time t-esc="quote.pickup_end"/>
             </p>
-            <table class="layaway-table">
+            <table t-if="draft.change" class="layaway-table">
+                <thead><tr><th>Producto por retirar</th><th>Cantidad</th><th>Total</th></tr></thead>
+                <tbody>
+                    <t t-foreach="quote.previous_lines" t-as="line" t-key="line.id">
+                        <tr t-if="quote.removed_ids.includes(line.id)">
+                            <td t-esc="line.product_name"/><td t-esc="line.qty"/>
+                            <td t-esc="money(line.amount_total)"/>
+                        </tr>
+                    </t>
+                </tbody>
+            </table>
+            <table t-if="quote.lines.length" class="layaway-table">
                 <thead><tr><th>Producto nuevo</th><th>Cantidad</th><th>Precio unitario</th><th>Impuestos</th><th>Total</th></tr></thead>
                 <tbody>
                     <tr t-foreach="quote.lines" t-as="line" t-key="line.product_id">
@@ -271,11 +301,15 @@
             <dl class="layaway-totals">
                 <div><dt>Total actualizado</dt><dd t-esc="money(quote.amount_total)"/></div>
                 <div><dt>Pagado</dt><dd t-esc="money(quote.amount_paid)"/></div>
-                <div><dt>Cobro necesario</dt><dd class="layaway-required" t-esc="money(quote.required_deposit)"/></div>
+                <div t-if="draft.change"><dt>Restante</dt><dd t-esc="money(quote.amount_due)"/></div>
+                <div t-else=""><dt>Cobro necesario</dt><dd class="layaway-required" t-esc="money(quote.required_deposit)"/></div>
             </dl>
             <form t-on-submit.prevent="confirmCheckout">
                 <fieldset t-att-disabled="blocked">
-                    <div class="layaway-transfer-form" t-if="quote.required_deposit || !draft.folio">
+                    <label t-if="draft.change">Motivo de la autorización
+                        <textarea name="reason" required="required" maxlength="500" rows="2"/>
+                    </label>
+                    <div class="layaway-transfer-form" t-elif="quote.required_deposit || !draft.folio">
                         <t t-foreach="quote.methods" t-as="method" t-key="method.id">
                             <label><span t-esc="method.name"/>
                                 <input type="number" min="0" step="any" inputmode="decimal"
@@ -289,7 +323,8 @@
                     </div>
                     <div class="layaway-actions">
                         <button type="button" t-on-click="() => draft.quote = null">Editar propuesta</button>
-                        <button type="submit" class="layaway-submit">Confirmar reserva de prueba</button>
+                        <button t-if="draft.change" type="submit" class="layaway-submit">Autorizar cambio de prueba</button>
+                        <button t-else="" type="submit" class="layaway-submit">Confirmar reserva de prueba</button>
                     </div>
                 </fieldset>
             </form>

@@ -41,7 +41,9 @@ class PosLayaway(models.Model):
     session_id = fields.Many2one("pos.session", required=True, ondelete="restrict")
     user_id = fields.Many2one("res.users", required=True, ondelete="restrict")
     warehouse_id = fields.Many2one("stock.warehouse", required=True, ondelete="restrict")
-    line_ids = fields.One2many("pos.layaway.line", "layaway_id")
+    line_ids = fields.One2many(
+        "pos.layaway.line", "layaway_id", domain=[("released_by_id", "=", False)],
+    )
     payment_ids = fields.One2many("pos.layaway.payment", "layaway_id")
     transfer_ids = fields.One2many("pos.layaway.transfer", "layaway_id")
     sale_id = fields.Many2one("pos.order", copy=False, ondelete="restrict")
@@ -64,7 +66,10 @@ class PosLayaway(models.Model):
         ("sale_unique", "UNIQUE(sale_id)", "La venta ya está vinculada a un apartado."),
     ]
 
-    @api.depends("line_ids.amount_total", "payment_ids.amount", "payment_ids.kind", "currency_id")
+    @api.depends(
+        "line_ids.amount_total", "line_ids.released_by_id",
+        "payment_ids.amount", "payment_ids.kind", "currency_id",
+    )
     def _compute_amounts(self):
         for layaway in self:
             currency = layaway.currency_id
@@ -83,7 +88,7 @@ class PosLayaway(models.Model):
             else:
                 layaway.payment_state = "partial" if layaway.amount_paid else "unpaid"
 
-    @api.depends("line_ids.qty_picked_up", "line_ids.qty_pending")
+    @api.depends("line_ids.qty_picked_up", "line_ids.qty_pending", "line_ids.released_by_id")
     def _compute_pickup_state(self):
         for layaway in self:
             if not any(layaway.line_ids.mapped("qty_picked_up")):
@@ -167,6 +172,9 @@ class PosLayawayLine(models.Model):
     amount_tax = fields.Monetary(required=True)
     amount_total = fields.Monetary(required=True)
     tax_details = fields.Text()
+    released_by_id = fields.Many2one(
+        "pos.layaway.operation", ondelete="restrict", copy=False, readonly=True, index=True,
+    )
 
     _sql_constraints = [
         ("positive_qty", "CHECK(qty > 0)", "La cantidad debe ser positiva."),

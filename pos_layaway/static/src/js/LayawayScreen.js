@@ -147,14 +147,14 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
             return ['pos_layaway_checkout', session.db, session.uid, this.env.pos.pos_session.id].join(':');
         }
 
-        async startCheckout(folio) {
+        async startCheckout(folio, change = false) {
             if (this.state.stale || this.state.transferBusy || this.state.checkoutBusy || !navigator.onLine) {
                 return;
             }
             this.state.checkoutMessage = '';
             const selected = this.env.pos.layawayCampaign;
             const draft = {
-                folio, campaigns: [], campaign: folio ? folio.campaign_id : '',
+                folio, change, removeIds: [], campaigns: [], campaign: folio ? folio.campaign_id : '',
                 partner: null, phone: '', partnerQuery: '', productQuery: '', lines: [], quote: null,
             };
             if (!folio) {
@@ -220,10 +220,34 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
             draft.lines = draft.lines.filter(line => line.product_id !== productId);
         }
 
+        toggleRemoval(lineId, event) {
+            const draft = this.state.draft;
+            if (event.target.checked) {
+                draft.removeIds.push(lineId);
+            } else {
+                draft.removeIds = draft.removeIds.filter(id => id !== lineId);
+            }
+        }
+
+        get changeableLines() {
+            const { folio } = this.state.draft;
+            return folio.lines.filter(line => folio.changeable_lines.includes(line.id));
+        }
+
         async quoteCheckout() {
             const draft = this.state.draft;
+            const lines = draft.lines.map(line => ({ product_id: line.product_id, qty: Number(line.qty) }));
+            if (draft.change) {
+                const args = [draft.folio.id, [...draft.removeIds], lines];
+                const quote = await this.checkoutRequest('quote_layaway_change', args);
+                if (quote) {
+                    draft.proposal = args;
+                    draft.quote = quote;
+                }
+                return;
+            }
             const proposal = {
-                lines: draft.lines.map(line => ({ product_id: line.product_id, qty: Number(line.qty) })),
+                lines,
                 campaign_id: Number(draft.campaign),
                 partner_id: draft.partner ? draft.partner.id : false,
                 phone: draft.phone || false,
@@ -243,30 +267,42 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                 return;
             }
             if (!this.state.pendingConfirmation) {
-                const { quote, proposal } = this.state.draft;
+                const { quote, proposal, change } = this.state.draft;
                 const data = new FormData(event.currentTarget);
-                const tenders = quote.methods.filter(method => Number(data.get('apply-' + method.id)) > 0)
-                    .map(method => {
-                        const amount = Number(data.get('apply-' + method.id));
-                        return {
-                            method_id: method.id, amount,
-                            amount_tendered: Number(data.get('received-' + method.id) || amount),
-                        };
-                    });
-                const pending = [operationReference(), proposal, quote.confirmation, tenders];
+                const reference = operationReference();
+                const pending = change ? {
+                    method: 'confirm_layaway_change',
+                    args: [reference, ...proposal, quote.confirmation, data.get('reason')],
+                } : [reference, proposal, quote.confirmation, this.checkoutTenders(quote, data)];
                 sessionStorage.setItem(this.confirmationKey, JSON.stringify(pending));
                 this.state.pendingConfirmation = pending;
             }
-            const result = await this.checkoutRequest('confirm_layaway', this.state.pendingConfirmation);
+            const pending = this.state.pendingConfirmation;
+            const change = pending.method === 'confirm_layaway_change';
+            const result = await this.checkoutRequest(
+                change ? pending.method : 'confirm_layaway', change ? pending.args : pending
+            );
             if (result !== null) {
                 sessionStorage.removeItem(this.confirmationKey);
                 this.state.pendingConfirmation = null;
             }
             if (result) {
                 this.state.draft = null;
-                this.state.checkoutMessage = this.env._t('Reserva confirmada') + ' · ' + result.folio;
+                const message = change ? this.env._t('Cambio autorizado') : this.env._t('Reserva confirmada');
+                this.state.checkoutMessage = message + ' · ' + result.folio;
                 await this.openDetail(result.id);
             }
+        }
+
+        checkoutTenders(quote, data) {
+            return quote.methods.filter(method => Number(data.get('apply-' + method.id)) > 0)
+                .map(method => {
+                    const amount = Number(data.get('apply-' + method.id));
+                    return {
+                        method_id: method.id, amount,
+                        amount_tendered: Number(data.get('received-' + method.id) || amount),
+                    };
+                });
         }
 
         async checkoutRequest(method, args) {

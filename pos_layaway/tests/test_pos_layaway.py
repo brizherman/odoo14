@@ -761,6 +761,188 @@ class TestPosLayawayCampaign(SavepointCase):
             self.assertFalse(self.env["pos.layaway"].search_count([("partner_id", "=", partner.id)]))
             self.assertEqual(self.session_a.cash_register_balance_end, 0)
 
+    def _change_fixture(self, amount=2000):
+        campaign, partner, product = self._checkout_fixture()
+        cashier = self.session_a.with_user(self.cashier_a)
+        _, opening = self._checkout_args(cashier, campaign, product, 2, partner)
+        opened = cashier.confirm_layaway(
+            *opening, [{"method_id": self.cash_a.id, "amount": amount}],
+        )
+        folio = self.env["pos.layaway"].browse(opened["id"])
+        return campaign, folio, folio.line_ids, self.session_a.with_user(self.supervisor)
+
+    def _change_product(self, price, stock=3):
+        product = self.env["product.product"].create({
+            "name": "Repuesto de apartado %s" % price, "type": "product",
+            "available_in_pos": True, "lst_price": price, "taxes_id": [(5, 0, 0)],
+        })
+        if stock:
+            self.env["stock.quant"]._update_available_quantity(
+                product, self.config_a.picking_type_id.default_location_src_id, stock,
+            )
+        return product
+
+    def _change_stock(self, products):
+        location = self.config_a.picking_type_id.default_location_src_id
+        quantities = self.env["stock.quant"]
+        return {
+            product.id: tuple(
+                sum(quant[field] for quant in quantities._gather(product, location, strict=True))
+                for field in ("quantity", "reserved_quantity")
+            )
+            for product in products
+        }
+
+    def test_change_swaps_entire_proposal_and_recovers_once(self):
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 20, 20)):
+            campaign, folio, original, manager = self._change_fixture()
+            replacement = self._change_product(3500)
+            lines = [{"product_id": replacement.id, "qty": 1}]
+            config = self.config_a
+            old_move = self.env["stock.move"].search([("layaway_line_id", "=", original.id)])
+            self.assertEqual(old_move.reserved_availability, 2)
+            self.assertEqual(self._change_stock(original.product_id | replacement),
+                             {original.product_id.id: (8, 2), replacement.id: (3, 0)})
+            payments = folio.payment_ids
+            amount_before = self.session_a.cash_register_balance_end
+            campaign.write({"minimum_amount": 5000, "deposit_percentage": 100})
+            campaign.action_archive()
+            args = [folio.id, original.ids, lines]
+            quote = manager.quote_layaway_change(*args)
+            reference = str(uuid4())
+            result = manager.confirm_layaway_change(
+                reference, *args, quote["confirmation"], "  Cambio de modelo  ",
+            )
+            self.assertEqual(result, manager.confirm_layaway_change(
+                reference, *args, quote["confirmation"], "Cambio de modelo",
+            ))
+            with self.assertRaisesRegex(ValidationError, "otra operación"):
+                manager.confirm_layaway_change(
+                    reference, *args, quote["confirmation"], "Motivo distinto",
+                )
+        operation = original.released_by_id
+        self.assertEqual((operation.reference, operation.kind, operation.user_id, operation.session_id),
+                         (reference, "change_products", self.supervisor, self.session_a))
+        self.assertEqual(operation.warehouse_id, config.picking_type_id.warehouse_id)
+        self.assertEqual((result["reason"], result["user_id"], result["authorized_at"]),
+                         ("Cambio de modelo", self.supervisor.id, "2026-11-20 20:00:00"))
+        self.assertEqual([line["id"] for line in result["previous_lines"]], original.ids)
+        self.assertEqual(result["previous_lines"][0]["price_unit"], 2000)
+        self.assertEqual([line["id"] for line in result["current_lines"]], folio.line_ids.ids)
+        self.assertEqual(folio.line_ids.product_id, replacement)
+        self.assertEqual([row["qty"] for row in result["released"]], [2])
+        self.assertEqual([row["qty"] for row in result["reserved"]], [1])
+        self.assertEqual(old_move.state, "cancel")
+        self.assertEqual(self._change_stock(original.product_id | replacement),
+                         {original.product_id.id: (8, 0), replacement.id: (3, 1)})
+        self.assertEqual((folio.amount_total, folio.amount_paid, folio.amount_due), (3500, 2000, 1500))
+        self.assertEqual(folio.payment_ids, payments)
+        self.assertEqual(self.session_a.cash_register_balance_end, amount_before)
+        self.assertFalse(folio.sale_id)
+
+    def test_change_rejects_cashier_empty_minimum_paid_and_coverage(self):
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 20, 20)):
+            _, folio, original, manager = self._change_fixture(amount=3600)
+            replacements = [(self._change_product(price), message) for price, message in (
+                (3000, "mínimo"), (2999.99, "mínimo"),
+                (3500, "inferior a lo pagado"), (7300, "insuficiente"),
+            )]
+            products = original.product_id | self.env["product.product"].browse([
+                product.id for product, _ in replacements
+            ])
+            before = self._checkout_state(folio), self._change_stock(products)
+            reference = str(uuid4())
+            args = [reference, folio.id, original.ids]
+            cashier = self.session_a.with_user(self.cashier_a)
+            with self.assertRaisesRegex(AccessError, "encargado"):
+                cashier.confirm_layaway_change(*args, [], "0" * 64, "Cambio")
+            self.assertEqual((self._checkout_state(folio), self._change_stock(products)), before)
+            attempts = [([], "conservar mercancía")] + [
+                ([{"product_id": product.id, "qty": 1}], message) for product, message in replacements
+            ]
+            for lines, message in attempts:
+                with self.subTest(message=message, lines=lines):
+                    with self.assertRaisesRegex(ValidationError, message):
+                        manager.confirm_layaway_change(*args, lines, "0" * 64, "Cambio")
+                    self.assertEqual((self._checkout_state(folio), self._change_stock(products)), before)
+            self.assertFalse(original.released_by_id)
+            self.assertFalse(self.env["pos.layaway.operation"].search_count([
+                ("reference", "=", reference),
+            ]))
+
+    def test_change_rolls_back_failed_stock_and_checks_stale_quote(self):
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 20, 20)):
+            _, folio, original, manager = self._change_fixture()
+            replacement = self._change_product(3500, stock=0)
+            args = [folio.id, original.ids, [{"product_id": replacement.id, "qty": 1}]]
+            before = self._checkout_state(folio), self._change_stock(original.product_id | replacement)
+            quote = manager.quote_layaway_change(*args)
+            reference = str(uuid4())
+            with self.assertRaisesRegex(UserError, "existencias libres"):
+                manager.confirm_layaway_change(reference, *args, quote["confirmation"], "Prueba")
+            self.assertEqual((self._checkout_state(folio), self._change_stock(
+                original.product_id | replacement,
+            )), before)
+            self.assertFalse(original.released_by_id)
+            self.assertFalse(self.env["pos.layaway.operation"].search_count([
+                ("reference", "=", reference),
+            ]))
+            replacement.lst_price = 3700
+            with self.assertRaisesRegex(ValidationError, "Cambió la cotización"):
+                manager.confirm_layaway_change(reference, *args, quote["confirmation"], "Prueba")
+            self.assertEqual((self._checkout_state(folio), self._change_stock(
+                original.product_id | replacement,
+            )), before)
+            with patch("odoo.addons.pos_layaway.models.pos_layaway_change.layaway_test_database",
+                       return_value=False):
+                self.assertEqual(manager.get_layaway_detail(folio.id)["changeable_lines"], [])
+                with self.assertRaisesRegex(AccessError, "disponibles para pruebas"):
+                    manager.confirm_layaway_change(reference, *args, quote["confirmation"], "Prueba")
+
+    def test_change_retires_line_and_checks_shop_delivery_and_original_deadline(self):
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 20, 20)):
+            campaign, folio, original, manager = self._change_fixture()
+            cashier_b = self.session_b.with_user(self.cashier_b)
+            self._payment(self.session_a, folio, "installment", [
+                {"method_id": self.cash_a.id, "amount": 1500},
+            ])
+            _, addition = self._checkout_args(cashier_b, campaign, original.product_id, 2, folio=folio)
+            cashier_b.confirm_layaway(*addition, [{"method_id": self.cash_b.id, "amount": 500}])
+            other_line = folio.line_ids - original
+            with self.assertRaisesRegex(ValidationError, "compañías habilitadas"):
+                manager.quote_layaway_change(folio.id, other_line.ids, [])
+            original.qty_picked_up = 1
+            with self.assertRaisesRegex(ValidationError, "mercancía pendiente"):
+                manager.quote_layaway_change(folio.id, original.ids, [])
+            original.qty_picked_up = 0
+            with self.assertRaisesRegex(ValidationError, "motivo"):
+                manager.confirm_layaway_change(str(uuid4()), folio.id, original.ids, [], "0" * 64, "  ")
+        args = [folio.id, original.ids, []]
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 16, 7, 59)):
+            quote = manager.quote_layaway_change(*args)
+            with self.assertRaisesRegex(UserError, "estado"), self.env.cr.savepoint():
+                folio.sale_id = self._wholesale_history_order(folio.partner_id, 8000, fields.Datetime.now())
+                self.assertEqual(manager.get_layaway_detail(folio.id)["changeable_lines"], [])
+                manager.confirm_layaway_change(
+                    str(uuid4()), *args, quote["confirmation"], "Venta ya liquidada",
+                )
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 16, 8)):
+            with self.assertRaisesRegex(UserError, "plazo"):
+                manager.confirm_layaway_change(str(uuid4()), *args, quote["confirmation"], "Tarde")
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 16, 7, 59)):
+            result = manager.confirm_layaway_change(
+                str(uuid4()), *args, quote["confirmation"], "Retiro de una línea",
+            )
+        self.assertEqual(result["reserved"], [])
+        self.assertEqual([row["qty"] for row in result["released"]], [2])
+        self.assertEqual(folio.line_ids, other_line)
+        self.assertEqual((folio.amount_total, folio.amount_paid, folio.amount_due), (4000, 4000, 0))
+        self.assertEqual(self._change_stock(original.product_id), {original.product_id.id: (8, 0)})
+        move_b = self.env["stock.move"].search([("layaway_line_id", "=", other_line.id)])
+        self.assertEqual(move_b.reserved_availability, 2)
+        rows = manager.get_layaways({"query": folio.folio, "store": original.warehouse_id.id})["rows"]
+        self.assertFalse(rows)
+
     def test_folio_search_filters_and_other_store_access(self):
         campaign = self.campaigns.create(self.values)
         campaign.action_activate()
