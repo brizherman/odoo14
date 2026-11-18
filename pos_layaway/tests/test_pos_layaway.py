@@ -1615,6 +1615,32 @@ class TestPosLayawayCampaign(SavepointCase):
             self.assertEqual(result["settlement"]["new_payment_ids"], folio.payment_ids[-1:].ids)
             self.assertEqual(result["amount_applied"], 2000)
             self.assertEqual(result["amount_due"], 0)
+            ticket, reprint = a._layaway_receipt(folio.id, ref, original=True, final_sale=True)
+            self.assertFalse(reprint)
+            self.assertEqual(ticket["ticket"]["amount_new"], 2000)
+            self.assertEqual(ticket["ticket"]["previous_installments"], 2000)
+            self.assertEqual(ticket["ticket"]["previous_deposit"], 2000)
+            self.assertEqual(ticket["ticket"]["contact_name"], partner.name)
+            self.assertEqual(
+                [(line["store"], line["quantity"], line["pending"]) for line in ticket["ticket"]["lines"]],
+                [(shop.picking_type_id.warehouse_id.display_name, qty, qty)
+                 for shop, qty in [(self.config_a, 2), (self.config_b, 1)]],
+            )
+            application = order.layaway_application_move_ids
+            self.assertEqual(a._layaway_receipt(folio.id, ref, final_sale=True), (ticket, True))
+            self.assertEqual(order.layaway_application_move_ids, application)
+            operation = self.env["pos.layaway.operation"].search([("reference", "=", ref)])
+            legacy = dict(result, settlement=dict(result["settlement"]))
+            legacy["settlement"].pop("ticket")
+            legacy_ticket = operation._sale_ticket_values(legacy)
+            for key, value in ticket["ticket"].items():
+                self.assertEqual(legacy_ticket[key], value, key)
+            with self.assertRaises(AccessError):
+                a._layaway_receipt(folio.id, opened["reference"], final_sale=True)
+            with self.assertRaises(AccessError):
+                self.session_other.with_user(self.cashier_a)._layaway_receipt(
+                    folio.id, ref, final_sale=True,
+                )
             self.assertEqual(a.get_layaway_detail(folio.id)["sale_name"], order.name)
             self.assertEqual(self._checkout_state(folio)[2:4], before[2:4])
             monthly = partner._wholesale_monthly_totals(self.company_a, datetime(2026, 11, 19))
@@ -1665,6 +1691,12 @@ class TestPosLayawayCampaign(SavepointCase):
             self.assertEqual(b.confirm_layaway(*request, tender), result)
             self.assertEqual(result["settlement"]["amount_previous"], 0)
             self.assertEqual(result["payments"][0]["amount_change"], 100)
+            ticket, _ = b._layaway_receipt(result["id"], result["reference"], final_sale=True)
+            self.assertEqual(ticket["ticket"]["payments"][0]["amount_change"], 100)
+            self.assertIn("final_sale", [
+                receipt["kind"] for receipt in b.get_layaway_detail(result["id"])["receipts"]
+            ])
+            self.assertEqual(b._layaway_receipt(result["id"], result["reference"]), (result, True))
             order = self.env["pos.order"].browse(result["sale_id"])
             self.assertEqual(order.amount_total, 4000)
             self.assertTrue(self.session_b.update_stock_at_closing)
@@ -1702,6 +1734,9 @@ class TestPosLayawayCampaign(SavepointCase):
             self.assertEqual(manager.authorize_layaway_transfer(*approval), result)
             self.assertEqual(result["settlement"]["amount_previous"], 2300)
             self.assertEqual((result["amount_due"], folio.sale_id.amount_total), (0, 4000))
+            ticket, _ = a._layaway_receipt(folio.id, result["reference"], final_sale=True)
+            self.assertEqual(ticket["ticket"]["cashier"], manager.env.user.name)
+            self.assertEqual(ticket["ticket"]["payments"][0]["method_name"], self.transfer_a.name)
 
     def test_settlement_explicit_amount_and_rollback_if_reservation_changes(self):
         campaign, partner, product = self._settlement_fixture()
@@ -1743,6 +1778,12 @@ class TestPosLayawayCampaign(SavepointCase):
             self.assertEqual((folio.amount_due, folio.sale_id.amount_total), (0, 4000))
             self.assertEqual(adjusted["settlement"]["amount_previous"], 4000)
             self.assertEqual(adjusted["settlement"]["new_payment_ids"], [])
+            ticket, _ = a._layaway_receipt(folio.id, adjusted["reference"], final_sale=True)
+            self.assertEqual(ticket["ticket"]["amount_new"], 0)
+            self.assertEqual(ticket["ticket"]["payments"], [])
+            self.assertIn("final_sale", [
+                receipt["kind"] for receipt in a.get_layaway_detail(folio.id)["receipts"]
+            ])
             self.assertEqual(len(folio.payment_ids), 1)
             self.assertEqual(self.session_a.cash_register_balance_end, 4000)
 
@@ -1777,6 +1818,9 @@ class TestPosLayawayCampaign(SavepointCase):
         moment = datetime(2026, 11, 20, 20)
         with patch.object(fields.Datetime, "now", return_value=moment):
             campaign, folio, product, replacement, opening = self._adjustment_fixture()
+            initial_ticket = self.session_a.with_user(self.cashier_a)._layaway_receipt(
+                folio.id, opening["reference"], final_sale=True,
+            )
             self._close_layaway_session(self.session_a, 4000)
             sale = folio.sale_id
             sale_snapshot = sale.read(["amount_total", "amount_tax", "payment_ids", "lines", "state"])
@@ -1844,6 +1888,12 @@ class TestPosLayawayCampaign(SavepointCase):
             self.assertEqual(folio.sale_id.read(list(sale_snapshot[0])), sale_snapshot)
             self.assertEqual(self.session_a.move_id.line_ids.read(list(closing_snapshot[0])), closing_snapshot)
             self.assertEqual(a._layaway_receipt(folio.id, opening["reference"])[0], opening)
+            self.assertNotEqual(set(folio.line_ids.mapped("product_id").ids), {product.id})
+            self.assertEqual(
+                b._layaway_receipt(folio.id, opening["reference"], final_sale=True), initial_ticket,
+            )
+            with self.assertRaises(AccessError):
+                b._layaway_receipt(folio.id, result["reference"], final_sale=True)
             self.assertFalse(pickings.move_lines.stock_valuation_layer_ids)
             self.assertFalse(any(pickings.move_line_ids.mapped("qty_done")))
             self._close_layaway_session(self.session_b, 500)

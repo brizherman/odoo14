@@ -3,23 +3,33 @@
     <template id="layaway_receipt">
         <t t-call="web.html_container">
             <t t-set="quote" t-value="document.get('quote')"/>
-            <t t-set="receipt" t-value="document['receipt']"/>
-            <t t-set="opening" t-value="receipt['kind'] == 'open'"/>
-            <t t-set="installment" t-value="receipt['kind'] == 'installment'"/>
-            <t t-set="agreement" t-value="receipt if installment else quote"/>
+            <t t-set="receipt" t-value="ticket or document['receipt']"/>
+            <t t-set="opening" t-value="receipt.get('kind') == 'open'"/>
+            <t t-set="installment" t-value="receipt.get('kind') == 'installment'"/>
+            <t t-set="agreement" t-value="receipt if ticket or installment else quote"/>
             <div class="page container pt-3 pb-3">
                 <button type="button" class="btn btn-secondary float-right d-print-none"
                         onclick="window.print()">Imprimir</button>
                 <p t-if="reprint" class="layaway-reprint font-weight-bold">Reimpresión</p>
-                <h2 t-if="opening">Comprobante de apartado y anticipo</h2>
+                <h2 t-if="ticket">Ticket final de venta de apartado</h2>
+                <h2 t-elif="opening">Comprobante de apartado y anticipo</h2>
                 <h2 t-elif="installment">Comprobante de abono</h2>
                 <h2 t-else="">Constancia de adición de mercancía</h2>
-                <p>Mercancía reservada · Recogida pendiente</p>
+                <div t-if="ticket" class="layaway-pickup-status">
+                    <p t-if="ticket['pickup_state'] == 'done'">Liquidado · Recogida completa</p>
+                    <p t-elif="ticket['pickup_state'] == 'partial'">Liquidado · Recogida parcial entre tiendas</p>
+                    <p t-else="">Liquidado · Pendiente de recogida</p>
+                </div>
+                <p t-else="">Mercancía reservada · Recogida pendiente</p>
                 <dl class="row">
                     <dt class="col-4">Campaña</dt>
                     <dd class="col-8" t-esc="agreement['campaign_name']"/>
                     <dt class="col-4">Folio</dt>
                     <dd class="col-8" t-esc="document['folio']"/>
+                    <t t-if="ticket">
+                        <dt class="col-4">Venta POS</dt>
+                        <dd class="col-8" t-esc="document['sale_name']"/>
+                    </t>
                     <dt class="col-4">Referencia de operación</dt>
                     <dd class="col-8" t-esc="document['reference']"/>
                     <dt class="col-4">Cliente</dt>
@@ -28,9 +38,11 @@
                         <dt class="col-4">Registro de transferencia</dt>
                         <dd class="col-8" t-esc="document['transfer_reference']"/>
                     </t>
-                    <dt t-if="installment" class="col-4">Tienda receptora</dt>
-                    <dt t-else="" class="col-4">Tienda de reserva</dt>
-                    <dd class="col-8" t-esc="agreement['warehouse']"/>
+                    <t t-if="not ticket or ticket['payments']">
+                        <dt t-if="ticket or installment" class="col-4">Tienda receptora</dt>
+                        <dt t-else="" class="col-4">Tienda de reserva</dt>
+                        <dd class="col-8" t-esc="agreement['warehouse']"/>
+                    </t>
                     <dt class="col-4">Caja y sesión</dt>
                     <dd class="col-8"><span t-esc="receipt['register']"/> · <span t-esc="receipt['session']"/></dd>
                     <dt class="col-4">Cajero</dt>
@@ -39,7 +51,8 @@
                     <dd class="col-8"><time t-esc="receipt['confirmed_at']"/> · <span t-esc="receipt['timezone']"/></dd>
                 </dl>
 
-                <section t-if="not installment" class="layaway-merchandise">
+                <t t-if="ticket" t-call="pos_layaway.layaway_sale_details"/>
+                <section t-if="not ticket and not installment" class="layaway-merchandise">
                     <h3 t-if="opening">Mercancía del apartado</h3>
                     <h3 t-else="">Mercancía agregada</h3>
                     <p>Importes en <span t-esc="receipt['currency']"/></p>
@@ -78,7 +91,7 @@
                     </dl>
                 </section>
 
-                <section class="layaway-payment">
+                <section t-if="not ticket" class="layaway-payment">
                     <t t-if="installment">
                         <p>Importes en <span t-esc="receipt['currency']"/></p>
                         <dl class="row">
@@ -117,7 +130,7 @@
                     </dl>
                 </section>
 
-                <section t-if="not installment">
+                <section t-if="not ticket and not installment">
                     <h3>Plazos y condiciones pactados</h3>
                     <ul>
                         <li t-if="opening">
@@ -133,5 +146,74 @@
                 </section>
             </div>
         </t>
+    </template>
+
+    <template id="layaway_sale_details">
+        <section class="layaway-merchandise">
+            <h3>Mercancía por tienda de reserva</h3>
+            <p>Importes en <span t-esc="ticket['currency']"/></p>
+            <table class="table table-sm">
+                <thead><tr>
+                    <th scope="col">Tienda</th>
+                    <th scope="col">Producto</th>
+                    <th scope="col" class="text-right">Cantidad</th>
+                    <th scope="col" class="text-right">Pendiente de recoger</th>
+                    <th scope="col" class="text-right">Precio unitario pactado</th>
+                    <th scope="col" class="text-right">Impuestos</th>
+                    <th scope="col" class="text-right">Importe total</th>
+                </tr></thead>
+                <tbody>
+                    <tr t-foreach="ticket['lines']" t-as="line">
+                        <td t-esc="line['store']"/>
+                        <td t-esc="line['name']"/>
+                        <td class="text-right" t-esc="'%g' % line['quantity']"/>
+                        <td class="text-right" t-esc="'%g' % line['pending']"/>
+                        <td class="text-right" t-esc="money(line['price_unit'])"/>
+                        <td class="text-right" t-esc="money(line['amount_tax'])"/>
+                        <td class="text-right" t-esc="money(line['amount_total'])"/>
+                    </tr>
+                </tbody>
+            </table>
+            <dl class="row">
+                <dt class="col-8">Subtotal sin impuestos</dt>
+                <dd class="col-4 text-right" t-esc="money(ticket['amount_total'] - ticket['amount_tax'])"/>
+                <dt class="col-8">Impuestos</dt>
+                <dd class="col-4 text-right" t-esc="money(ticket['amount_tax'])"/>
+                <dt class="col-8">Total de la venta con impuestos</dt>
+                <dd class="col-4 text-right" t-esc="money(ticket['amount_total'])"/>
+            </dl>
+        </section>
+        <section class="layaway-payment">
+            <h3>Pagos anteriores aplicados</h3>
+            <dl class="row">
+                <dt class="col-8">Anticipo anterior</dt>
+                <dd class="col-4 text-right" t-esc="money(ticket['previous_deposit'])"/>
+                <dt class="col-8">Abonos anteriores</dt>
+                <dd class="col-4 text-right" t-esc="money(ticket['previous_installments'])"/>
+                <dt class="col-8">Total de pagos anteriores aplicados</dt>
+                <dd class="col-4 text-right" t-esc="money(ticket['amount_previous'])"/>
+            </dl>
+            <h3>Dinero nuevo por método</h3>
+            <p t-if="ticket['payments'] and ticket['receiving_session'] != ticket['session']">
+                Caja y sesión receptoras
+                <span t-esc="ticket['receiving_register']"/> · <span t-esc="ticket['receiving_session']"/>
+            </p>
+            <dl class="row">
+                <t t-foreach="ticket['payments']" t-as="payment">
+                    <dt class="col-8" t-esc="payment['method_name']"/>
+                    <dd class="col-4 text-right" t-esc="money(payment['amount'])"/>
+                    <t t-if="payment['amount_change']">
+                        <dt class="col-8">Efectivo entregado</dt>
+                        <dd class="col-4 text-right" t-esc="money(payment['amount_tendered'])"/>
+                        <dt class="col-8">Cambio devuelto</dt>
+                        <dd class="col-4 text-right" t-esc="money(payment['amount_change'])"/>
+                    </t>
+                </t>
+                <dt class="col-8">Total de dinero nuevo</dt>
+                <dd class="col-4 text-right" t-esc="money(ticket['amount_new'])"/>
+                <dt class="col-8">Restante por pagar</dt>
+                <dd class="col-4 text-right" t-esc="money(0)"/>
+            </dl>
+        </section>
     </template>
 </odoo>

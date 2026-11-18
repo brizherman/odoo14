@@ -35,12 +35,14 @@ class PosSession(models.Model):
             ("result", "!=", False),
         ])
 
-    def _layaway_receipt(self, folio_id, reference, original=False):
+    def _layaway_receipt(self, folio_id, reference, original=False, final_sale=False):
         operation = self._layaway_receipt_operations([
             ("layaway_id", "=", folio_id), ("reference", "=", reference),
         ])
         result = json.loads(operation.result) if operation else {}
-        if not result.get("receipt"):
+        if final_sale and result.get("settlement"):
+            result["ticket"] = operation._sale_ticket_values(result)
+        elif final_sale or not result.get("receipt"):
             raise AccessError(_("El comprobante original no está disponible."))
         return result, not (original and operation.session_id.id == self.id)
 
@@ -50,8 +52,12 @@ class PosSession(models.Model):
         for operation in self._layaway_receipt_operations([("layaway_id", "=", folio.id)]):
             result = json.loads(operation.result)
             receipt = result.get("receipt")
+            if result.get("settlement"):
+                receipts.append({
+                    "reference": operation.reference, "kind": "final_sale", "available": True,
+                })
             if not receipt and (
-                operation.kind == "authorize_transfer"
+                operation.kind in ("authorize_transfer", "change_products")
                 or (operation.kind == "installment" and not result.get("amount_applied"))
             ):
                 continue

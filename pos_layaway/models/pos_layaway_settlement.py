@@ -95,6 +95,7 @@ class PosSession(models.Model):
                     payments.filtered_domain([("kind", "=", "deposit")]).mapped("amount")
                 )),
                 "new_payment_ids": new_payments.ids, "previous_payment_ids": payments.ids,
+                "ticket": operation._sale_ticket_snapshot(folio, new_payments),
                 "pickup_state": folio.pickup_state,
                 "lines": [{
                     "name": line.product_name, "store": line.warehouse_id.display_name,

@@ -315,8 +315,7 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
             }
             if (result) {
                 this.state.draft = null;
-                this.state.originalReceipt = result.receipt
-                    ? { id: result.id, reference: result.reference } : null;
+                this.showOriginalReceipts(result);
                 const messages = {
                     confirm_layaway_change: this.env._t('Cambio autorizado'),
                     register_layaway_installment: this.env._t('Abono confirmado'),
@@ -413,9 +412,7 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
             if (result) {
                 this.state.transferMessage = result.sale_id && !result.amount_due ? this.env._t('Apartado liquidado')
                     : this.env._t('Transferencia confirmada.');
-                if (result.receipt) {
-                    this.state.originalReceipt = { id: result.id, reference: result.reference };
-                }
+                this.showOriginalReceipts(result);
             }
         }
 
@@ -518,17 +515,33 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
             return '/pos/layaway/label/' + this.env.pos.pos_session.id + '/' + this.state.detail.id;
         }
 
-        receiptUrl(reference, original = false) {
-            return '/pos/layaway/receipt/' + this.env.pos.pos_session.id + '/'
-                + this.state.detail.id + '/' + encodeURIComponent(reference)
-                + (original ? '?original=1' : '');
+        showOriginalReceipts(result) {
+            this.state.originalReceipt = result.receipt || result.settlement ? {
+                id: result.id,
+                reference: result.reference,
+                receipt: Boolean(result.receipt),
+                finalSale: Boolean(result.settlement),
+            } : null;
         }
 
-        openOriginalReceipt() {
+        receiptUrl(reference, original = false, finalSale = false) {
+            const query = new URLSearchParams();
+            if (original) {
+                query.set('original', '1');
+            }
+            if (finalSale) {
+                query.set('final_sale', '1');
+            }
+            return '/pos/layaway/receipt/' + this.env.pos.pos_session.id + '/'
+                + this.state.detail.id + '/' + encodeURIComponent(reference)
+                + (query.toString() ? '?' + query : '');
+        }
+
+        openOriginalReceipt(kind) {
             const receipt = this.state.originalReceipt;
             window.setTimeout(() => {
                 if (this.state.originalReceipt === receipt) {
-                    this.state.originalReceipt = null;
+                    receipt[kind] = false;
                 }
             }, 0);
         }

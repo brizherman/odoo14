@@ -16,13 +16,17 @@ class LayawayLabel(http.Controller):
 
     @http.route("/pos/layaway/receipt/<int:session_id>/<int:folio_id>/<string:reference>",
                 auth="user", type="http", methods=["GET"])
-    def receipt(self, session_id, folio_id, reference, original=None):
+    def receipt(self, session_id, folio_id, reference, original=None, final_sale=None):
         session = request.env["pos.session"].browse(session_id)
-        result, reprint = session._layaway_receipt(folio_id, reference, original == "1")
+        result, reprint = session._layaway_receipt(
+            folio_id, reference, original == "1", final_sale=final_sale == "1",
+        )
         lines = result.get("quote", {}).get("lines", [])
-        digits = result["receipt"]["decimal_places"]
+        ticket = result.get("ticket")
+        digits = (ticket or result["receipt"])["decimal_places"]
         return request.render("pos_layaway.layaway_receipt", {
             "document": result,
+            "ticket": ticket,
             "reprint": reprint,
             "tax_total": sum(line["amount_tax"] for line in lines),
             "tax_names": {

@@ -14,7 +14,9 @@ class PosLayawayOperation(models.Model):
     _order = "create_date, id"
     _rec_name = "reference"
 
-    _receipt_kinds = ("open", "add_products", "installment", "settle", "authorize_transfer")
+    _receipt_kinds = (
+        "open", "add_products", "installment", "settle", "authorize_transfer", "change_products",
+    )
 
     reference = fields.Char(required=True)
     kind = fields.Char(required=True)
@@ -121,6 +123,42 @@ class PosLayawayOperation(models.Model):
             "phone": folio.phone,
             "warehouse": self.warehouse_id.display_name,
             "amount_total": folio.amount_total,
+        }
+
+    def _sale_ticket_snapshot(self, folio, payments, receipt=None):
+        receiving = payments.session_id or self.session_id
+        return {
+            **(receipt or self._receipt_identification(folio, self.create_date)),
+            "campaign_name": folio.campaign_name,
+            "contact_name": folio.contact_name,
+            "phone": folio.phone,
+            "warehouse": receiving.config_id.picking_type_id.warehouse_id.display_name,
+            "receiving_register": receiving.config_id.name,
+            "receiving_session": receiving.name,
+            "payments": payments.read(
+                ["method_name", "amount", "amount_tendered", "amount_change"], load="_classic_write",
+            ),
+            "amount_new": folio.currency_id.round(sum(payments.mapped("amount"))),
+        }
+
+    def _sale_ticket_values(self, result):
+        settlement = result["settlement"]
+        ticket = settlement.get("ticket")
+        if ticket is None:
+            # Earlier settlements saved the original lines, state and immutable payment IDs.
+            payments = self.env["pos.layaway.payment"].browse(settlement["new_payment_ids"])
+            ticket = self._sale_ticket_snapshot(self.layaway_id, payments, result.get("receipt"))
+        return {
+            **ticket,
+            "amount_total": settlement["amount_total"],
+            "amount_tax": settlement["amount_tax"],
+            "amount_previous": settlement["amount_previous"],
+            "previous_deposit": settlement["previous_deposit"],
+            "previous_installments": round(
+                settlement["amount_previous"] - settlement["previous_deposit"], ticket["decimal_places"],
+            ),
+            "pickup_state": settlement["pickup_state"],
+            "lines": settlement["lines"],
         }
 
     def _receipt_snapshot(self, folio):
