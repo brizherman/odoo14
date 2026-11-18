@@ -1853,6 +1853,17 @@ class TestPosLayawayCampaign(SavepointCase):
             added = b.confirm_layaway(*addition, [])
             self.assertEqual(a.confirm_layaway(*addition, []), added)
             self.assertEqual(added["sale_id"], sale.id)
+            detail = b.get_layaway_detail(folio.id)
+            self.assertEqual(
+                (detail["amount_reserved"], detail["amount_paid"], detail["amount_due"]), (6000, 4000, 2000),
+            )
+            change, addition_history = detail["merchandise_history"]
+            self.assertEqual(change["reason"], "Sustitución al mismo precio")
+            self.assertEqual(change["supervisor"], self.supervisor.name)
+            self.assertEqual(change["removed"], [{"name": product.display_name, "qty": 2}])
+            self.assertEqual(change["added"], [{"name": replacement.display_name, "qty": 1}])
+            self.assertEqual(addition_history["added"], [{"name": product.display_name, "qty": 1}])
+            self.assertFalse(detail["sale_url"])
             difference = self.env["account.move"].browse(added["sale_adjustment"]["id"])
             self.assertEqual((difference.amount_total, difference.amount_tax), (2000, 275.86))
             self.assertEqual((difference.invoice_origin, difference.company_id), (sale.name, self.company_a))
@@ -2012,6 +2023,12 @@ class TestPosLayawayCampaign(SavepointCase):
                 picking.with_context(layaway_pickup_guard=True)._action_done()
             with self.assertRaisesRegex(UserError, "reserva"), self.cr.savepoint():
                 picking.move_lines._do_unreserve()
+                detail = a.get_layaway_detail(folio.id)
+                self.assertEqual((detail["amount_reserved"], detail["amount_paid"]), (2000, 6000))
+                self.assertEqual(
+                    [(line["pending"], line["reserved_amount"]) for line in detail["lines"]],
+                    [(2, 0), (1, 2000)],
+                )
                 a.confirm_layaway_pickup(folio.id, str(uuid4()), holder, lines)
             with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 16, 8)):
                 with self.assertRaisesRegex(UserError, "Terminó el plazo"):
@@ -2052,7 +2069,19 @@ class TestPosLayawayCampaign(SavepointCase):
             self.assertEqual(first["confirmed_at"], "2026-11-18 12:00:00-08:00")
             self.assertEqual(first["pickup_state"], "partial")
             self.assertEqual([line["qty"] for line in first["pending"]], [1])
-            b_detail = b.get_layaway_detail(folio.id)["pickup"]
+            detail = b.get_layaway_detail(folio.id)
+            self.assertEqual(
+                (detail["amount_reserved"], detail["amount_paid"], detail["amount_due"]), (2000, 6000, 0),
+            )
+            self.assertEqual([line["pending"] for line in detail["lines"]], [0, 1])
+            self.assertEqual([line["reserved_amount"] for line in detail["lines"]], [0, 2000])
+            filters = {"campaign": campaign.id, "store": self.config_a.picking_type_id.warehouse_id.id,
+                       "payment_state": "paid", "pickup_state": "partial"}
+            self.assertEqual([row["id"] for row in b.get_layaways(filters)["rows"]], [folio.id])
+            self.assertFalse(b.get_layaways(dict(filters, pickup_state="done"))["rows"])
+            with self.assertRaises(AccessError):
+                self.session_a.with_user(self.cashier_b).get_layaways(filters)
+            b_detail = detail["pickup"]
             self.assertEqual(b_detail["authorizations"], [registration])
             self.assertEqual(b_detail["history"], [first])
             recipient = {
@@ -2065,7 +2094,9 @@ class TestPosLayawayCampaign(SavepointCase):
             self.assertEqual(b.confirm_layaway_pickup(*a_args), first)
             with self.assertRaisesRegex(ValidationError, "bloque pendiente"):
                 a.confirm_layaway_pickup(a_args[0], str(uuid4()), *a_args[2:])
-            history = a.get_layaway_detail(folio.id)["pickup"]["history"]
+            complete = a.get_layaway_detail(folio.id)
+            self.assertEqual((complete["amount_reserved"], complete["amount_paid"]), (0, 6000))
+            history = complete["pickup"]["history"]
             self.assertCountEqual(history, [first, second])
             self.assertEqual((folio.sale_id, sale.layaway_ids), (sale, folio))
             self.assertEqual(self._checkout_state(folio)[4:], before[4:])
@@ -2268,6 +2299,11 @@ class TestPosLayawayCampaign(SavepointCase):
             self.assertFalse(manager.get_layaways({"expiry": "expired"})["rows"])
             detail = b.get_layaway_detail(folio.id)
             self.assertEqual(detail["expiry_credit"], result["credit"])
+            filters = {"store": self.config_a.picking_type_id.warehouse_id.id,
+                       "payment_state": "converted", "pickup_state": "released", "credit_state": "available"}
+            row, = b.get_layaways(filters)["rows"]
+            self.assertEqual((row["id"], row["amount_reserved"], row["amount_paid"], row["amount_due"]),
+                             (folio.id, 0, 3400, 0))
             self.assertEqual(detail["expiry_review"]["history"][-1], result)
             self.assertFalse(detail["transfer_review"]["transfers"][0]["can_approve"])
             with self.assertRaisesRegex(UserError, "no admite abonos"):
@@ -2372,6 +2408,8 @@ class TestPosLayawayCampaign(SavepointCase):
                 sale = credit.order_id
                 stored.append((folio, reference, payload, result))
                 self.assertEqual((credit.state, sale.state, sale.amount_paid), ("consumed", "paid", total))
+                rows = destination.get_layaways({"query": folio.folio, "credit_state": "consumed"})["rows"]
+                self.assertEqual([(row["id"], row["credit_state"]) for row in rows], [(folio.id, "consumed")])
                 self.assertEqual((sale.amount_total, sale.amount_tax, sale.date_order), (total, 0, moment))
                 self.assertEqual(sale.session_id, self.session_b)
                 self.assertFalse(sale.layaway_ids or folio.sale_id)
@@ -2411,6 +2449,8 @@ class TestPosLayawayCampaign(SavepointCase):
         credit = folio.expiry_credit_id
         before = (folio.payment_ids.ids, credit.operation_id, self.session_b.cash_register_balance_end)
         with patch.object(fields.Datetime, "now", return_value=datetime(2027, 2, 1, 7, 59, 59)):
+            self.assertEqual(destination.get_layaways({"credit_state": "available"})["rows"][0]["id"], folio.id)
+            self.assertFalse(destination.get_layaways({"credit_state": "expired"})["rows"])
             preview = destination.preview_layaway_credit(folio.folio, partner.id)
             self.assertEqual(preview, destination.preview_layaway_credit(folio.folio, partner.id))
             self.assertFalse(credit.order_id or credit.consumption_id)
@@ -2449,6 +2489,7 @@ class TestPosLayawayCampaign(SavepointCase):
             self.assertEqual(self.env["account.move"].search_count([]), accounting)
             self.assertEqual((credit.state, credit.order_id.id), ("expired", False))
             self.assertFalse(supervisor.get_layaways({"expiry": "expired_credit"})["rows"])
+            self.assertEqual(destination.get_layaways({"credit_state": "expired"})["rows"][0]["id"], folio.id)
         self.assertEqual((folio.payment_ids.ids, credit.operation_id, self.session_b.cash_register_balance_end), before)
 
     def test_settle_and_pickup_is_atomic_and_snapshots_only_the_local_delivery(self):

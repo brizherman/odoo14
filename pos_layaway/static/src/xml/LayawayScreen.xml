@@ -95,6 +95,13 @@
                             <option value="current">Sin vencimiento pendiente</option>
                         </select>
                     </label>
+                    <label>Saldo por vencimiento
+                        <select name="credit_state" t-model="state.filters.credit_state">
+                            <option value="">Todos</option>
+                            <option t-foreach="Object.keys(creditLabels)" t-as="key" t-key="key"
+                                    t-att-value="key" t-esc="creditLabels[key]"/>
+                        </select>
+                    </label>
                     <button type="submit" class="layaway-submit"
                             t-att-disabled="state.loading">Buscar</button>
                 </form>
@@ -102,7 +109,8 @@
                 <table t-if="state.rows.length" class="layaway-table">
                     <thead><tr>
                         <th>Folio</th><th>Cliente</th><th>Campaña</th><th>Apertura</th>
-                        <th>Pago</th><th>Entrega</th><th>Restante</th>
+                        <th>Pago</th><th>Entrega</th><th>Valor reservado</th><th>Cobrado</th>
+                        <th>Restante</th><th>Saldo por vencimiento</th>
                     </tr></thead>
                     <tbody>
                         <tr t-foreach="state.rows" t-as="row" t-key="row.id">
@@ -113,7 +121,10 @@
                             <td t-esc="row.customer"/><td t-esc="row.campaign"/><td t-esc="row.opened_on"/>
                             <td t-esc="paymentLabels[row.payment_state]"/>
                             <td t-esc="pickupLabels[row.pickup_state]"/>
-                            <td t-esc="money(row.amount_due)"/>
+                            <td t-esc="folioMoney(row.amount_reserved, row)"/>
+                            <td t-esc="folioMoney(row.amount_paid, row)"/>
+                            <td t-esc="folioMoney(row.amount_due, row)"/>
+                            <td t-esc="creditLabels[row.credit_state] || '—'"/>
                         </tr>
                     </tbody>
                 </table>
@@ -144,28 +155,32 @@
                 </div>
                 <h2 t-esc="folio.folio"/>
                 <p><strong t-esc="folio.customer"/> · <span t-esc="folio.phone"/></p>
-                <p><span t-esc="folio.campaign"/> · Recogida hasta <time t-esc="folio.pickup_end"/>
+                <p><span t-esc="folio.campaign"/> · Apertura <time t-esc="folio.opened_on"/>
+                    · Cambios hasta <time t-esc="folio.addition_end"/>
+                    · Recogida hasta <time t-esc="folio.pickup_end"/>
                     <strong t-if="folio.expired" class="layaway-expired"> · Vencido</strong>
                 </p>
+                <p>Uso del saldo hasta <time t-esc="folio.credit_end"/> · <span t-esc="folio.timezone"/></p>
                 <p><span t-esc="paymentLabels[folio.payment_state]"/> · <span t-esc="pickupLabels[folio.pickup_state]"/></p>
                 <p t-if="folio.sale_name">Venta POS
                     <a t-if="folio.sale_url" t-att-href="folio.sale_url" target="_blank"
                        rel="noopener" t-esc="folio.sale_name"/>
                     <strong t-else="" t-esc="folio.sale_name"/>
                 </p>
+                <h3>Importes del folio en todas sus tiendas</h3>
                 <dl class="layaway-totals">
-                    <div><dt>Total</dt><dd t-esc="money(folio.amount_total)"/></div>
-                    <div><dt>Anticipo</dt><dd t-esc="money(folio.amount_deposit)"/></div>
-                    <div><dt>Abonos</dt><dd t-esc="money(folio.amount_installments)"/></div>
-                    <div><dt>Restante</dt><dd t-esc="money(folio.amount_due)"/></div>
+                    <div><dt>Total vigente</dt><dd t-esc="folioMoney(folio.amount_total, folio)"/></div>
+                    <div><dt>Valor reservado</dt><dd t-esc="folioMoney(folio.amount_reserved, folio)"/></div>
+                    <div><dt>Cobrado</dt><dd t-esc="folioMoney(folio.amount_paid, folio)"/></div>
+                    <div><dt>Anticipo</dt><dd t-esc="folioMoney(folio.amount_deposit, folio)"/></div>
+                    <div><dt>Abonos</dt><dd t-esc="folioMoney(folio.amount_installments, folio)"/></div>
+                    <div><dt>Restante</dt><dd t-esc="folioMoney(folio.amount_due, folio)"/></div>
                 </dl>
                 <t t-if="!folio.expiry_credit" t-call="pos_layaway.LayawayStockTable"/>
                 <section t-else="" class="layaway-expiry-credit">
-                    <p><strong>Saldo por vencimiento</strong> · <span t-esc="money(folio.expiry_credit.amount)"/>
+                    <p><strong>Saldo por vencimiento</strong> · <span t-esc="folioMoney(folio.expiry_credit.amount, folio)"/>
                         · Fecha límite <time t-esc="folio.expiry_credit.expires_on"/>
-                        · <span t-if="folio.expiry_credit.state === 'available'">Disponible</span>
-                        <span t-elif="folio.expiry_credit.state === 'consumed'">Consumido</span>
-                        <span t-else="">Caducado</span>
+                        · <span t-esc="creditLabels[folio.expiry_credit.state]"/>
                     </p>
                     <p t-if="folio.expiry_credit.consumption">
                         Compra <strong t-esc="folio.expiry_credit.consumption.order_name"/>
@@ -182,6 +197,25 @@
                         Cerrar saldo caducado de prueba
                     </button>
                 </section>
+                <details t-if="folio.merchandise_history.length" class="layaway-merchandise-history">
+                    <summary>Cambios de mercancía</summary>
+                    <article t-foreach="folio.merchandise_history" t-as="change" t-key="change.reference">
+                        <p><strong t-if="change.kind === 'add_products'">Adición</strong>
+                            <strong t-else="">Cambio autorizado</strong>
+                            · <span t-esc="change.store"/> · <time t-esc="change.date"/>
+                            · <span t-esc="change.reference"/>
+                        </p>
+                        <p t-if="change.supervisor"><span t-esc="change.supervisor"/> · <span t-esc="change.reason"/></p>
+                        <ul>
+                            <li t-foreach="change.added" t-as="item" t-key="item_index">
+                                Agregado · <t t-esc="item.qty"/> × <t t-esc="item.name"/>
+                            </li>
+                            <li t-foreach="change.removed" t-as="item" t-key="item_index">
+                                Retirado · <t t-esc="item.qty"/> × <t t-esc="item.name"/>
+                            </li>
+                        </ul>
+                    </article>
+                </details>
                 <section t-if="folio.expiry_review.can_review || folio.expiry_review.history.length"
                          class="layaway-expiry-review">
                     <h3>Revisión de vencimiento</h3>
@@ -430,12 +464,14 @@
     <t t-name="pos_layaway.LayawayStockTable" owl="1">
         <table class="layaway-table">
             <thead><tr>
-                <th>Producto</th><th>Tienda</th><th>Ubicación</th><th>Cantidad</th><th>Pendiente</th>
+                <th>Producto</th><th>Tienda</th><th>Ubicación</th><th>Cantidad</th>
+                <th>Entregada</th><th>Pendiente</th><th>Valor reservado</th>
             </tr></thead>
             <tbody>
                 <tr t-foreach="folio.lines" t-as="line" t-key="line.id">
                     <td t-esc="line.name"/><td t-esc="line.store"/><td t-esc="line.location"/>
-                    <td t-esc="line.qty"/><td t-esc="line.pending"/>
+                    <td t-esc="line.qty"/><td t-esc="line.picked_up"/><td t-esc="line.pending"/>
+                    <td t-esc="folioMoney(line.reserved_amount, folio)"/>
                 </tr>
             </tbody>
         </table>

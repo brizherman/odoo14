@@ -33,7 +33,7 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                 pendingCorrection: null, correctionPayment: '', correctionMethod: '',
                 correctionKind: '', expiryResolution: '',
                 filters: { query: '', campaign: '', store: '', from: '', to: '',
-                    payment_state: '', pickup_state: '', expiry: '' },
+                    payment_state: '', pickup_state: '', expiry: '', credit_state: '' },
             });
             this.filters = {};
             this.requestNumber = 0;
@@ -571,6 +571,18 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
         get pickupLabels() {
             return { pending: this.env._t('Pendiente'), partial: this.env._t('Parcial'),
                 done: this.env._t('Entregado'), released: this.env._t('Reserva liberada') };
+        }
+
+        get creditLabels() {
+            return { available: this.env._t('Disponible'), consumed: this.env._t('Consumido'),
+                expired: this.env._t('Caducado') };
+        }
+
+        folioMoney(amount, folio) {
+            const formatted = this.env.pos.format_currency_no_symbol(amount, null, {
+                decimals: folio.decimal_places,
+            });
+            return formatted + ' ' + folio.currency;
         }
 
         get expiryResolutionLabels() {

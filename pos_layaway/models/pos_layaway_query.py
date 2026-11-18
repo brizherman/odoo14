@@ -1,5 +1,6 @@
 import json
 import re
+from collections import defaultdict
 
 from odoo import _, fields, models
 from odoo.exceptions import AccessError, ValidationError
@@ -114,7 +115,7 @@ class PosSession(models.Model):
             and sale._filter_access_rules("read")
         )
         return {
-            **folio._pos_layaway_values(detail=True),
+            **folio._pos_layaway_values(folio._layaway_reserved_quantities(), detail=True),
             "receipts": receipts,
             "installment_methods": [{
                 "id": method.id, "name": method.name, "cash": method.is_cash_count,
@@ -126,6 +127,7 @@ class PosSession(models.Model):
                 and folio._layaway_can_modify_products(fields.Datetime.now())
             ),
             "sale_adjustments": folio._layaway_adjustment_history(),
+            "merchandise_history": folio._layaway_merchandise_history(),
             "pickup": self._layaway_pickup_detail(folio),
             "expiry_review": {
                 "can_review": can_review_expired,
@@ -156,8 +158,10 @@ class PosSession(models.Model):
         domain = scope + folios._pos_layaway_filter_domain(filters, scope)
         page_size = 30
         page = folios.search(domain, offset=offset, limit=page_size + 1)
+        visible = page[:page_size]
+        reserved = visible._layaway_reserved_quantities()
         return {
-            "rows": [folio._pos_layaway_values() for folio in page[:page_size]],
+            "rows": [folio._pos_layaway_values(reserved) for folio in visible],
             "has_more": len(page) > page_size,
             "can_open_layaway": layaway_test_database(self.env),
             "can_review_expired": self.env.user.has_group("point_of_sale.group_pos_manager"),
@@ -175,9 +179,7 @@ class PosLayaway(models.Model):
     def _pos_layaway_filter_options(self, scope):
         campaigns = self.read_group(scope, ["campaign_id"], ["campaign_id"])
         shops = self.env["pos.layaway.line"].read_group(
-            [("released_by_id", "=", False)] + [
-                ("layaway_id." + field, operator, value) for field, operator, value in scope
-            ],
+            self._layaway_store_line_domain(scope),
             ["warehouse_id"], ["warehouse_id"],
         )
         return {
@@ -186,6 +188,13 @@ class PosLayaway(models.Model):
             "stores": [{"id": row["warehouse_id"][0], "name": row["warehouse_id"][1]}
                        for row in shops],
         }
+
+    def _layaway_store_line_domain(self, scope):
+        return expression.AND([
+            [("layaway_id." + field, operator, value) for field, operator, value in scope],
+            ["|", ("released_by_id", "=", False),
+             ("released_by_id.kind", "=", "convert_expiry_credit")],
+        ])
 
     def _pos_layaway_filter_domain(self, filters, scope):
         domain = []
@@ -202,11 +211,11 @@ class PosLayaway(models.Model):
         if filters.get("campaign"):
             domain.append(("campaign_id", "=", record_id(filters["campaign"])))
         if filters.get("store"):
-            lines = self.env["pos.layaway.line"].search([
-                ("warehouse_id", "=", record_id(filters["store"])),
-                ("released_by_id", "=", False),
-            ])
-            domain.append(("line_ids", "in", lines.ids))
+            lines = self.env["pos.layaway.line"]._search(
+                self._layaway_store_line_domain(scope)
+                + [("warehouse_id", "=", record_id(filters["store"]))],
+            )
+            domain.append(("line_ids", "in", lines))
         for key, operator in (("from", ">="), ("to", "<=")):
             if filters.get(key):
                 try:
@@ -218,27 +227,78 @@ class PosLayaway(models.Model):
             if filters.get(state):
                 domain.append((state, "=", filters[state]))
         expiry = filters.get("expiry")
-        if expiry in ("expired", "current", "expired_credit"):
+        credit_state = filters.get("credit_state")
+        if expiry in ("expired", "current", "expired_credit") or credit_state in ("available", "expired"):
             timezones = self.read_group(scope, ["timezone"], ["timezone"])
             now = fields.Datetime.now()
-            credit_expiry = expiry == "expired_credit"
-            overdue = expression.AND([
-                [("expiry_credit_id", "!=", False), ("expiry_credit_id.order_id", "=", False),
-                 ("expiry_credit_id.closure_id", "=", False)]
-                if credit_expiry else [("pickup_state", "in", ("pending", "partial"))],
-                expression.OR([
-                    [("timezone", "=", row["timezone"]),
-                     ("credit_end" if credit_expiry else "pickup_end", "<", local_date(now, row["timezone"]))]
+
+            def past_deadline(field):
+                return expression.OR([
+                    [("timezone", "=", row["timezone"]), (field, "<", local_date(now, row["timezone"]))]
                     for row in timezones
-                ]),
-            ])
-            if expiry == "current":
-                overdue = expression.distribute_not(["!"] + expression.normalize_domain(overdue))
-            domain += overdue
+                ])
+
+            if expiry in ("expired", "current"):
+                overdue = expression.AND([
+                    [("pickup_state", "in", ("pending", "partial"))], past_deadline("pickup_end"),
+                ])
+                domain += ["!"] + overdue if expiry == "current" else overdue
+            if credit_state in ("available", "expired") or expiry == "expired_credit":
+                expired_credit = expression.OR([
+                    [("expiry_credit_id.closure_id", "!=", False)], past_deadline("credit_end"),
+                ])
+                domain += [("expiry_credit_id", "!=", False), ("expiry_credit_id.order_id", "=", False)]
+                if credit_state:
+                    domain += ["!"] + expired_credit if credit_state == "available" else expired_credit
+                if expiry == "expired_credit":
+                    domain += [("expiry_credit_id.closure_id", "=", False)] + expired_credit
+        if credit_state == "consumed":
+            domain.append(("expiry_credit_id.order_id", "!=", False))
         return domain
 
-    def _pos_layaway_values(self, detail=False):
+    def _layaway_reserved_quantities(self):
+        quantities = defaultdict(float)
+        moves = self.env["stock.move"].search([
+            ("layaway_line_id", "in", self.line_ids.filtered("qty_pending").ids),
+            ("state", "not in", ("done", "cancel", "draft")),
+            ("location_dest_id.usage", "=", "customer"),
+        ])
+        for move in moves:
+            quantities[move.layaway_line_id.id] += move.reserved_availability
+        return quantities
+
+    def _layaway_merchandise_history(self):
         self.ensure_one()
+        operations = self.env["pos.layaway.operation"].search([
+            ("layaway_id", "=", self.id), ("kind", "in", ("add_products", "change_products")),
+            ("result", "!=", False),
+        ])
+        history = []
+        for operation in operations:
+            result = json.loads(operation.result)
+            snapshot = result.get("quote", {}) if operation.kind == "add_products" else result
+            removed_ids = set(snapshot.get("removed_ids", []))
+            history.append({
+                "reference": operation.reference,
+                "kind": operation.kind,
+                "store": operation.warehouse_id.display_name,
+                "date": operation._receipt_identification(self, operation.create_date)["confirmed_at"],
+                "reason": result.get("reason"),
+                "supervisor": operation.user_id.name if operation.kind == "change_products" else False,
+                "added": [{"name": line["product_name"], "qty": line["qty"]}
+                          for line in snapshot.get("lines", [])],
+                "removed": [{"name": line["product_name"], "qty": line["qty"]}
+                            for line in snapshot.get("previous_lines", []) if line["id"] in removed_ids],
+            })
+        return history
+
+    def _pos_layaway_values(self, reserved, detail=False):
+        self.ensure_one()
+        reserved_amounts = {
+            line.id: self.currency_id.round(
+                line.amount_total * min(line.qty_pending, reserved.get(line.id, 0)) / line.qty,
+            ) for line in self.line_ids
+        }
         values = {
             "id": self.id, "folio": self.folio, "campaign": self.campaign_name,
             "customer": self.contact_name, "phone": self.phone,
@@ -247,14 +307,22 @@ class PosLayaway(models.Model):
             "payment_state": self.payment_state, "pickup_state": self.pickup_state,
             "expired": self._layaway_pickup_overdue(fields.Datetime.now()),
             "amount_total": self.amount_total, "amount_due": self.amount_due,
+            "amount_paid": self.amount_paid,
+            "amount_reserved": self.currency_id.round(sum(reserved_amounts.values())),
+            "currency": self.currency_id.name, "decimal_places": self.currency_id.decimal_places,
+            "credit_state": self.expiry_credit_id.state,
         }
         if detail:
             values.update({
                 "amount_deposit": self.amount_deposit, "amount_installments": self.amount_installments,
                 "sale_name": self.sale_id.name,
+                "addition_end": fields.Date.to_string(self.addition_end),
+                "credit_end": fields.Date.to_string(self.credit_end),
+                "timezone": self.timezone,
                 "lines": [{
                     "id": line.id, "name": line.product_name, "store": line.warehouse_id.display_name,
                     "location": line.location_id.complete_name, "qty": line.qty, "pending": line.qty_pending,
+                    "picked_up": line.qty_picked_up, "reserved_amount": reserved_amounts[line.id],
                 } for line in self.line_ids],
             })
         return values
