@@ -2079,6 +2079,117 @@ class TestPosLayawayCampaign(SavepointCase):
                 with self.assertRaises(AccessError):
                     picking.move_line_ids.qty_done = qty + 1
 
+    def test_settle_and_pickup_is_atomic_and_snapshots_only_the_local_delivery(self):
+        campaign, partner, product = self._settlement_fixture()
+        a = self.session_a.with_user(self.cashier_a)
+        b = self.session_b.with_user(self.cashier_b)
+        holder = {"kind": "holder", "identity_verified": True}
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            _, opening = self._checkout_args(a, campaign, product, 2, partner)
+            opened = a.confirm_layaway(*opening, [{"method_id": self.cash_a.id, "amount": 2000}])
+            folio = self.env["pos.layaway"].browse(opened["id"])
+            _, addition = self._checkout_args(b, campaign, product, 1, folio=folio)
+            b.confirm_layaway(*addition, [{"method_id": self.cash_b.id, "amount": 1000}])
+            lines = a.get_layaway_detail(folio.id)["pickup"]["lines"]
+            before = self._checkout_state(folio)
+            ref = str(uuid4())
+            tenders = [{"method_id": self.cash_a.id, "amount": 3000}]
+            failed_recipient = dict(holder, kind="authorized", authorization_reference=str(uuid4()))
+            with self.assertRaisesRegex(ValidationError, "autorizado previamente"):
+                a.settle_and_pickup_layaway(folio.id, ref, tenders, failed_recipient, lines)
+            self.assertEqual(self._checkout_state(folio), before)
+            self.assertFalse(folio.sale_id)
+            self.assertFalse(self.env["pos.layaway.operation"].search([("reference", "=", ref)]))
+            with self.assertRaisesRegex(ValidationError, "bloque pendiente"):
+                b.settle_and_pickup_layaway(
+                    folio.id, ref, [{"method_id": self.cash_b.id, "amount": 3000}], holder, lines,
+                )
+            self.assertEqual(self._checkout_state(folio), before)
+            args = (folio.id, ref, tenders, holder, lines)
+            first = a.settle_and_pickup_layaway(*args)
+            self.assertEqual(b.settle_and_pickup_layaway(*args), first)
+            self.assertEqual(first["pickup"]["pickup_state"], "partial")
+            self.assertEqual(first["pickup"]["pending"], b.get_layaway_detail(folio.id)["pickup"]["lines"])
+            self.assertEqual(first["settlement"]["pickup_state"], "partial")
+            self.assertEqual([line["pending"] for line in first["settlement"]["lines"]], [0, 1])
+            self.assertEqual((folio.sale_id.amount_total, folio.amount_due, len(folio.payment_ids)), (6000, 0, 3))
+            self.assertFalse(folio.sale_id.picking_ids)
+            self.assertEqual(folio.sale_id.layaway_ids, folio)
+
+            second = b.confirm_layaway_pickup(
+                folio.id, str(uuid4()), holder, first["pickup"]["pending"],
+            )
+            self.assertEqual(second["pickup_state"], "done")
+            sale_ticket, reprint = b._layaway_receipt(folio.id, ref, original=True, final_sale=True)
+            self.assertTrue(reprint)
+            self.assertEqual(sale_ticket["ticket"]["pickup_state"], "partial")
+            pickup_ticket, _ = b._layaway_receipt(folio.id, ref, pickup=True)
+            self.assertEqual(pickup_ticket["recipient"]["name"], partner.name)
+            self.assertEqual(pickup_ticket["pickup_state"], "partial")
+            self.assertEqual(pickup_ticket["sale_id"], second["sale_id"])
+            self.assertEqual(folio.payment_ids.mapped("amount"), [2000, 1000, 3000])
+
+    def test_relocation_moves_the_reserved_lot_before_pickup_in_another_location(self):
+        campaign, partner, product = self._settlement_fixture()
+        source = self.config_a.picking_type_id.default_location_src_id
+        self.config_a.picking_type_id.warehouse_id.int_type_id.active = True
+        warehouse = self.env["stock.warehouse"].with_company(self.company_a).create({
+            "name": "Otra tienda de recogida", "code": "REC",
+        })
+        config = self.config_a.copy({"name": "POS Recogida", "picking_type_id": warehouse.pos_type_id.id})
+        destination = config.picking_type_id.default_location_src_id
+        session = self._create_session(config, self.cashier_a).with_user(self.cashier_a)
+        campaign.write({"pos_config_ids": [(4, config.id)]})
+        a = self.session_a.with_user(self.cashier_a)
+        supervisor = self.session_a.with_user(self.supervisor)
+        lot = self.env["stock.production.lot"].with_company(self.company_a).create({
+            "name": "Lote de prueba del traslado", "product_id": product.id,
+            "company_id": self.company_a.id,
+        })
+        product.tracking = "lot"
+        quants = self.env["stock.quant"]
+        quants._update_available_quantity(product, source, -8)
+        quants._update_available_quantity(product, source, 8, lot_id=lot)
+        holder = {"kind": "holder", "identity_verified": True}
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            _, opening = self._checkout_args(a, campaign, product, 2, partner)
+            opened = a.confirm_layaway(*opening, [{"method_id": self.cash_a.id, "amount": 2000}])
+            folio = self.env["pos.layaway"].browse(opened["id"])
+            before = a.get_layaway_detail(folio.id)["pickup"]
+            self.assertFalse(before["destinations"])
+            lines = before["lines"]
+            args = (folio.id, str(uuid4()), config.id, lines)
+            with self.assertRaises(AccessError):
+                a.relocate_layaway_block(*args)
+            with self.assertRaisesRegex(UserError, "misma compañía"):
+                supervisor.relocate_layaway_block(folio.id, str(uuid4()), self.config_b.id, lines)
+            with self.assertRaisesRegex(ValidationError, "bloque pendiente"):
+                session.settle_and_pickup_layaway(
+                    folio.id, str(uuid4()), [{"method_id": self.cash_a.id, "amount": 2000}], holder, lines,
+                )
+            self.assertFalse(folio.sale_id)
+            move = supervisor.relocate_layaway_block(*args)
+            self.assertEqual(supervisor.relocate_layaway_block(*args), move)
+            transfer = self.env["stock.picking"].browse(move["transfer_id"])
+            reservation = self.env["stock.picking"].browse(move["reservation_id"])
+            self.assertEqual((transfer.state, transfer.picking_type_code), ("done", "internal"))
+            self.assertEqual((transfer.location_id, transfer.location_dest_id), (source, destination))
+            self.assertEqual(transfer.move_line_ids.lot_id, lot)
+            self.assertEqual(transfer.move_line_ids.qty_done, 2)
+            self.assertEqual(reservation.move_lines.move_orig_ids, transfer.move_lines)
+            self.assertEqual(reservation.move_line_ids.lot_id, lot)
+            self.assertEqual(reservation.move_line_ids.product_qty, 2)
+            self.assertEqual((folio.amount_due, folio.pickup_state), (2000, "pending"))
+            self.assertFalse(a.get_layaway_detail(folio.id)["pickup"]["lines"])
+            self.assertEqual(supervisor._layaway_changeable_lines(folio), folio.line_ids)
+            detail = session.get_layaway_detail(folio.id)["pickup"]
+            self.assertEqual(detail["relocations"], [move])
+            session.settle_layaway(folio.id, str(uuid4()), [{"method_id": self.cash_a.id, "amount": 2000}])
+            collected = session.confirm_layaway_pickup(folio.id, str(uuid4()), holder, detail["lines"])
+            self.assertEqual(collected["picking_ids"], reservation.ids)
+            self.assertEqual(collected["delivered"][0]["location"], destination.complete_name)
+            self.assertEqual(collected["pickup_state"], "done")
+
     def test_sale_adjustment_requires_new_coverage_and_rolls_back_stock_failure(self):
         with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 20, 20)):
             campaign, folio, product, _, opening = self._adjustment_fixture()

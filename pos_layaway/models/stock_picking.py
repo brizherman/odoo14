@@ -8,6 +8,7 @@ from .pos_layaway_payment import layaway_test_database
 
 
 _PICKUP_GUARD = object()
+_RELOCATION_GUARD = object()
 
 
 class LayawayStockError(UserError):
@@ -113,37 +114,41 @@ class StockPicking(models.Model):
                 "UPDATE pos_layaway_line SET write_date = %s WHERE id IN %s",
                 (fields.Datetime.now(), tuple(lines.ids)),
             )
-            if self.env["stock.move"].sudo().search_count([
-                ("layaway_line_id", "in", lines.ids), ("state", "!=", "cancel"),
+            if self.env["stock.move"].search_count([
+                ("layaway_line_id", "in", lines.ids), ("state", "not in", ("done", "cancel")),
             ]):
                 raise UserError(_("La mercancía del apartado ya tiene una reserva."))
-            picking_model = self.with_company(session.company_id)
-            partner = layaway.partner_id
-            destination = (
-                picking_type.default_location_dest_id
-                or self.env["stock.warehouse"]._get_partner_locations()[0]
-            )
-            picking = picking_model.create({
-                **picking_model._prepare_picking_vals(partner, picking_type, source.id, destination.id),
-                "layaway_id": layaway.id,
-                "origin": layaway.folio,
-            })
-            self.env["stock.move"].with_company(session.company_id).create([{
-                "name": line.product_name,
-                "product_id": line.product_id.id,
-                "product_uom": line.product_id.uom_id.id,
-                "product_uom_qty": line.qty_pending,
-                "location_id": source.id,
-                "location_dest_id": destination.id,
-                "company_id": session.company_id.id,
-                "picking_id": picking.id,
-                "picking_type_id": picking_type.id,
-                "layaway_line_id": line.id,
-            } for line in lines])
+            picking = self._create_layaway_picking(layaway, lines, picking_type, source)
             picking.action_confirm()
             picking.action_assign()
             picking._require_stock_reserved()
             return picking
+
+    @api.model
+    def _create_layaway_picking(self, folio, lines, picking_type, source, destination=None, origins=None):
+        picking_model = self.with_company(picking_type.company_id)
+        destination = destination or (
+            picking_type.default_location_dest_id or self.env["stock.warehouse"]._get_partner_locations()[0]
+        )
+        picking = picking_model.create({
+            **picking_model._prepare_picking_vals(folio.partner_id, picking_type, source.id, destination.id),
+            "layaway_id": folio.id,
+            "origin": folio.folio,
+        })
+        picking.env["stock.move"].create([{
+            "name": line.product_name,
+            "product_id": line.product_id.id,
+            "product_uom": line.product_id.uom_id.id,
+            "product_uom_qty": line.qty_pending,
+            "location_id": source.id,
+            "location_dest_id": destination.id,
+            "company_id": picking_type.company_id.id,
+            "picking_id": picking.id,
+            "picking_type_id": picking_type.id,
+            "layaway_line_id": line.id,
+            "move_orig_ids": [(4, origins[line.id])] if origins else [],
+        } for line in lines])
+        return picking
 
     @api.model
     def _layaway_positive_lines(self, lines):
@@ -292,9 +297,15 @@ class StockMove(models.Model):
         if folios:
             if not layaway_test_database(self.env):
                 raise AccessError(_("La entrega de apartados solo está disponible para pruebas."))
-            for folio in folios:
-                folio._check_pickup_payment()
-            if not self.env.su or self.env.context.get("layaway_pickup_guard") is not _PICKUP_GUARD:
+            guard = self.env.context.get("layaway_pickup_guard")
+            relocation = guard is _RELOCATION_GUARD and all(
+                move.picking_type_id.code == "internal" and move.location_dest_id.usage == "internal"
+                for move in moves
+            )
+            if not relocation:
+                for folio in folios:
+                    folio._check_pickup_payment()
+            if not self.env.su or not (guard is _PICKUP_GUARD or relocation):
                 raise AccessError(_("Registra la recogida desde el apartado."))
         return super()._action_done(cancel_backorder=cancel_backorder)
 

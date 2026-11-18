@@ -28,6 +28,7 @@ class PosSession(models.Model):
     def _layaway_changeable_lines(self, folio):
         delivered = self.env["stock.move"].sudo().search([
             ("layaway_line_id", "in", folio.line_ids.ids), ("state", "=", "done"),
+            ("location_dest_id.usage", "=", "customer"),
         ]).layaway_line_id
         return folio.line_ids.filtered(
             lambda line: not line.qty_picked_up and line.warehouse_id.company_id in self.env.companies
@@ -109,7 +110,7 @@ class PosSession(models.Model):
         ).env
         removed = env["pos.layaway.line"].browse(quote["removed_ids"])
         moves = env["stock.move"].search([
-            ("layaway_line_id", "in", removed.ids), ("state", "!=", "cancel"),
+            ("layaway_line_id", "in", removed.ids), ("state", "not in", ("done", "cancel")),
         ])
         if len(moves) != len(removed) or moves.layaway_line_id != removed:
             # Recordset equality ignores ordering.

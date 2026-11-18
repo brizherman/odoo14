@@ -35,14 +35,21 @@ class PosSession(models.Model):
             ("result", "!=", False),
         ])
 
-    def _layaway_receipt(self, folio_id, reference, original=False, final_sale=False):
+    def _layaway_receipt(self, folio_id, reference, original=False, final_sale=False, pickup=False):
         operation = self._layaway_receipt_operations([
             ("layaway_id", "=", folio_id), ("reference", "=", reference),
         ])
         result = json.loads(operation.result) if operation else {}
         if final_sale and result.get("settlement"):
             result["ticket"] = operation._sale_ticket_values(result)
-        elif final_sale or not result.get("receipt"):
+        elif not final_sale and (operation.kind == "pickup" or pickup and result.get("pickup")):
+            result = result.get("pickup", result)
+            # Older pickup operations already saved the physical handover and receipt metadata.
+            result.setdefault("campaign_name", operation.layaway_id.campaign_name)
+            result.setdefault("contact_name", operation.layaway_id.contact_name)
+            result.setdefault("phone", operation.layaway_id.phone)
+            result["pickup_receipt"] = True
+        elif final_sale or pickup or not result.get("receipt"):
             raise AccessError(_("El comprobante original no está disponible."))
         return result, not (original and operation.session_id.id == self.id)
 
@@ -56,6 +63,12 @@ class PosSession(models.Model):
                 receipts.append({
                     "reference": operation.reference, "kind": "final_sale", "available": True,
                 })
+            if operation.kind == "pickup" or result.get("pickup"):
+                receipts.append({
+                    "reference": operation.reference, "kind": "pickup", "available": True,
+                })
+                if operation.kind == "pickup":
+                    continue
             if not receipt and (
                 operation.kind in ("authorize_transfer", "change_products")
                 or (operation.kind == "installment" and not result.get("amount_applied"))

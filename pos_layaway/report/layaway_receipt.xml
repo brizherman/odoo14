@@ -52,6 +52,9 @@
                 </dl>
 
                 <t t-if="ticket" t-call="pos_layaway.layaway_sale_details"/>
+                <t t-if="ticket and document.get('pickup')" t-call="pos_layaway.layaway_pickup_details">
+                    <t t-set="pickup" t-value="document['pickup']"/>
+                </t>
                 <section t-if="not ticket and not installment" class="layaway-merchandise">
                     <h3 t-if="opening">Mercancía del apartado</h3>
                     <h3 t-else="">Mercancía agregada</h3>
@@ -146,6 +149,79 @@
                 </section>
             </div>
         </t>
+    </template>
+
+    <template id="layaway_pickup_receipt">
+        <t t-call="web.html_container">
+            <div class="page container py-4">
+                <button type="button" class="btn btn-primary d-print-none"
+                        onclick="window.print()">Imprimir</button>
+                <p t-if="reprint" class="layaway-reprint font-weight-bold">Reimpresión</p>
+                <h2>Comprobante de recogida de apartado</h2>
+                <dl class="row">
+                    <dt class="col-4">Campaña</dt>
+                    <dd class="col-8" t-esc="pickup['campaign_name']"/>
+                    <dt class="col-4">Folio</dt>
+                    <dd class="col-8" t-esc="pickup['folio']"/>
+                    <dt class="col-4">Venta POS</dt>
+                    <dd class="col-8" t-esc="pickup['sale_name']"/>
+                    <dt class="col-4">Referencia de operación</dt>
+                    <dd class="col-8" t-esc="pickup['reference']"/>
+                    <dt class="col-4">Cliente</dt>
+                    <dd class="col-8" t-esc="pickup['contact_name']"/>
+                </dl>
+                <p t-if="pickup['pickup_state'] == 'done'">Liquidado · Recogida completa</p>
+                <p t-else="">Liquidado · Recogida parcial entre tiendas</p>
+                <t t-call="pos_layaway.layaway_pickup_details"/>
+            </div>
+        </t>
+    </template>
+
+    <template id="layaway_pickup_details">
+        <section class="layaway-pickup">
+            <h3>Recogida</h3>
+            <dl class="row">
+                <dt class="col-4">Receptor</dt>
+                <dd class="col-8"><span t-esc="pickup['recipient']['name']"/> · Identidad verificada
+                    <t t-if="pickup['recipient']['kind'] == 'authorized'">
+                        · Autorizado <span t-esc="pickup['recipient']['reference']"/>
+                    </t>
+                    <t t-else="">· Titular</t>
+                </dd>
+                <dt class="col-4">Tienda de recogida</dt>
+                <dd class="col-8" t-esc="pickup['warehouse']"/>
+                <dt class="col-4">Caja y sesión</dt>
+                <dd class="col-8"><span t-esc="pickup['register']"/> · <span t-esc="pickup['session']"/></dd>
+                <dt class="col-4">Cajero</dt>
+                <dd class="col-8" t-esc="pickup['cashier']"/>
+                <dt class="col-4">Fecha y hora</dt>
+                <dd class="col-8"><time t-esc="pickup['confirmed_at']"/> · <span t-esc="pickup['timezone']"/></dd>
+            </dl>
+            <h4>Mercancía entregada</h4>
+            <t t-call="pos_layaway.layaway_pickup_lines">
+                <t t-set="lines" t-value="pickup['delivered']"/>
+            </t>
+            <h4>Mercancía pendiente por tienda</h4>
+            <t t-if="pickup['pending']" t-call="pos_layaway.layaway_pickup_lines">
+                <t t-set="lines" t-value="pickup['pending']"/>
+            </t>
+            <p t-else="">Sin mercancía pendiente</p>
+        </section>
+    </template>
+
+    <template id="layaway_pickup_lines">
+        <table class="table table-sm">
+            <thead><tr>
+                <th scope="col">Tienda</th><th scope="col">Ubicación</th>
+                <th scope="col">Producto</th><th scope="col">Cantidad</th>
+            </tr></thead>
+            <tbody>
+                <tr t-foreach="lines" t-as="line">
+                    <td t-esc="line['store']"/><td t-esc="line['location']"/>
+                    <td t-esc="line['name']"/><td t-esc="'%g' % line['qty']"/>
+                </tr>
+            </tbody>
+        </table>
     </template>
 
     <template id="layaway_sale_details">

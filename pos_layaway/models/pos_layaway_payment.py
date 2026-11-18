@@ -307,7 +307,7 @@ class PosSession(models.Model):
         return self._register_layaway_payment(folio_id, reference, "installment", tenders, settle=True)
 
     def _register_layaway_payment(self, folio_id, reference, kind, tenders, require_transfer=False,
-                                 settle=False):
+                                 settle=False, pickup=None):
         """Register a synthetic mixed tender through the server history."""
         self._check_layaway_payment_test()
         session = self.sudo(False)
@@ -373,8 +373,17 @@ class PosSession(models.Model):
                 } for tender in transfers])
                 result["pending_transfers"] = pending.ids
             result.update(session._settle_layaway_if_paid(folio, operation, payments))
+            if pickup:
+                result["pickup"] = session._apply_layaway_pickup(operation, folio, pickup)
+                settlement = result.get("settlement")
+                if settlement:
+                    settlement["pickup_state"] = folio.pickup_state
+                    for snapshot, line in zip(settlement["lines"], folio.line_ids):
+                        snapshot["pending"] = line.qty_pending
             return folio, result
 
+        operation_kind = "settle_pickup" if pickup else "settle" if settle else kind
+        payload = {"tenders": tenders, "pickup": pickup} if pickup else tenders
         return self.env["pos.layaway.operation"].sudo()._confirm(
-            session, reference, "settle" if settle else kind, tenders, apply, folio, pass_operation=True,
+            session, reference, operation_kind, payload, apply, folio, pass_operation=True,
         )

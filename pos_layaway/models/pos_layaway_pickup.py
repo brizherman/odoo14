@@ -21,9 +21,9 @@ class PosSession(models.Model):
         warehouse = self.config_id.picking_type_id.warehouse_id
         return folio.line_ids.filtered(lambda line: line.warehouse_id == warehouse and line.qty_pending)
 
-    def _layaway_pickup_operations(self, folio, kind):
+    def _layaway_pickup_operations(self, folio, kinds):
         return self.env["pos.layaway.operation"].sudo().search([
-            ("layaway_id", "=", folio.id), ("kind", "=", kind), ("result", "!=", False),
+            ("layaway_id", "=", folio.id), ("kind", "in", kinds), ("result", "!=", False),
         ])
 
     def register_layaway_pickup_authorization(self, folio_id, reference, partner_id):
@@ -65,6 +65,21 @@ class PosSession(models.Model):
         session = self.sudo(False)
         session._check_layaway_pickup_test()
         folio = session._find_layaway(folio_id, require_open=False)
+        pickup = session._normalize_layaway_pickup(recipient, lines)
+        return session.env["pos.layaway.operation"].sudo()._confirm(
+            session, reference, "pickup", pickup,
+            lambda operation: (folio, session._apply_layaway_pickup(operation, folio, pickup)),
+            layaway=folio, pass_operation=True,
+        )
+
+    def settle_and_pickup_layaway(self, folio_id, reference, tenders, recipient, lines):
+        self._check_layaway_pickup_test()
+        pickup = self._normalize_layaway_pickup(recipient, lines)
+        return self._register_layaway_payment(
+            folio_id, reference, "installment", tenders, settle=True, pickup=pickup,
+        )
+
+    def _normalize_layaway_pickup(self, recipient, lines):
         if (
             not isinstance(recipient, dict) or recipient.get("identity_verified") is not True
             or recipient.get("kind") not in ("holder", "authorized")
@@ -77,6 +92,12 @@ class PosSession(models.Model):
             or (kind == "holder" and authorization is not None and authorization is not False)
         ):
             raise ValidationError(_("Selecciona una autorización registrada para el receptor."))
+        return {
+            "recipient": kind, "authorization": authorization or False,
+            "lines": self._normalize_layaway_block(lines),
+        }
+
+    def _normalize_layaway_block(self, lines):
         if not isinstance(lines, list) or not lines:
             raise ValidationError(_("Confirma las cantidades pendientes de la tienda."))
         quantities = {}
@@ -90,17 +111,8 @@ class PosSession(models.Model):
             ):
                 raise ValidationError(_("Las cantidades de recogida no son válidas."))
             quantities[line_id] = float(qty)
-        payload = {
-            "recipient": kind, "authorization": authorization or False,
-            "lines": sorted(quantities.items()),
-        }
-        return session.env["pos.layaway.operation"].sudo()._confirm(
-            session, reference, "pickup", payload,
-            lambda operation: session._apply_layaway_pickup(operation, folio, kind, authorization, quantities),
-            layaway=folio, pass_operation=True,
-        )
-
-    def _apply_layaway_pickup(self, operation, folio, kind, authorization, quantities):
+        return sorted(quantities.items())
+    def _apply_layaway_pickup(self, operation, folio, pickup):
         self._lock_layaway_stock_session()
         if self.rescue:
             raise UserError(_("La recogida requiere una sesión ordinaria."))
@@ -108,24 +120,54 @@ class PosSession(models.Model):
         if local_date(operation.create_date, folio.timezone) > folio.pickup_end:
             raise UserError(_("Terminó el plazo de recogida del apartado."))
         recipient = {"partner_id": folio.partner_id.id, "name": folio.contact_name}
+        kind = pickup["recipient"]
         if kind == "authorized":
             registration = self.env["pos.layaway.operation"].sudo().search([
-                ("reference", "=", authorization), ("kind", "=", "authorize_pickup"),
+                ("reference", "=", pickup["authorization"]), ("kind", "=", "authorize_pickup"),
                 ("layaway_id", "=", folio.id), ("result", "!=", False),
             ], limit=1)
             if not registration:
                 raise ValidationError(_("El receptor debe estar autorizado previamente en este apartado."))
             recipient = json.loads(registration.result)
-        picking_type = self.config_id.picking_type_id
-        source = picking_type.default_location_src_id
+        lines = self._validate_layaway_local_block(folio, pickup["lines"])
+        source = self.config_id.picking_type_id.default_location_src_id
+        moves = self._checked_layaway_block_moves(folio, lines, source)
+        pickings = moves.picking_id
+        delivered = [self._layaway_pickup_line(line) for line in lines]
+        for move_line in moves.move_line_ids:
+            move_line.qty_done = move_line.product_uom_qty
+        pickings.with_context(layaway_pickup_guard=_PICKUP_GUARD)._action_done()
+        if any(picking.state != "done" for picking in pickings):
+            raise LayawayStockError(_("No se pudo validar la salida completa del apartado."))
+        for line in lines:
+            line.qty_picked_up = line.qty
+
+        return {
+            "reference": operation.reference, "id": folio.id, "folio": folio.folio,
+            "sale_id": folio.sale_id.id, "sale_name": folio.sale_id.name,
+            "warehouse": operation.warehouse_id.display_name,
+            "campaign_name": folio.campaign_name, "contact_name": folio.contact_name,
+            "phone": folio.phone,
+            **operation._receipt_identification(folio, operation.create_date),
+            "recipient": dict(recipient, kind=kind, identity_verified=True),
+            "picking_ids": pickings.ids, "delivered": delivered,
+            "pickup_state": folio.pickup_state,
+            "pending": [self._layaway_pickup_line(line) for line in folio.line_ids if line.qty_pending],
+        }
+
+    def _validate_layaway_local_block(self, folio, quantities):
+        source = self.config_id.picking_type_id.default_location_src_id
         lines = self._layaway_pickup_block(folio)
-        if not lines or quantities != {line.id: line.qty_pending for line in lines}:
+        if not lines or dict(quantities) != {line.id: line.qty_pending for line in lines}:
             raise ValidationError(_("Confirma exactamente el bloque pendiente de esta tienda."))
         if source.usage != "internal" or source.company_id != self.company_id or any(
             line.location_id != source for line in lines
         ):
             raise UserError(_("La mercancía no está reservada en la ubicación de esta caja."))
 
+        return lines
+
+    def _checked_layaway_block_moves(self, folio, lines, source):
         stock_model = self.env["stock.move"].sudo().with_context(
             {}, allowed_company_ids=self.company_id.ids,
         )
@@ -139,25 +181,7 @@ class PosSession(models.Model):
         ) for move in moves):
             raise LayawayStockError(_("La demanda de inventario difiere del bloque pendiente."))
         self._check_layaway_pickup_quants(moves, source)
-        delivered = [self._layaway_pickup_line(line) for line in lines]
-        for move_line in moves.move_line_ids:
-            move_line.qty_done = move_line.product_uom_qty
-        pickings.with_context(layaway_pickup_guard=_PICKUP_GUARD)._action_done()
-        if any(picking.state != "done" for picking in pickings):
-            raise LayawayStockError(_("No se pudo validar la salida completa del apartado."))
-        for line in lines:
-            line.qty_picked_up = line.qty
-
-        return folio, {
-            "reference": operation.reference, "id": folio.id, "folio": folio.folio,
-            "sale_id": folio.sale_id.id, "sale_name": folio.sale_id.name,
-            "warehouse": operation.warehouse_id.display_name,
-            **operation._receipt_identification(folio, operation.create_date),
-            "recipient": dict(recipient, kind=kind, identity_verified=True),
-            "picking_ids": pickings.ids, "delivered": delivered,
-            "pickup_state": folio.pickup_state,
-            "pending": [self._layaway_pickup_line(line) for line in folio.line_ids if line.qty_pending],
-        }
+        return moves
 
     def _check_layaway_pickup_quants(self, moves, source):
         stock = moves.env["stock.quant"]
@@ -200,19 +224,34 @@ class PosSession(models.Model):
 
     def _layaway_pickup_detail(self, folio):
         block = self._layaway_pickup_block(folio)
+        source = self.config_id.picking_type_id.default_location_src_id
+        can_pickup = bool(
+            layaway_test_database(self.env) and not self.rescue and block
+            and source.usage == "internal" and source.company_id == self.company_id
+            and all(line.location_id == source for line in block)
+            and local_date(fields.Datetime.now(), folio.timezone) <= folio.pickup_end
+        )
         return {
-            "available": bool(
-                layaway_test_database(self.env) and not self.rescue and block and folio.sale_id
-                and folio.payment_state == "paid"
-                and local_date(fields.Datetime.now(), folio.timezone) <= folio.pickup_end
-            ),
+            "available": bool(can_pickup and folio.sale_id and folio.payment_state == "paid"),
+            "can_settle": can_pickup and folio.amount_due > 0,
             "lines": [self._layaway_pickup_line(line) for line in block],
+            "destinations": [{
+                "id": config.id, "name": config.picking_type_id.default_location_src_id.complete_name,
+            } for config in self._layaway_relocation_destinations(folio, block)] if can_pickup else [],
+            "relocations": [
+                json.loads(operation.result)
+                for operation in self._layaway_pickup_operations(folio, ("relocate_block",))
+            ],
             "authorizations": [
                 json.loads(operation.result)
-                for operation in self._layaway_pickup_operations(folio, "authorize_pickup")
+                for operation in self._layaway_pickup_operations(folio, ("authorize_pickup",))
             ],
             "history": [
-                json.loads(operation.result)
-                for operation in self._layaway_pickup_operations(folio, "pickup")
+                self._layaway_pickup_result(operation)
+                for operation in self._layaway_pickup_operations(folio, ("pickup", "settle_pickup"))
             ],
         }
+
+    def _layaway_pickup_result(self, operation):
+        result = json.loads(operation.result)
+        return result.get("pickup", result)

@@ -185,6 +185,16 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
             this.state.draft = { installment: true, folio, settle };
         }
 
+        startPickup(folio, settle = false) {
+            this.state.checkoutMessage = '';
+            this.state.draft = { installment: settle, folio, settle, pickup: true };
+        }
+
+        startRelocation(folio) {
+            this.state.checkoutMessage = '';
+            this.state.draft = { folio, relocate: true };
+        }
+
         cancelCheckout() {
             this.state.draft = null;
             this.state.checkoutMessage = '';
@@ -280,19 +290,38 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                 return;
             }
             if (!this.state.pendingConfirmation) {
-                const { quote, proposal, change, installment, folio, settle } = this.state.draft;
+                const { quote, proposal, change, installment, folio, settle, pickup, relocate } = this.state.draft;
                 const data = new FormData(event.currentTarget);
                 const reference = operationReference();
                 let pending;
-                if (installment) {
+                const recipient = pickup && {
+                    kind: data.get('recipient') === 'holder' ? 'holder' : 'authorized',
+                    authorization_reference: data.get('recipient') === 'holder' ? false : data.get('recipient'),
+                    identity_verified: data.get('identity_verified') === 'on',
+                };
+                if (relocate) {
+                    pending = {
+                        method: 'relocate_layaway_block',
+                        args: [folio.id, reference, Number(data.get('destination')), folio.pickup.lines],
+                    };
+                } else if (installment) {
                     const tenders = this.checkoutTenders(folio.installment_methods, data);
                     if (!tenders.length) {
                         this.state.checkoutMessage = this.env._t('Indica un importe para el abono.');
                         return;
                     }
                     pending = {
-                        method: settle ? 'settle_layaway' : 'register_layaway_installment',
+                        method: pickup ? 'settle_and_pickup_layaway'
+                            : settle ? 'settle_layaway' : 'register_layaway_installment',
                         args: [folio.id, reference, tenders],
+                    };
+                    if (pickup) {
+                        pending.args.push(recipient, folio.pickup.lines);
+                    }
+                } else if (pickup) {
+                    pending = {
+                        method: 'confirm_layaway_pickup',
+                        args: [folio.id, reference, recipient, folio.pickup.lines],
                     };
                 } else if (change) {
                     pending = {
@@ -319,8 +348,13 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                 const messages = {
                     confirm_layaway_change: this.env._t('Cambio autorizado'),
                     register_layaway_installment: this.env._t('Abono confirmado'),
+                    confirm_layaway_pickup: this.env._t('Recogida confirmada'),
+                    settle_and_pickup_layaway: this.env._t('Liquidación y recogida confirmadas'),
+                    relocate_layaway_block: this.env._t('Traslado registrado'),
                 };
-                const message = result.sale_adjustment ? this.env._t('Ajuste vinculado a la venta')
+                const pickupConfirmed = result.pickup || result.recipient;
+                const message = pickupConfirmed ? messages[pending.method]
+                    : result.sale_adjustment ? this.env._t('Ajuste vinculado a la venta')
                     : result.sale_id && !result.amount_due ? this.env._t('Apartado liquidado')
                     : messages[pending.method] || this.env._t('Reserva confirmada');
                 this.state.checkoutMessage = message + ' · ' + result.folio;
@@ -516,21 +550,26 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
         }
 
         showOriginalReceipts(result) {
-            this.state.originalReceipt = result.receipt || result.settlement ? {
+            const pickup = Boolean(result.pickup || result.recipient);
+            this.state.originalReceipt = result.receipt || result.settlement || pickup ? {
                 id: result.id,
                 reference: result.reference,
                 receipt: Boolean(result.receipt),
                 finalSale: Boolean(result.settlement),
+                pickup,
             } : null;
         }
 
-        receiptUrl(reference, original = false, finalSale = false) {
+        receiptUrl(reference, original = false, finalSale = false, pickup = false) {
             const query = new URLSearchParams();
             if (original) {
                 query.set('original', '1');
             }
             if (finalSale) {
                 query.set('final_sale', '1');
+            }
+            if (pickup) {
+                query.set('pickup', '1');
             }
             return '/pos/layaway/receipt/' + this.env.pos.pos_session.id + '/'
                 + this.state.detail.id + '/' + encodeURIComponent(reference)

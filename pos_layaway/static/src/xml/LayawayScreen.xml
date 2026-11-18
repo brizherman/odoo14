@@ -27,7 +27,8 @@
                         t-att-disabled="state.stale || state.checkoutBusy">Recuperar confirmación</button>
             </main>
             <main t-elif="state.draft" class="layaway-content layaway-checkout">
-                <t t-if="state.draft.installment" t-call="pos_layaway.LayawayInstallment"/>
+                <t t-if="state.draft.relocate" t-call="pos_layaway.LayawayRelocation"/>
+                <t t-elif="state.draft.installment || state.draft.pickup" t-call="pos_layaway.LayawayInstallment"/>
                 <t t-else="" t-call="pos_layaway.LayawayCheckout"/>
             </main>
             <main t-elif="!state.detail" class="layaway-content">
@@ -118,6 +119,10 @@
                            t-att-href="receiptUrl(state.originalReceipt.reference, true)"
                            target="_blank" rel="noopener"
                            t-on-click="() => openOriginalReceipt('receipt')">Imprimir comprobante</a>
+                        <a t-if="state.originalReceipt.pickup"
+                           t-att-href="receiptUrl(state.originalReceipt.reference, true, false, true)"
+                           target="_blank" rel="noopener"
+                           t-on-click="() => openOriginalReceipt('pickup')">Imprimir comprobante de recogida</a>
                     </t>
                 </div>
                 <h2 t-esc="folio.folio"/>
@@ -145,12 +150,22 @@
                             <span t-if="receipt.kind === 'open'">Apertura</span>
                             <span t-elif="receipt.kind === 'add_products'">Adición</span>
                             <span t-elif="receipt.kind === 'final_sale'">Ticket final de venta</span>
+                            <span t-elif="receipt.kind === 'pickup'">Recogida</span>
                             <span t-else="">Abono</span>
                             · <span t-esc="receipt.reference"/>
                             <a t-if="receipt.available &amp;&amp; !state.stale"
-                               t-att-href="receiptUrl(receipt.reference, false, receipt.kind === 'final_sale')" target="_blank"
+                               t-att-href="receiptUrl(receipt.reference, false, receipt.kind === 'final_sale', receipt.kind === 'pickup')" target="_blank"
                                rel="noopener">Reimprimir</a>
                             <span t-if="!receipt.available"> · Original no disponible</span>
+                        </li>
+                    </ul>
+                </details>
+                <details t-if="folio.pickup.relocations.length" class="layaway-receipts">
+                    <summary>Traslados de mercancía</summary>
+                    <ul>
+                        <li t-foreach="folio.pickup.relocations" t-as="move" t-key="move.reference">
+                            <strong t-esc="move.transfer_name"/> · <span t-esc="move.source"/>
+                            → <span t-esc="move.destination"/> · <time t-esc="move.confirmed_at"/>
                         </li>
                     </ul>
                 </details>
@@ -295,8 +310,15 @@
                             t-on-click="() => startInstallment(folio)">Registrar abono</button>
                     <button type="button" t-att-disabled="state.stale || state.loading || state.transferBusy || !folio.installment_methods.length"
                             t-on-click="() => startInstallment(folio, true)">Liquidar</button>
-                    <button type="button" disabled="disabled">Registrar recogida</button>
-                    <button type="button" disabled="disabled">Liquidar y entregar</button>
+                    <button type="button"
+                            t-att-disabled="state.stale || state.loading || state.transferBusy || !folio.pickup.available"
+                            t-on-click="() => startPickup(folio)">Registrar recogida</button>
+                    <button type="button"
+                            t-att-disabled="state.stale || state.loading || state.transferBusy || !folio.pickup.can_settle || !folio.installment_methods.length"
+                            t-on-click="() => startPickup(folio, true)">Liquidar y entregar</button>
+                    <button t-if="folio.pickup.destinations.length" type="button"
+                            t-att-disabled="state.stale || state.loading || state.transferBusy"
+                            t-on-click="() => startRelocation(folio)">Registrar traslado</button>
                 </div>
                 <p t-if="!state.stale" class="layaway-status">Operaciones pendientes de habilitación.</p>
             </main>
@@ -333,7 +355,9 @@
     <t t-name="pos_layaway.LayawayInstallment" owl="1">
         <t t-set="folio" t-value="state.detail"/>
         <button type="button" t-on-click="cancelCheckout" t-att-disabled="state.checkoutBusy">Volver al folio</button>
-        <h2><t t-if="state.draft.settle">Liquidar apartado de prueba</t>
+        <h2><t t-if="state.draft.pickup &amp;&amp; state.draft.settle">Liquidar y entregar de prueba</t>
+            <t t-elif="state.draft.pickup">Registrar recogida de prueba</t>
+            <t t-elif="state.draft.settle">Liquidar apartado de prueba</t>
             <t t-else="">Registrar abono de prueba</t> · <span t-esc="folio.folio"/></h2>
         <p t-esc="folio.customer"/>
         <dl class="layaway-totals">
@@ -344,16 +368,64 @@
         </dl>
         <t t-call="pos_layaway.LayawayStockTable"/>
         <form t-on-submit.prevent="confirmCheckout">
-            <fieldset t-att-disabled="state.stale || state.checkoutBusy || state.loading || !folio.installment_methods.length">
-                <div class="layaway-transfer-form">
+            <fieldset t-att-disabled="state.stale || state.checkoutBusy || state.loading">
+                <div t-if="state.draft.installment" class="layaway-transfer-form">
                     <t t-call="pos_layaway.LayawayTenderFields">
                         <t t-set="methods" t-value="state.draft.folio.installment_methods"/>
                     </t>
                 </div>
+                <t t-if="state.draft.pickup" t-call="pos_layaway.LayawayPickupFields"/>
                 <button type="submit" class="layaway-submit">
-                    <t t-if="state.draft.settle">Confirmar liquidación de prueba</t>
+                    <t t-if="state.draft.pickup &amp;&amp; state.draft.settle">Confirmar liquidación y recogida</t>
+                    <t t-elif="state.draft.pickup">Confirmar recogida</t>
+                    <t t-elif="state.draft.settle">Confirmar liquidación de prueba</t>
                     <t t-else="">Confirmar abono de prueba</t>
                 </button>
+            </fieldset>
+        </form>
+    </t>
+
+    <t t-name="pos_layaway.LayawayPickupFields" owl="1">
+        <t t-set="pickup" t-value="state.draft.folio.pickup"/>
+        <h3>Bloque que se entrega en esta tienda</h3>
+        <t t-call="pos_layaway.LayawayLocalBlock"/>
+        <label>Receptor
+            <select name="recipient" required="required">
+                <option value="">Selecciona quién recibe</option>
+                <option value="holder">Titular · <t t-esc="state.draft.folio.customer"/></option>
+                <option t-foreach="pickup.authorizations" t-as="person" t-key="person.reference"
+                        t-att-value="person.reference">Autorizado · <t t-esc="person.name"/></option>
+            </select>
+        </label>
+        <label><input type="checkbox" name="identity_verified" required="required"/>
+            Verifiqué la identidad de la persona que recibe
+        </label>
+    </t>
+
+    <t t-name="pos_layaway.LayawayLocalBlock" owl="1">
+        <ul>
+            <li t-foreach="pickup.lines" t-as="line" t-key="line.id">
+                <span t-esc="line.qty"/> × <span t-esc="line.name"/> · <span t-esc="line.location"/>
+            </li>
+        </ul>
+    </t>
+
+    <t t-name="pos_layaway.LayawayRelocation" owl="1">
+        <t t-set="pickup" t-value="state.draft.folio.pickup"/>
+        <button type="button" t-on-click="cancelCheckout" t-att-disabled="state.checkoutBusy">Volver al folio</button>
+        <h2>Registrar traslado de prueba · <span t-esc="state.draft.folio.folio"/></h2>
+        <h3>Bloque reservado en esta tienda</h3>
+        <t t-call="pos_layaway.LayawayLocalBlock"/>
+        <form t-on-submit.prevent="confirmCheckout">
+            <fieldset t-att-disabled="state.stale || state.checkoutBusy || state.loading">
+                <label>Ubicación de destino
+                    <select name="destination" required="required">
+                        <option value="">Selecciona la ubicación de recogida</option>
+                        <option t-foreach="pickup.destinations" t-as="destination" t-key="destination.id"
+                                t-att-value="destination.id" t-esc="destination.name"/>
+                    </select>
+                </label>
+                <button type="submit" class="layaway-submit">Confirmar traslado físico</button>
             </fieldset>
         </form>
     </t>

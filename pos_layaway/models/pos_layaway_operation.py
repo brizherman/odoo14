@@ -16,6 +16,7 @@ class PosLayawayOperation(models.Model):
 
     _receipt_kinds = (
         "open", "add_products", "installment", "settle", "authorize_transfer", "change_products",
+        "pickup", "settle_pickup",
     )
 
     reference = fields.Char(required=True)
