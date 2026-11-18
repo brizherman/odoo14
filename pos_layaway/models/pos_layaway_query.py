@@ -87,9 +87,11 @@ class PosSession(models.Model):
                 })
                 if operation.kind == "pickup":
                     continue
-            if not receipt and (
-                operation.kind in ("authorize_transfer", "change_products")
-                or (operation.kind == "installment" and not result.get("amount_applied"))
+            # Legacy settlements can have a sale or pickup snapshot without a
+            # separate payment receipt.
+            if not receipt and not (
+                operation.kind in ("open", "add_products")
+                or (operation.kind == "installment" and result.get("amount_applied"))
             ):
                 continue
             receipts.append({

@@ -2501,6 +2501,24 @@ class TestPosLayawayCampaign(SavepointCase):
             self.assertEqual(pickup_ticket["sale_id"], second["sale_id"])
             self.assertEqual(folio.payment_ids.mapped("amount"), [2000, 1000, 3000])
 
+            # Older combined operations may only have the sale and pickup snapshots.
+            legacy_ref = str(uuid4())
+            legacy = dict(first, reference=legacy_ref, pickup=dict(first["pickup"], reference=legacy_ref))
+            legacy.pop("receipt")
+            self.env["pos.layaway.operation"].sudo()._confirm(
+                a, legacy_ref, "settle_pickup", [], lambda: (folio, legacy),
+            )
+            self.assertEqual(
+                [row for row in b.get_layaway_detail(folio.id)["receipts"] if row["reference"] == legacy_ref],
+                [{"reference": legacy_ref, "kind": kind, "available": True} for kind in ("final_sale", "pickup")],
+            )
+            self.assertEqual(b._layaway_receipt(folio.id, legacy_ref, final_sale=True), (dict(
+                legacy, ticket=sale_ticket["ticket"],
+            ), True))
+            self.assertEqual(b._layaway_receipt(folio.id, legacy_ref, pickup=True), (
+                dict(legacy["pickup"], pickup_receipt=True), True,
+            ))
+
     def test_relocation_moves_the_reserved_lot_before_pickup_in_another_location(self):
         campaign, partner, product = self._settlement_fixture()
         source = self.config_a.picking_type_id.default_location_src_id
