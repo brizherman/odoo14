@@ -1,0 +1,7 @@
+.pos .pos-customer-data-popup { width: 560px; max-width: 95vw; }
+.pos .pos-customer-data-popup .customer-data-body { padding: 0 24px 16px; max-height: 65vh; overflow-y: auto; text-align: left; }
+.pos .pos-customer-data-popup .customer-data-field { display: block; margin: 12px 0; }
+.pos .pos-customer-data-popup input, .pos .pos-customer-data-popup select { display: block; box-sizing: border-box; width: 100%; min-height: 44px; margin: 5px 0; padding: 8px; font-size: 18px; }
+.pos .pos-customer-data-popup small { display: block; font-size: 14px; }
+.pos .pos-customer-data-popup .customer-data-error { color: #a32020; }
+.pos .pos-customer-data-popup button:disabled { opacity: .5; cursor: wait; }

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <template id="customer_data_assets" inherit_id="point_of_sale.assets">
+        <xpath expr="." position="inside">
+            <script type="text/javascript" src="/pos_customer_data_validation/static/src/js/CustomerDataPopup.js"/>
+            <script type="text/javascript" src="/pos_customer_data_validation/static/src/js/PaymentScreen.js"/>
+            <link rel="stylesheet" href="/pos_customer_data_validation/static/src/css/customer_data_popup.css"/>
+        </xpath>
+    </template>
+    <template id="customer_data_assets_tests" inherit_id="point_of_sale.assets_tests">
+        <xpath expr="." position="inside">
+            <script type="text/javascript" src="/pos_customer_data_validation/static/tests/tours/customer_data_validation.js"/>
+        </xpath>
+    </template>
+</odoo>

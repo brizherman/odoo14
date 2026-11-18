@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="pos_customer_data_validation.PaymentScreen"
+       t-inherit="point_of_sale.PaymentScreen" t-inherit-mode="extension" owl="1">
+        <xpath expr="//div[@t-on-click='validateOrder(false)']" position="attributes">
+            <attribute name="t-on-click">lockedValidateOrder(false)</attribute>
+        </xpath>
+        <xpath expr="//button[@t-on-click='validateOrder(false)']" position="attributes">
+            <attribute name="t-on-click">lockedValidateOrder(false)</attribute>
+        </xpath>
+    </t>
+</templates>

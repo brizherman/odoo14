@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="pos_customer_data_validation.CustomerDataPopup" owl="1">
+        <div role="dialog" aria-label="Revisar datos del cliente" class="modal-dialog">
+            <div class="popup pos-customer-data-popup">
+                <header class="title">Revisar datos del cliente</header>
+                <div class="customer-data-body">
+                    <p>Revisa estos datos con el cliente. Si alguno cambió, actualízalo antes de guardar.</p>
+                    <p t-if="state.loading">Cargando datos del cliente…</p>
+                    <p t-if="state.error" class="customer-data-error" role="alert" t-esc="state.error"/>
+                    <t t-if="data">
+                        <t t-foreach="['name', 'mobile']" t-as="field" t-key="field">
+                            <label class="customer-data-field">
+                                <span t-if="field === 'name'">Nombre</span>
+                                <span t-else="">WhatsApp</span>
+                                <input t-att-name="field" t-att-type="field === 'mobile' ? 'tel' : 'text'"
+                                       t-att-value="state.values[field]" t-on-input="change" t-att-disabled="state.saving"/>
+                                <small>Última actualización: <t t-esc="updatedAt(field)"/></small>
+                                <small t-if="state.errors[field]" class="customer-data-error" t-esc="state.errors[field]"/>
+                            </label>
+                        </t>
+                        <label class="customer-data-field">
+                            <span>Tipo de Cliente</span>
+                            <select name="customer_type" t-on-change="change" t-att-disabled="state.saving">
+                                <option value="" t-att-selected="!state.values.customer_type">Selecciona un tipo</option>
+                                <t t-foreach="data.customer_types" t-as="type" t-key="type[0]">
+                                    <option t-att-value="type[0]" t-att-selected="state.values.customer_type === type[0]" t-esc="type[1]"/>
+                                </t>
+                            </select>
+                            <small>Última actualización: <t t-esc="updatedAt('customer_type')"/></small>
+                            <small t-if="state.errors.customer_type" class="customer-data-error" t-esc="state.errors.customer_type"/>
+                        </label>
+                        <label class="customer-data-field">
+                            <span>Tarifa</span>
+                            <select name="property_product_pricelist" t-on-change="change" t-att-disabled="state.saving">
+                                <option value="" t-att-selected="!state.values.property_product_pricelist">Selecciona una tarifa</option>
+                                <t t-foreach="data.pricelists" t-as="price" t-key="price.id">
+                                    <option t-att-value="price.id" t-att-selected="state.values.property_product_pricelist === ('' + price.id)" t-esc="price.name"/>
+                                </t>
+                            </select>
+                            <small>Última actualización: <t t-esc="updatedAt('property_product_pricelist')"/></small>
+                            <small t-if="state.errors.property_product_pricelist" class="customer-data-error" t-esc="state.errors.property_product_pricelist"/>
+                        </label>
+                    </t>
+                </div>
+                <p t-if="state.saving">Espera a que termine el guardado.</p>
+                <div class="footer">
+                    <button class="button confirm" t-on-click="confirm" t-att-disabled="state.loading || state.saving || !data">
+                        <t t-if="state.saving">Guardando…</t><t t-else="">Guardar</t>
+                    </button>
+                    <button class="button cancel" t-on-click="cancel" t-att-disabled="state.saving">Cancelar</button>
+                </div>
+            </div>
+        </div>
+    </t>
+</templates>
