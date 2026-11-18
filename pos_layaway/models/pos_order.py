@@ -12,9 +12,13 @@ _CREDIT_PURCHASE = object()
 class PosOrder(models.Model):
     _inherit = "pos.order"
 
-    layaway_ids = fields.One2many("pos.layaway", "sale_id", string="Apartado", readonly=True)
+    layaway_ids = fields.One2many(
+        "pos.layaway", "sale_id", string="Apartado", readonly=True,
+        groups="pos_layaway.group_layaway_campaign_manager",
+    )
     layaway_credit_ids = fields.One2many(
         "pos.layaway.credit", "order_id", string="Saldo de apartado aplicado", readonly=True,
+        groups="point_of_sale.group_pos_manager",
     )
     layaway_credit_amount = fields.Monetary(
         compute="_compute_layaway_credit_amount", store=True, readonly=True,
@@ -182,6 +186,8 @@ class PosOrder(models.Model):
         fields_protected = {"layaway_ids", "layaway_application_move_ids", "layaway_credit_ids", "layaway_credit_amount"}
         if not self.env.su and fields_protected.intersection(vals):
             raise AccessError(_("El vínculo de venta de apartado lo asigna el servidor."))
+        if vals.get("state") in ("draft", "cancel"):
+            self._check_layaway_order_cancellation()
         if self.sudo().layaway_application_move_ids and (
             {"lines", "payment_ids", "partner_id", "session_id", "company_id", "account_move",
              "fiscal_position_id", "pricelist_id", "amount_total", "amount_paid", "amount_tax",
@@ -191,6 +197,22 @@ class PosOrder(models.Model):
         ):
             raise UserError(_("La venta final solo admite operaciones vinculadas al apartado."))
         return super().write(vals)
+
+    def _check_layaway_order_cancellation(self):
+        orders = self.sudo()
+        if orders.layaway_ids or orders.layaway_credit_ids:
+            raise UserError(_("La cancelación voluntaria no está permitida para una venta vinculada a un apartado."))
+
+    def unlink(self):
+        self._check_layaway_order_cancellation()
+        return super().unlink()
+
+    def _check_payment_change_allowed(self):
+        """Extend the optional pos_payment_change hook."""
+        orders = self.sudo()
+        if orders.layaway_ids or orders.layaway_credit_ids:
+            raise UserError(_("Usa la corrección de cobros del apartado para conservar el registro original."))
+        return super()._check_payment_change_allowed()
 
     def refund(self):
         if self.sudo().layaway_ids or self.sudo().layaway_credit_ids:

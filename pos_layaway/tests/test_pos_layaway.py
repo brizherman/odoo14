@@ -1732,6 +1732,34 @@ class TestPosLayawayCampaign(SavepointCase):
             self.assertEqual((picking.state, picking.move_lines.reserved_availability), ("assigned", 2))
             self.assertEqual(picking.move_line_ids.qty_done, 0)
 
+    def test_final_sale_cancellation_and_payment_change_preserve_original(self):
+        campaign, partner, product = self._settlement_fixture()
+        cashier = self.session_a.with_user(self.cashier_a)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            _, opening = self._checkout_args(cashier, campaign, product, 2, partner)
+            result = cashier.confirm_layaway(*opening, [{"method_id": self.cash_a.id, "amount": 4000}])
+        folio = self.env["pos.layaway"].browse(result["id"])
+        order = folio.sale_id.with_user(self.supervisor)
+        before = self._checkout_state(folio)
+        original = order.payment_ids
+        for user in self.cashier_a | self.supervisor:
+            as_user = order.with_user(user)
+            view = as_user.fields_view_get(self.env.ref("point_of_sale.view_pos_pos_form").id)
+            self.assertNotIn("layaway_ids", view["fields"])
+            self.assertEqual(as_user.read(list(view["fields"]))[0]["state"], "paid")
+        with self.assertRaisesRegex(UserError, "cancelación voluntaria"):
+            order.action_pos_order_cancel()
+        with self.assertRaisesRegex(UserError, "cancelación voluntaria"):
+            order.write({"state": "draft"})
+        with self.assertRaisesRegex(UserError, "cancelación voluntaria"):
+            order.unlink()
+        if hasattr(order, "change_payment"):
+            with self.assertRaisesRegex(UserError, "corrección de cobros"):
+                order.change_payment([{"payment_method_id": self.card_a.id, "amount": 4000}])
+        self.assertEqual(order.state, "paid")
+        self.assertEqual(order.payment_ids, original)
+        self.assertEqual(self._checkout_state(folio), before)
+
     def test_settlement_by_addition_and_transfer_authorization(self):
         campaign, partner, product = self._settlement_fixture()
         a = self.session_a.with_user(self.cashier_a)
