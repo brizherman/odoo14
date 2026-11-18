@@ -108,6 +108,9 @@
                     <button type="button" t-on-click="backToSearch"
                             t-att-disabled="state.transferBusy">Volver a la búsqueda</button>
                     <a t-if="!state.stale" t-att-href="labelUrl" target="_blank" rel="noopener">Imprimir etiqueta</a>
+                    <a t-if="!state.stale &amp;&amp; state.originalReceipt &amp;&amp; state.originalReceipt.id === folio.id"
+                       t-att-href="receiptUrl(state.originalReceipt.reference, true)" target="_blank" rel="noopener"
+                       t-on-click="openOriginalReceipt">Imprimir comprobante</a>
                 </div>
                 <h2 t-esc="folio.folio"/>
                 <p><strong t-esc="folio.customer"/> · <span t-esc="folio.phone"/></p>
@@ -132,6 +135,20 @@
                         </tr>
                     </tbody>
                 </table>
+                <details t-if="folio.receipts.length" class="layaway-receipts">
+                    <summary>Comprobantes de apertura y adición</summary>
+                    <ul>
+                        <li t-foreach="folio.receipts" t-as="receipt" t-key="receipt.reference">
+                            <span t-if="receipt.kind === 'open'">Apertura</span>
+                            <span t-else="">Adición</span>
+                            · <span t-esc="receipt.reference"/>
+                            <a t-if="receipt.available &amp;&amp; !state.stale"
+                               t-att-href="receiptUrl(receipt.reference)" target="_blank"
+                               rel="noopener">Reimprimir</a>
+                            <span t-if="!receipt.available"> · Original no disponible</span>
+                        </li>
+                    </ul>
+                </details>
                 <t t-set="review" t-value="folio.transfer_review"/>
                 <section t-if="review &amp;&amp; (review.methods &amp;&amp; review.methods.length || review.transfers &amp;&amp; review.transfers.length)"
                          class="layaway-transfers">

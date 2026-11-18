@@ -1,3 +1,4 @@
+import json
 import re
 
 from odoo import _, fields, models
@@ -25,10 +26,32 @@ class PosSession(models.Model):
             raise AccessError(_("El apartado no está disponible en esta caja."))
         return folio
 
+    def _layaway_receipt_operations(self, domain):
+        self._check_layaway_session()
+        operations = self.env["pos.layaway.operation"].sudo()
+        return operations.search(domain + [
+            ("layaway_id.participant_config_ids", "in", self.config_id.ids),
+            ("kind", "in", operations._receipt_kinds),
+            ("result", "!=", False),
+        ])
+
+    def _layaway_receipt(self, folio_id, reference, original=False):
+        operation = self._layaway_receipt_operations([
+            ("layaway_id", "=", folio_id), ("reference", "=", reference),
+        ])
+        result = json.loads(operation.result) if operation else {}
+        if not result.get("receipt"):
+            raise AccessError(_("El comprobante original no está disponible."))
+        return result, not (original and operation.session_id.id == self.id)
+
     def get_layaway_detail(self, record_id):
         folio = self._find_layaway(record_id)
         return {
             **folio._pos_layaway_values(detail=True),
+            "receipts": [{
+                "reference": operation.reference, "kind": operation.kind,
+                "available": bool(json.loads(operation.result).get("receipt")),
+            } for operation in self._layaway_receipt_operations([("layaway_id", "=", folio.id)])],
             "campaign_id": folio.campaign_id.id,
             "can_add_products": (
                 layaway_test_database(self.env) and not folio.sale_id

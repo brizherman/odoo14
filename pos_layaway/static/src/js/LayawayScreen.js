@@ -28,6 +28,7 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                 stale: !navigator.onLine, loaded: false, loading: false, hasMore: false,
                 transferBusy: false, transferMessage: '', transferRetry: false,
                 canOpen: false, draft: null, checkoutBusy: false, checkoutMessage: '',
+                originalReceipt: null,
                 pendingConfirmation: JSON.parse(sessionStorage.getItem(this.confirmationKey)),
                 filters: { query: '', campaign: '', store: '', from: '', to: '',
                     payment_state: '', pickup_state: '', expiry: '' },
@@ -123,6 +124,7 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
             this.requestNumber++;
             this.state.loading = false;
             this.state.detail = null;
+            this.state.originalReceipt = null;
             this.state.transferMessage = '';
             if (!this.state.stale) {
                 this.loadPage(0);
@@ -288,6 +290,8 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
             }
             if (result) {
                 this.state.draft = null;
+                this.state.originalReceipt = result.receipt
+                    ? { id: result.id, reference: result.reference } : null;
                 const message = change ? this.env._t('Cambio autorizado') : this.env._t('Reserva confirmada');
                 this.state.checkoutMessage = message + ' · ' + result.folio;
                 await this.openDetail(result.id);
@@ -424,6 +428,21 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
 
         get labelUrl() {
             return '/pos/layaway/label/' + this.env.pos.pos_session.id + '/' + this.state.detail.id;
+        }
+
+        receiptUrl(reference, original = false) {
+            return '/pos/layaway/receipt/' + this.env.pos.pos_session.id + '/'
+                + this.state.detail.id + '/' + encodeURIComponent(reference)
+                + (original ? '?original=1' : '');
+        }
+
+        openOriginalReceipt() {
+            const receipt = this.state.originalReceipt;
+            window.setTimeout(() => {
+                if (this.state.originalReceipt === receipt) {
+                    this.state.originalReceipt = null;
+                }
+            }, 0);
         }
     }
 

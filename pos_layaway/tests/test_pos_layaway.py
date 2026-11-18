@@ -745,6 +745,87 @@ class TestPosLayawayCampaign(SavepointCase):
                 cashier_b.confirm_layaway(open_other[0], *addition[1:], [])
             self.assertEqual((self._checkout_state(first), self._checkout_state(second)), before)
 
+    def test_receipts_preserve_confirmed_opening_and_additions(self):
+        campaign, partner, product = self._checkout_fixture()
+        cashier_a = self.session_a.with_user(self.cashier_a)
+        cashier_b = self.session_b.with_user(self.cashier_b)
+        tax = self.env["account.tax"].with_company(self.company_a).create({
+            "name": "IVA sintético 16%", "amount": 16, "price_include": True,
+            "company_id": self.company_a.id,
+        })
+        product.taxes_id = tax
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            _, opening = self._checkout_args(cashier_a, campaign, product, 2, partner)
+            tenders = [
+                {"method_id": self.cash_a.id, "amount": 1200, "amount_tendered": 1300},
+                {"method_id": self.card_a.id, "amount": 800},
+            ]
+            paid = cashier_a.confirm_layaway(*opening, tenders)
+            _, other_opening = self._checkout_args(cashier_a, campaign, product, 2, partner)
+            covered = cashier_a.confirm_layaway(
+                *other_opening, [{"method_id": self.cash_a.id, "amount": 3000}],
+            )
+        folios = self.env["pos.layaway"].browse([paid["id"], covered["id"]])
+        original = paid["receipt"]
+        self.assertEqual(original["cashier"], self.cashier_a.name)
+        self.assertEqual(original["register"], self.config_a.name)
+        self.assertEqual(original["confirmed_at"], "2026-11-18 12:00:00-08:00")
+        self.assertEqual(paid["quote"]["lines"][0]["amount_tax"], 551.72)
+        self.assertEqual([(p["method_name"], p["amount"]) for p in paid["payments"]],
+                         [("Efectivo", 1200), ("Tarjeta", 800)])
+
+        campaign.write({"name": "Campaña editada", "pickup_end": "2026-12-16"})
+        campaign.action_archive()
+        partner.name = "Cliente editado"
+        product.write({"name": "Mercancía renombrada", "lst_price": 1000})
+        self.cashier_a.name = "Caja A editada"
+        added = []
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 1, 20)):
+            for folio, amount in zip(folios, (1000, 0)):
+                _, addition = self._checkout_args(cashier_b, campaign, product, 2, folio=folio)
+                added.append(cashier_b.confirm_layaway(
+                    *addition, [{"method_id": self.cash_b.id, "amount": amount}] if amount else [],
+                ))
+        self.assertEqual([item["amount_applied"] for item in added], [1000, 0])
+        self.assertEqual([item["amount_due"] for item in added], [3000, 3000])
+        self.assertEqual(added[1]["payments"], [])
+        self.assertEqual(added[0]["quote"]["lines"][0]["price_unit"], 1000)
+        before = [self._checkout_state(folio) for folio in folios]
+        self.assertEqual(cashier_b.confirm_layaway(*opening, tenders), paid)
+        self.assertEqual(cashier_a._layaway_receipt(paid["id"], paid["reference"], True), (paid, False))
+        self.assertEqual(cashier_b._layaway_receipt(paid["id"], paid["reference"], True), (paid, True))
+        for folio, addition in zip(folios, added):
+            self.assertEqual(cashier_a._layaway_receipt(folio.id, addition["reference"]), (addition, True))
+            self.assertEqual(addition["quote"]["pickup_end"], "2026-12-15")
+            self.assertEqual(addition["quote"]["contact_name"], "Beneficiario de apertura")
+        with self.assertRaises(AccessError):
+            self.session_other.with_user(self.cashier_a)._layaway_receipt(paid["id"], paid["reference"])
+        with self.assertRaises(AccessError):
+            cashier_a._layaway_receipt(covered["id"], paid["reference"])
+        self.assertEqual(
+            cashier_b.get_layaway_detail(paid["id"])["receipts"],
+            [{"reference": result["reference"], "kind": result["receipt"]["kind"], "available": True}
+             for result in (paid, added[0])],
+        )
+        self.assertEqual([self._checkout_state(folio) for folio in folios], before)
+        self.assertFalse(folios.mapped("sale_id"))
+
+    def test_receipt_history_handles_operations_before_printing_was_available(self):
+        campaign = self.campaigns.create(self.values)
+        campaign.action_activate()
+        folio = self._make_folio(campaign)
+        session = self.session_a.with_user(self.cashier_a)
+        reference = str(uuid4())
+        legacy_result = {"id": folio.id, "folio": folio.folio, "reference": reference}
+        operations = self.env["pos.layaway.operation"].sudo()
+        operations._confirm(session, reference, "open", [], lambda: (folio, legacy_result))
+        self.assertEqual(session.get_layaway_detail(folio.id)["receipts"], [
+            {"reference": reference, "kind": "open", "available": False},
+        ])
+        with self.assertRaisesRegex(AccessError, "comprobante original"):
+            session._layaway_receipt(folio.id, reference)
+        self.assertEqual(operations._confirm(session, reference, "open", [], self.fail), legacy_result)
+
     def test_checkout_rejects_stale_quote_and_non_test_database(self):
         campaign, partner, product = self._checkout_fixture()
         cashier_a = self.session_a.with_user(self.cashier_a)

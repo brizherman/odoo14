@@ -113,6 +113,7 @@ class PosSession(models.Model):
             "payments": payments.read([
                 "method_id", "method_name", "amount", "amount_tendered", "amount_change",
             ], load="_classic_write"),
+            "receipt": operation._receipt_snapshot(folio),
         }
 
     def _quote_layaway(self, lines, campaign_id, partner_id, phone, layaway_id, now):

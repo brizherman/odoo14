@@ -2,6 +2,8 @@ import hashlib
 import json
 import uuid
 
+import pytz
+
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, ValidationError
 
@@ -11,6 +13,8 @@ class PosLayawayOperation(models.Model):
     _description = "Operación confirmada de apartado POS"
     _order = "create_date, id"
     _rec_name = "reference"
+
+    _receipt_kinds = ("open", "add_products")
 
     reference = fields.Char(required=True)
     kind = fields.Char(required=True)
@@ -93,6 +97,30 @@ class PosLayawayOperation(models.Model):
             ):
                 raise ValidationError(_("La referencia corresponde a otra operación."))
             return json.loads(operation.result)
+
+    def _receipt_snapshot(self, folio):
+        self.ensure_one()
+        confirmed_at = pytz.UTC.localize(self.create_date).astimezone(pytz.timezone(folio.timezone))
+        return {
+            "kind": self.kind,
+            "cashier": self.user_id.name,
+            "register": self.session_id.config_id.name,
+            "session": self.session_id.name,
+            "confirmed_at": confirmed_at.isoformat(sep=" ", timespec="seconds"),
+            "timezone": folio.timezone,
+            "currency": folio.currency_id.name,
+            "decimal_places": folio.currency_id.decimal_places,
+            "conditions": [
+                _("Los plazos son inclusivos en la zona horaria indicada."),
+                _("La mercancía queda reservada en la tienda indicada. "
+                  "La recogida requiere liquidar todo el apartado."),
+                _("Las adiciones antes de liquidar respetan el plazo original "
+                  "y la cobertura pactada sobre el total vigente."),
+                _("La cancelación voluntaria no está permitida. "
+                  "Los cambios de mercancía requieren autorización."),
+                _("La recogida fuera de plazo requiere autorización y reserva disponible."),
+            ],
+        }
 
     def write(self, vals):
         raise ValidationError(_("La operación confirmada conserva su resultado original."))

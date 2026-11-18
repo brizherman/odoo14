@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="layaway_receipt">
+        <t t-call="web.html_container">
+            <t t-set="quote" t-value="document['quote']"/>
+            <t t-set="receipt" t-value="document['receipt']"/>
+            <t t-set="opening" t-value="receipt['kind'] == 'open'"/>
+            <div class="page container pt-3 pb-3">
+                <button type="button" class="btn btn-secondary float-right d-print-none"
+                        onclick="window.print()">Imprimir</button>
+                <p t-if="reprint" class="layaway-reprint font-weight-bold">Reimpresión</p>
+                <h2 t-if="opening">Comprobante de apartado y anticipo</h2>
+                <h2 t-else="">Constancia de adición de mercancía</h2>
+                <p>Mercancía reservada · Recogida pendiente</p>
+                <dl class="row">
+                    <dt class="col-4">Campaña</dt>
+                    <dd class="col-8" t-esc="quote['campaign_name']"/>
+                    <dt class="col-4">Folio</dt>
+                    <dd class="col-8" t-esc="document['folio']"/>
+                    <dt class="col-4">Referencia de operación</dt>
+                    <dd class="col-8" t-esc="document['reference']"/>
+                    <dt class="col-4">Cliente</dt>
+                    <dd class="col-8"><span t-esc="quote['contact_name']"/> · <span t-esc="quote['phone']"/></dd>
+                    <dt class="col-4">Tienda de reserva</dt>
+                    <dd class="col-8" t-esc="quote['warehouse']"/>
+                    <dt class="col-4">Caja y sesión</dt>
+                    <dd class="col-8"><span t-esc="receipt['register']"/> · <span t-esc="receipt['session']"/></dd>
+                    <dt class="col-4">Cajero</dt>
+                    <dd class="col-8" t-esc="receipt['cashier']"/>
+                    <dt class="col-4">Fecha y hora</dt>
+                    <dd class="col-8"><time t-esc="receipt['confirmed_at']"/> · <span t-esc="receipt['timezone']"/></dd>
+                </dl>
+
+                <section class="layaway-merchandise">
+                    <h3 t-if="opening">Mercancía del apartado</h3>
+                    <h3 t-else="">Mercancía agregada</h3>
+                    <p>Importes en <span t-esc="receipt['currency']"/></p>
+                    <table class="table table-sm">
+                        <thead><tr>
+                            <th scope="col">Producto</th>
+                            <th scope="col" class="text-right">Cantidad</th>
+                            <th scope="col" class="text-right">Precio unitario pactado</th>
+                            <th scope="col" class="text-right">Importe sin impuestos</th>
+                            <th scope="col" class="text-right">Impuestos</th>
+                            <th scope="col" class="text-right">Importe total</th>
+                        </tr></thead>
+                        <tbody>
+                            <tr t-foreach="quote['lines']" t-as="line">
+                                <td t-esc="line['product_name']"/>
+                                <td class="text-right" t-esc="'%g' % line['qty']"/>
+                                <td class="text-right" t-esc="money(line['price_unit'])"/>
+                                <td class="text-right" t-esc="money(line['amount_total'] - line['amount_tax'])"/>
+                                <td class="text-right">
+                                    <span t-esc="money(line['amount_tax'])"/>
+                                    <small class="d-block" t-esc="tax_names[line['product_id']]"/>
+                                </td>
+                                <td class="text-right" t-esc="money(line['amount_total'])"/>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <dl class="row">
+                        <dt class="col-8">Impuestos de esta mercancía</dt>
+                        <dd class="col-4 text-right" t-esc="money(tax_total)"/>
+                        <t t-if="not opening">
+                            <dt class="col-8">Total de la mercancía agregada</dt>
+                            <dd class="col-4 text-right" t-esc="money(quote['amount_new'])"/>
+                        </t>
+                        <dt class="col-8">Total del apartado con impuestos</dt>
+                        <dd class="col-4 text-right" t-esc="money(quote['amount_total'])"/>
+                    </dl>
+                </section>
+
+                <section class="layaway-payment">
+                    <t t-if="document['payments']">
+                        <h3 t-if="opening">Anticipo recibido por método</h3>
+                        <h3 t-else="">Abono recibido por método</h3>
+                        <dl class="row">
+                            <t t-foreach="document['payments']" t-as="payment">
+                                <dt class="col-8" t-esc="payment['method_name']"/>
+                                <dd class="col-4 text-right" t-esc="money(payment['amount'])"/>
+                            </t>
+                            <dt class="col-8">Total recibido en esta operación</dt>
+                            <dd class="col-4 text-right" t-esc="money(document['amount_applied'])"/>
+                        </dl>
+                    </t>
+                    <p t-else="" class="font-weight-bold">Adición sin cobro. Cobertura suficiente con los pagos anteriores.</p>
+                    <dl class="row">
+                        <t t-if="not opening">
+                            <dt class="col-8">Pagado antes de esta operación</dt>
+                            <dd class="col-4 text-right" t-esc="money(quote['amount_paid'])"/>
+                            <dt class="col-8">Pagado acumulado</dt>
+                            <dd class="col-4 text-right" t-esc="money(document['amount_paid'])"/>
+                        </t>
+                        <dt class="col-8">Restante por pagar</dt>
+                        <dd class="col-4 text-right" t-esc="money(document['amount_due'])"/>
+                    </dl>
+                </section>
+
+                <section>
+                    <h3>Plazos y condiciones pactados</h3>
+                    <ul>
+                        <li t-if="opening">
+                            Apertura del <time t-esc="quote['opening_start']"/> al <time t-esc="quote['opening_end']"/>.
+                        </li>
+                        <li>Adiciones hasta el <time t-esc="quote['addition_end']"/>.</li>
+                        <li>Recogida ordinaria hasta el <time t-esc="quote['pickup_end']"/>.</li>
+                        <li>Si se autoriza saldo por vencimiento, se puede usar hasta el <time t-esc="quote['credit_end']"/>.</li>
+                        <li t-if="opening">Total inicial superior a <span t-esc="money(quote['minimum_amount'])"/>.</li>
+                        <li>Cobertura mínima <span t-esc="'%g' % quote['deposit_percentage']"/> % del total vigente.</li>
+                        <li t-foreach="receipt['conditions']" t-as="condition" t-esc="condition"/>
+                    </ul>
+                </section>
+            </div>
+        </t>
+    </template>
+</odoo>
