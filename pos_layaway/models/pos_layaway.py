@@ -47,17 +47,22 @@ class PosLayaway(models.Model):
     payment_ids = fields.One2many("pos.layaway.payment", "layaway_id")
     transfer_ids = fields.One2many("pos.layaway.transfer", "layaway_id")
     sale_id = fields.Many2one("pos.order", copy=False, ondelete="restrict", readonly=True)
+    expiry_credit_id = fields.Many2one(
+        "pos.layaway.credit", copy=False, ondelete="restrict", readonly=True, index=True,
+    )
     amount_total = fields.Monetary(compute="_compute_amounts", store=True)
     amount_deposit = fields.Monetary(compute="_compute_amounts", store=True)
     amount_installments = fields.Monetary(compute="_compute_amounts", store=True)
     amount_paid = fields.Monetary(compute="_compute_amounts", store=True)
     amount_due = fields.Monetary(compute="_compute_amounts", store=True)
     payment_state = fields.Selection(
-        [("unpaid", "Sin pago"), ("partial", "Pago parcial"), ("paid", "Liquidado")],
+        [("unpaid", "Sin pago"), ("partial", "Pago parcial"), ("paid", "Liquidado"),
+         ("converted", "Convertido en saldo")],
         compute="_compute_amounts", store=True,
     )
     pickup_state = fields.Selection(
-        [("pending", "Pendiente"), ("partial", "Parcial"), ("done", "Entregado")],
+        [("pending", "Pendiente"), ("partial", "Parcial"), ("done", "Entregado"),
+         ("released", "Reserva liberada")],
         compute="_compute_pickup_state", store=True,
     )
 
@@ -68,7 +73,7 @@ class PosLayaway(models.Model):
 
     @api.depends(
         "line_ids.amount_total", "line_ids.released_by_id",
-        "payment_ids.amount", "payment_ids.kind", "currency_id",
+        "payment_ids.amount", "payment_ids.kind", "currency_id", "expiry_credit_id",
     )
     def _compute_amounts(self):
         for layaway in self:
@@ -82,16 +87,22 @@ class PosLayaway(models.Model):
                 ("kind", "=", "installment"),
             ]).mapped("amount")))
             layaway.amount_paid = currency.round(layaway.amount_deposit + layaway.amount_installments)
-            layaway.amount_due = currency.round(layaway.amount_total - layaway.amount_paid)
-            if layaway.amount_due <= 0:
+            layaway.amount_due = (
+                0 if layaway.expiry_credit_id else currency.round(layaway.amount_total - layaway.amount_paid)
+            )
+            if layaway.expiry_credit_id:
+                layaway.payment_state = "converted"
+            elif layaway.amount_due <= 0:
                 layaway.payment_state = "paid"
             else:
                 layaway.payment_state = "partial" if layaway.amount_paid else "unpaid"
 
-    @api.depends("line_ids.qty_picked_up", "line_ids.qty_pending", "line_ids.released_by_id")
+    @api.depends("line_ids.qty_picked_up", "line_ids.qty_pending", "line_ids.released_by_id", "expiry_credit_id")
     def _compute_pickup_state(self):
         for layaway in self:
-            if not any(layaway.line_ids.mapped("qty_picked_up")):
+            if layaway.expiry_credit_id:
+                layaway.pickup_state = "released"
+            elif not any(layaway.line_ids.mapped("qty_picked_up")):
                 layaway.pickup_state = "pending"
             else:
                 layaway.pickup_state = "partial" if any(
@@ -143,6 +154,11 @@ class PosLayaway(models.Model):
             not self.env.su or not vals["sale_id"] or any(self.mapped("sale_id"))
         ):
             raise AccessError(_("La venta del apartado conserva el vínculo asignado por el servidor."))
+        if "expiry_credit_id" in vals:
+            self.ensure_one()
+            credit = self.env["pos.layaway.credit"].browse(vals["expiry_credit_id"])
+            if not self.env.su or self.expiry_credit_id or credit.layaway_id != self:
+                raise AccessError(_("El saldo conserva el vínculo asignado por el servidor."))
         immutable = set(TERMS) | {
             "folio", "campaign_id", "campaign_name", "campaign_code", "participant_config_ids",
             "participant_company_ids", "partner_id", "contact_name", "phone", "phone_digits",

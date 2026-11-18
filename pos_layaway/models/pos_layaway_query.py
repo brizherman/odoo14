@@ -55,6 +55,11 @@ class PosSession(models.Model):
 
     def get_layaway_detail(self, record_id):
         folio = self._find_layaway(record_id)
+        now = fields.Datetime.now()
+        can_review_expired = bool(
+            layaway_test_database(self.env) and not self.rescue
+            and self.env.user.has_group("point_of_sale.group_pos_manager") and folio._layaway_pickup_overdue(now)
+        )
         receipts = []
         for operation in self._layaway_receipt_operations([("layaway_id", "=", folio.id)]):
             result = json.loads(operation.result)
@@ -108,16 +113,15 @@ class PosSession(models.Model):
             "sale_adjustments": folio._layaway_adjustment_history(),
             "pickup": self._layaway_pickup_detail(folio),
             "expiry_review": {
-                "can_review": bool(
-                    layaway_test_database(self.env) and not self.rescue
-                    and self.env.user.has_group("point_of_sale.group_pos_manager")
-                    and folio._layaway_pickup_overdue(fields.Datetime.now())
-                ),
+                "can_review": can_review_expired,
+                "can_convert": can_review_expired and folio._can_convert_layaway_to_credit(),
+                "credit_end": fields.Date.to_string(folio.credit_end),
                 "history": [
                     json.loads(review.result)
-                    for review in self._layaway_pickup_operations(folio, ("review_expiry",))
+                    for review in self._layaway_pickup_operations(folio, ("review_expiry", "convert_expiry_credit"))
                 ],
             },
+            "expiry_credit": folio.expiry_credit_id._pos_layaway_credit_values() if folio.expiry_credit_id else False,
             "transfer_review": self._layaway_transfer_detail(folio),
             "payment_corrections": self._layaway_correction_detail(folio),
             "changeable_lines": (
@@ -151,7 +155,7 @@ class PosLayaway(models.Model):
 
     def _layaway_pickup_overdue(self, now):
         self.ensure_one()
-        return self.pickup_state != "done" and self.pickup_end < local_date(now, self.timezone)
+        return self.pickup_state in ("pending", "partial") and self.pickup_end < local_date(now, self.timezone)
 
     def _pos_layaway_filter_options(self, scope):
         campaigns = self.read_group(scope, ["campaign_id"], ["campaign_id"])
@@ -203,7 +207,7 @@ class PosLayaway(models.Model):
             timezones = self.read_group(scope, ["timezone"], ["timezone"])
             now = fields.Datetime.now()
             overdue = expression.AND([
-                [("pickup_state", "!=", "done")],
+                [("pickup_state", "in", ("pending", "partial"))],
                 expression.OR([
                     [("timezone", "=", row["timezone"]),
                      ("pickup_end", "<", local_date(now, row["timezone"]))]

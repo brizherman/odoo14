@@ -115,7 +115,7 @@
                 <div class="layaway-detail-header">
                     <button type="button" t-on-click="backToSearch"
                             t-att-disabled="state.transferBusy">Volver a la búsqueda</button>
-                    <a t-if="!state.stale" t-att-href="labelUrl" target="_blank" rel="noopener">Imprimir etiqueta</a>
+                    <a t-if="!state.stale &amp;&amp; !folio.expiry_credit" t-att-href="labelUrl" target="_blank" rel="noopener">Imprimir etiqueta</a>
                     <t t-if="!state.stale &amp;&amp; state.originalReceipt &amp;&amp; state.originalReceipt.id === folio.id">
                         <a t-if="state.originalReceipt.finalSale"
                            t-att-href="receiptUrl(state.originalReceipt.reference, true, true)"
@@ -148,7 +148,12 @@
                     <div><dt>Abonos</dt><dd t-esc="money(folio.amount_installments)"/></div>
                     <div><dt>Restante</dt><dd t-esc="money(folio.amount_due)"/></div>
                 </dl>
-                <t t-call="pos_layaway.LayawayStockTable"/>
+                <t t-if="!folio.expiry_credit" t-call="pos_layaway.LayawayStockTable"/>
+                <p t-else="" class="layaway-expiry-credit">
+                    <strong>Saldo por vencimiento</strong> · <span t-esc="money(folio.expiry_credit.amount)"/>
+                    · Fecha límite <time t-esc="folio.expiry_credit.expires_on"/>
+                    · <span t-if="folio.expiry_credit.state === 'available'">Disponible</span><span t-else="">Caducado</span>
+                </p>
                 <section t-if="folio.expiry_review.can_review || folio.expiry_review.history.length"
                          class="layaway-expiry-review">
                     <h3>Revisión de vencimiento</h3>
@@ -156,6 +161,12 @@
                         <p><strong t-esc="expiryResolutionLabels[review.resolution]"/>
                             · <span t-esc="review.reviewer"/> · <time t-esc="review.reviewed_at"/></p>
                         <p t-esc="review.notes"/>
+                        <t t-if="review.credit">
+                            <p>Deuda extinguida <span t-esc="money(review.debt_released)"/></p>
+                            <ul><li t-foreach="review.released_lines" t-as="line" t-key="line.id">
+                                <t t-esc="line.qty"/> × <t t-esc="line.name"/> · <t t-esc="line.store"/>
+                            </li></ul>
+                        </t>
                     </article>
                     <button t-if="folio.expiry_review.can_review" type="button" class="layaway-submit"
                             t-on-click="() => startExpiryReview(folio)"
@@ -349,18 +360,27 @@
         <h2>Revisar apartado vencido <span t-esc="state.draft.folio.folio"/></h2>
         <form class="layaway-transfer-form" t-on-submit.prevent="confirmCheckout">
             <label>Resolución
-                <select name="resolution" required="required">
+                <select name="resolution" t-model="state.expiryResolution" required="required">
                     <option value="">Seleccionar resolución</option>
                     <option value="keep_reserved" t-esc="expiryResolutionLabels.keep_reserved"/>
                     <option t-if="state.draft.folio.sale_name &amp;&amp; state.draft.folio.payment_state === 'paid'"
                             value="authorize_late_pickup" t-esc="expiryResolutionLabels.authorize_late_pickup"/>
+                    <option t-if="state.draft.folio.expiry_review.can_convert"
+                            value="convert_to_credit" t-esc="expiryResolutionLabels.convert_to_credit"/>
                 </select>
             </label>
+            <p t-if="state.expiryResolution === 'convert_to_credit'">
+                Se liberará la mercancía de todas las tiendas y se extinguirá la deuda de
+                <strong t-esc="money(state.draft.folio.amount_due)"/>. Se emitirá un saldo de
+                <strong t-esc="money(state.draft.folio.amount_deposit + state.draft.folio.amount_installments)"/>
+                con fecha límite <time t-esc="state.draft.folio.expiry_review.credit_end"/>.
+            </p>
             <label>Motivo y observaciones
                 <textarea name="notes" maxlength="500" required="required"/>
             </label>
             <button type="submit" class="layaway-submit" t-att-disabled="state.stale || state.checkoutBusy">
-                Guardar revisión
+                <t t-if="state.expiryResolution === 'convert_to_credit'">Confirmar conversión de prueba</t>
+                <t t-else="">Guardar revisión</t>
             </button>
         </form>
         <button type="button" t-on-click="cancelCheckout" t-att-disabled="state.checkoutBusy">Volver al folio</button>

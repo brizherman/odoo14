@@ -29,11 +29,12 @@ class PosSession(models.Model):
     def review_expired_layaway(self, folio_id, reference, resolution, notes):
         """Record a supervisor's decision on an overdue folio."""
         session = self.sudo(False)
-        session._check_layaway_pickup_test()
+        if not layaway_test_database(session.env):
+            raise AccessError(_("La revisión de vencimientos solo está disponible para pruebas."))
         if not session.env.user.has_group("point_of_sale.group_pos_manager"):
             raise AccessError(_("El encargado debe revisar el apartado vencido."))
         folio = session._find_layaway(folio_id, require_open=False)
-        if resolution not in ("keep_reserved", "authorize_late_pickup"):
+        if resolution not in ("keep_reserved", "authorize_late_pickup", "convert_to_credit"):
             raise ValidationError(_("Selecciona una resolución de vencimiento válida."))
         if not isinstance(notes, str) or not notes.strip() or len(notes.strip()) > 500:
             raise ValidationError(_("Registra el motivo y las observaciones de la revisión (hasta 500 caracteres)."))
@@ -45,16 +46,21 @@ class PosSession(models.Model):
                 raise UserError(_("La revisión requiere un apartado vencido con mercancía pendiente."))
             if resolution == "authorize_late_pickup":
                 session._check_layaway_late_pickup_reservations(folio)
-            return folio, {
+            result = {
                 "id": folio.id, "folio": folio.folio, "reference": operation.reference,
                 "resolution": resolution, "notes": notes, "reviewer": operation.user_id.name,
                 "reviewed_at": operation._receipt_identification(
                     folio, operation.create_date,
                 )["confirmed_at"],
             }
+            if resolution == "convert_to_credit":
+                result.update(session._convert_layaway_to_credit(folio, operation, notes))
+            return folio, result
 
+        kind = "convert_expiry_credit" if resolution == "convert_to_credit" else "review_expiry"
         return session.env["pos.layaway.operation"].sudo()._confirm(
-            session, reference, "review_expiry", {"resolution": resolution, "notes": notes},
+            session, reference, kind,
+            {"resolution": resolution, "notes": notes},
             apply, layaway=folio, pass_operation=True,
         )
 
@@ -86,7 +92,7 @@ class PosSession(models.Model):
 
         def apply(operation):
             session._lock_layaway_stock_session()
-            if session.rescue or folio.pickup_state == "done":
+            if session.rescue or folio.pickup_state in ("done", "released"):
                 raise UserError(_("El apartado no admite autorizaciones de recogida."))
             partner = partners.with_context(active_test=True).search([
                 ("id", "=", partner_id), ("active", "=", True), ("is_company", "=", False),

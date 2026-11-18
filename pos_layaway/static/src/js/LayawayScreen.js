@@ -31,7 +31,7 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                 originalReceipt: null,
                 pendingConfirmation: JSON.parse(sessionStorage.getItem(this.confirmationKey)),
                 pendingCorrection: null, correctionPayment: '', correctionMethod: '',
-                correctionKind: '',
+                correctionKind: '', expiryResolution: '',
                 filters: { query: '', campaign: '', store: '', from: '', to: '',
                     payment_state: '', pickup_state: '', expiry: '' },
             });
@@ -163,6 +163,7 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
 
         startExpiryReview(folio) {
             this.state.checkoutMessage = '';
+            this.state.expiryResolution = '';
             this.state.draft = { folio, expiryReview: true };
         }
 
@@ -369,7 +370,8 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
                     confirm_layaway_pickup: this.env._t('Recogida confirmada'),
                     settle_and_pickup_layaway: this.env._t('Liquidación y recogida confirmadas'),
                     relocate_layaway_block: this.env._t('Traslado registrado'),
-                    review_expired_layaway: this.env._t('Revisión de vencimiento registrada'),
+                    review_expired_layaway: result.credit ? this.env._t('Saldo por vencimiento emitido')
+                        : this.env._t('Revisión de vencimiento registrada'),
                 };
                 const pickupConfirmed = result.pickup || result.recipient;
                 const message = pickupConfirmed ? messages[pending.method]
@@ -552,18 +554,19 @@ odoo.define('pos_layaway.LayawayScreen', function (require) {
 
         get paymentLabels() {
             return { unpaid: this.env._t('Sin pago'), partial: this.env._t('Pago parcial'),
-                paid: this.env._t('Liquidado') };
+                paid: this.env._t('Liquidado'), converted: this.env._t('Convertido en saldo') };
         }
 
         get pickupLabels() {
             return { pending: this.env._t('Pendiente'), partial: this.env._t('Parcial'),
-                done: this.env._t('Entregado') };
+                done: this.env._t('Entregado'), released: this.env._t('Reserva liberada') };
         }
 
         get expiryResolutionLabels() {
             return {
                 keep_reserved: this.env._t('Mantener en revisión y conservar la reserva'),
                 authorize_late_pickup: this.env._t('Autorizar recogida tardía'),
+                convert_to_credit: this.env._t('Liberar la reserva y emitir saldo'),
             };
         }
 

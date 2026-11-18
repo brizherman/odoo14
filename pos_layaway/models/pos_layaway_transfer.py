@@ -190,7 +190,7 @@ class PosSession(models.Model):
                 "id": transfer.id, "amount": transfer.amount,
                 "method": transfer.method_id.name, "reference": transfer.reference,
                 "confirmed": bool(transfer.payment_id),
-                "can_approve": can_approve and transfer.company_id == self.company_id,
+                "can_approve": can_approve and not folio.expiry_credit_id and transfer.company_id == self.company_id,
                 "bank_reference": (
                     transfer.bank_reference
                     if can_approve and transfer.company_id == self.company_id else False

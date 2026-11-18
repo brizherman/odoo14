@@ -64,7 +64,7 @@ class StockPicking(models.Model):
         ]):
             return True
         if self.env["pos.layaway"].sudo().search_count([
-            ("pickup_state", "!=", "done"),
+            ("pickup_state", "in", ("pending", "partial")),
             ("participant_config_ids.picking_type_id.default_location_src_id", "in", overlapping.ids),
         ]):
             return True

@@ -6,3 +6,4 @@ access_layaway_line_manager,pos.layaway.line.manager,model_pos_layaway_line,grou
 access_layaway_operation_manager,pos.layaway.operation.manager,model_pos_layaway_operation,group_layaway_campaign_manager,1,0,0,0
 access_layaway_payment_manager,pos.layaway.payment.manager,model_pos_layaway_payment,point_of_sale.group_pos_manager,1,0,0,0
 access_layaway_transfer_manager,pos.layaway.transfer.manager,model_pos_layaway_transfer,point_of_sale.group_pos_manager,1,0,0,0
+access_layaway_credit_manager,pos.layaway.credit.manager,model_pos_layaway_credit,point_of_sale.group_pos_manager,1,0,0,0

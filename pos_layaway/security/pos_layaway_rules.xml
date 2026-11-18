@@ -59,4 +59,9 @@
         <field name="model_id" ref="model_pos_layaway_transfer"/>
         <field name="domain_force">[('company_id', 'in', company_ids)]</field>
     </record>
+    <record id="rule_layaway_credit_company" model="ir.rule">
+        <field name="name">Saldos de apartados en compañías participantes</field>
+        <field name="model_id" ref="model_pos_layaway_credit"/>
+        <field name="domain_force">[('layaway_id.participant_company_ids', 'in', company_ids)]</field>
+    </record>
 </odoo>

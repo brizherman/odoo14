@@ -59,6 +59,13 @@ class PosLayawayOperation(models.Model):
             if not operation:
                 origin._check_layaway_session()
                 now = fields.Datetime.now()
+                if layaway:
+                    # Take the folio lock before the new operation's foreign key takes a key-share lock.
+                    self.env.cr.execute(
+                        "UPDATE pos_layaway SET write_date = %s WHERE id = %s",
+                        (now, layaway.id),
+                    )
+                    layaway.invalidate_cache(["write_date"])
                 # Under REPEATABLE READ PostgreSQL raises 40001 on a concurrent
                 # invisible conflict. Odoo retries the entire RPC in a fresh snapshot.
                 self.env.cr.execute("""
@@ -78,13 +85,6 @@ class PosLayawayOperation(models.Model):
                 claimed = self.env.cr.fetchone()
                 if claimed:
                     operation = self.browse(claimed[0])
-                    if layaway:
-                        # Serialize different operations on the same folio as well.
-                        self.env.cr.execute(
-                            "UPDATE pos_layaway SET write_date = %s WHERE id = %s",
-                            (now, layaway.id),
-                        )
-                        layaway.invalidate_cache(["write_date"])
                     folio, result = apply(operation) if pass_operation else apply()
                     if not folio or origin.config_id not in folio.participant_config_ids:
                         raise AccessError(_("El resultado no corresponde a esta caja."))

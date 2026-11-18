@@ -106,6 +106,8 @@ class PosSession(models.Model):
 
     def _apply_layaway_correction(self, operation, folio, payment, values):
         self._lock_layaway_stock_session()
+        if folio.expiry_credit_id:
+            raise UserError(_("El cobro respalda un saldo por vencimiento ya emitido."))
         currency = folio.currency_id
         if self.rescue or currency != self.currency_id or currency != self.company_id.currency_id:
             raise UserError(_("La corrección requiere una sesión ordinaria en la moneda del apartado."))
@@ -189,7 +191,7 @@ class PosSession(models.Model):
             "amount": payment.amount, "session": payment.session_id.name,
             "corrects": payment.corrects_payment_id.reference,
             "remaining": payment._layaway_unreversed_amount() if payment.amount > 0 else 0,
-            "can_refund": not folio.sale_id,
+            "can_refund": not folio.sale_id and not folio.expiry_credit_id,
             "methods": [{
                 "id": method.id, "name": method.name, "transfer": method.layaway_transfer,
             } for method in payment._available_methods(payment.session_id) if (
@@ -197,5 +199,5 @@ class PosSession(models.Model):
                 and (payment.session_id.state == "opened" or not method.is_cash_count)
                 and (not folio.sale_id or not method.is_cash_count)
                 and (payment.tender_type != "cash" or payment.session_id.state == "opened" and not folio.sale_id)
-            )] if payment.amount > 0 else [],
+            )] if payment.amount > 0 and not folio.expiry_credit_id else [],
         } for payment in payments]

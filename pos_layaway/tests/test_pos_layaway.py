@@ -2151,7 +2151,8 @@ class TestPosLayawayCampaign(SavepointCase):
             self.assertEqual((second["pickup_state"], second["late_authorization"]), ("done", new_args[1]))
             self.assertFalse(manager.get_layaways({"expiry": "expired"})["rows"])
             self.assertEqual(manager.get_layaway_detail(folio.id)["expiry_review"], {
-                "can_review": False, "history": [review, authorization, revoked, new_auth],
+                "can_review": False, "can_convert": False, "credit_end": str(folio.credit_end),
+                "history": [review, authorization, revoked, new_auth],
             })
             self.assertEqual(manager.review_expired_layaway(*new_args), new_auth)
             with self.assertRaisesRegex(UserError, "pendiente"):
@@ -2199,6 +2200,122 @@ class TestPosLayawayCampaign(SavepointCase):
             self.assertTrue(paid.sale_id)
             for folio in unpaid | paid:
                 self.assertEqual(len(manager.get_layaway_detail(folio.id)["expiry_review"]["history"]), 1)
+
+    def test_expiry_credit_releases_both_shops_and_preserves_net_payments(self):
+        campaign, partner, product = self._checkout_fixture()
+        a = self.session_a.with_user(self.cashier_a)
+        b = self.session_b.with_user(self.cashier_b)
+        manager = self.session_a.with_user(self.supervisor)
+        remote_manager = self.session_b.with_user(self.supervisor_b)
+        correction = {"kind": "refund_payment", "amount": 100, "reason": "Importe incorrecto",
+                      "evidence": "Devolución sintética en efectivo"}
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            _, opening = self._checkout_args(a, campaign, product, 2, partner)
+            opened = a.confirm_layaway(*opening, [{"method_id": self.cash_a.id, "amount": 2000}])
+            folio = self.env["pos.layaway"].browse(opened["id"])
+            _, addition = self._checkout_args(b, campaign, product, 1, folio=folio)
+            added = b.confirm_layaway(*addition, [{"method_id": self.cash_b.id, "amount": 1000}])
+            b.register_layaway_installment(folio.id, str(uuid4()), [
+                {"method_id": self.card_b.id, "amount": 500},
+            ])
+            pending = b.register_layaway_transfer(folio.id, str(uuid4()), "installment", [
+                {"method_id": self.transfer_b.id, "amount": 300},
+            ])["pending_transfers"][0]
+            manager.correct_layaway_payment(folio.id, folio.payment_ids[0].id, str(uuid4()), correction)
+
+        pickings = self.env["stock.picking"].browse([opened["picking_id"], added["picking_id"]])
+        lines, payments = folio.line_ids, folio.payment_ids
+        args = (folio.id, str(uuid4()), "convert_to_credit", "Vencimiento revisado en ambas tiendas.")
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 16, 7, 59, 59)):
+            with self.assertRaisesRegex(UserError, "vencido"):
+                manager.review_expired_layaway(*args)
+
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 16, 8)):
+            self.assertTrue(manager.get_layaway_detail(folio.id)["expiry_review"]["can_convert"])
+            self.assertFalse(a.get_layaway_detail(folio.id)["expiry_review"]["can_convert"])
+            with self.assertRaises(AccessError):
+                a.review_expired_layaway(*args)
+            disabled = "odoo.addons.pos_layaway.models.pos_layaway_pickup.layaway_test_database"
+            with patch(disabled, return_value=False), self.assertRaises(AccessError):
+                manager.review_expired_layaway(*args)
+            before = self._checkout_state(folio)
+            wholesale_before = self._wholesale_eligibility(self.session_a, partner)
+            self.assertEqual(wholesale_before["previous_month_amount"], 3400)
+            manager.review_expired_layaway(folio.id, str(uuid4()), "keep_reserved", "Pendiente de confirmar.")
+            self.assertEqual(self._checkout_state(folio), before)
+            self.assertFalse(folio.expiry_credit_id)
+
+            cancel = type(pickings).action_cancel
+
+            def fail_in_b(records):
+                if records.company_id == self.company_b:
+                    raise UserError("Synthetic cancellation failure")
+                return cancel(records)
+
+            with patch.object(type(pickings), "action_cancel", fail_in_b), self.assertRaisesRegex(
+                UserError, "Synthetic cancellation failure",
+            ):
+                manager.review_expired_layaway(*args)
+            self.assertEqual(self._checkout_state(folio), before)
+            self.assertEqual(pickings.mapped("state"), ["assigned", "assigned"])
+            self.assertFalse(folio.expiry_credit_id)
+
+            result = manager.review_expired_layaway(*args)
+            self.assertEqual(remote_manager.review_expired_layaway(*args), result)
+            with self.assertRaisesRegex(UserError, "vencido"):
+                remote_manager.review_expired_layaway(folio.id, str(uuid4()), *args[2:])
+            self.assertEqual(self._wholesale_eligibility(self.session_a, partner), wholesale_before)
+            self.assertFalse(manager.get_layaways({"expiry": "expired"})["rows"])
+            detail = b.get_layaway_detail(folio.id)
+            self.assertEqual(detail["expiry_credit"], result["credit"])
+            self.assertEqual(detail["expiry_review"]["history"][-1], result)
+            self.assertFalse(detail["transfer_review"]["transfers"][0]["can_approve"])
+            with self.assertRaisesRegex(UserError, "no admite abonos"):
+                remote_manager.authorize_layaway_transfer(folio.id, pending, "SYN-44", "Prueba", "Extracto")
+            with self.assertRaisesRegex(UserError, "saldo por vencimiento"):
+                manager.correct_layaway_payment(folio.id, payments[0].id, str(uuid4()), correction)
+
+        credit = folio.expiry_credit_id
+        self.assertEqual((credit.partner_id, credit.campaign_id), (partner, campaign))
+        self.assertEqual((credit.reason, credit.expires_on, credit.amount), (args[-1], folio.credit_end, 3400))
+        self.assertEqual(credit.operation_id.user_id, self.supervisor)
+        self.assertEqual(result["debt_released"], 2600)
+        self.assertEqual([line["qty"] for line in result["released_lines"]], [2, 1])
+        self.assertEqual(lines.released_by_id, credit.operation_id)
+        self.assertFalse(folio.line_ids or folio.sale_id or pickings.move_line_ids)
+        self.assertEqual((folio.amount_due, folio.amount_paid), (0, 3400))
+        self.assertEqual((folio.payment_state, folio.pickup_state), ("converted", "released"))
+        self.assertEqual(pickings.mapped("state"), ["cancel", "cancel"])
+        self.assertEqual(folio.payment_ids, payments)
+        self.assertEqual(self._checkout_state(folio)[-2:], before[-2:])
+        self.assertEqual(credit.search_count([("layaway_id", "=", folio.id)]), 1)
+        for picking in pickings:
+            self.assertEqual(self.env["stock.quant"]._get_available_quantity(product, picking.location_id), 8)
+
+    def test_expiry_credit_rejects_folios_with_a_sale_or_delivery(self):
+        campaign, partner, product = self._settlement_fixture()
+        cashier = self.session_a.with_user(self.cashier_a)
+        manager = self.session_a.with_user(self.supervisor)
+        sold = []
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 11, 18, 20)):
+            for collect in (False, True):
+                _, opening = self._checkout_args(cashier, campaign, product, 2, partner)
+                opened = cashier.confirm_layaway(*opening, [{"method_id": self.cash_a.id, "amount": 2000}])
+                folio = self.env["pos.layaway"].browse(opened["id"])
+                cashier.settle_layaway(folio.id, str(uuid4()), [{"method_id": self.cash_a.id, "amount": 2000}])
+                if collect:
+                    cashier.confirm_layaway_pickup(folio.id, str(uuid4()), {
+                        "kind": "holder", "identity_verified": True,
+                    }, cashier.get_layaway_detail(folio.id)["pickup"]["lines"])
+                sold.append(folio)
+        with patch.object(fields.Datetime, "now", return_value=datetime(2026, 12, 16, 8)):
+            for folio, error in zip(sold, ("sin venta ni entregas", "vencido")):
+                before = self._checkout_state(folio)
+                self.assertFalse(manager.get_layaway_detail(folio.id)["expiry_review"]["can_convert"])
+                with self.assertRaisesRegex(UserError, error):
+                    manager.review_expired_layaway(folio.id, str(uuid4()), "convert_to_credit", "Prueba")
+                self.assertEqual(self._checkout_state(folio), before)
+                self.assertFalse(folio.expiry_credit_id)
 
     def test_settle_and_pickup_is_atomic_and_snapshots_only_the_local_delivery(self):
         campaign, partner, product = self._settlement_fixture()

@@ -52,7 +52,7 @@ class PosLayaway(models.Model):
 
     def _layaway_can_modify_products(self, now):
         return (
-            self.pickup_state != "done"
+            self.pickup_state in ("pending", "partial")
             and local_date(now, self.timezone) <= self.addition_end
             and (not self.sale_id or self._layaway_adjustable_sale())
         )
