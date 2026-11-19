@@ -13,7 +13,7 @@ class PosProductRequest(models.Model):
     _order = "create_date desc, id desc"
     _check_company_auto = True
 
-    product_text = fields.Text(required=True, readonly=True)
+    product_text = fields.Text(string="Requested Product", required=True, readonly=True)
     reason = fields.Selection(
         [
             ("out_of_stock", "Out of stock"),
@@ -24,7 +24,7 @@ class PosProductRequest(models.Model):
         readonly=True,
     )
     config_id = fields.Many2one(
-        "pos.config", required=True, readonly=True, index=True,
+        "pos.config", string="Point of Sale", required=True, readonly=True, index=True,
         ondelete="restrict", check_company=True,
     )
     company_id = fields.Many2one(
@@ -80,7 +80,7 @@ class PosProductRequest(models.Model):
 
         product_text = product_text.strip()
         domain.append(("capture_key", "=", capture_key))
-        # POS users can only reach these records through the validated session.
+        # Creation is restricted to the validated POS session.
         requests = self.with_context({}).sudo()
         request = requests.search(domain, limit=1)
         if not request:

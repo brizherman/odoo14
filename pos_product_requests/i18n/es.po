@@ -46,6 +46,9 @@ msgstr "No se pudo guardar el faltante. Revisa la conexión e inténtalo de nuev
 #. module: pos_product_requests
 #. openerp-web
 #: code:addons/pos_product_requests/static/src/xml/product_requests.xml:0
+#: model_terms:ir.ui.view,arch_db:pos_product_requests.pos_product_request_view_tree
+#: model_terms:ir.ui.view,arch_db:pos_product_requests.pos_product_request_view_form
+#: model_terms:ir.ui.view,arch_db:pos_product_requests.pos_product_request_view_search
 #, python-format
 msgid "Date and Time"
 msgstr "Fecha y hora"
@@ -82,6 +85,7 @@ msgstr "Cargando faltantes…"
 #. module: pos_product_requests
 #. openerp-web
 #: code:addons/pos_product_requests/static/src/xml/product_requests.xml:0
+#: model_terms:ir.actions.act_window,help:pos_product_requests.pos_product_request_action
 #, python-format
 msgid "No product requests have been recorded yet."
 msgstr "Aún no hay faltantes registrados"
@@ -104,6 +108,8 @@ msgstr "Se requiere acceso al Punto de venta."
 #. openerp-web
 #: code:addons/pos_product_requests/static/src/xml/product_requests.xml:0
 #: code:addons/pos_product_requests/static/src/js/product_requests.js:0
+#: model:ir.actions.act_window,name:pos_product_requests.pos_product_request_action
+#: model:ir.ui.menu,name:pos_product_requests.pos_product_request_menu
 #, python-format
 msgid "Product Requests"
 msgstr "Faltantes"
@@ -111,6 +117,8 @@ msgstr "Faltantes"
 #. module: pos_product_requests
 #. openerp-web
 #: code:addons/pos_product_requests/static/src/xml/product_requests.xml:0
+#: model:ir.model.fields,field_description:pos_product_requests.field_pos_product_request__reason
+#: model_terms:ir.ui.view,arch_db:pos_product_requests.pos_product_request_view_search
 #, python-format
 msgid "Reason"
 msgstr "Motivo"
@@ -125,6 +133,8 @@ msgstr "Registrar faltante"
 #. module: pos_product_requests
 #. openerp-web
 #: code:addons/pos_product_requests/static/src/xml/product_requests.xml:0
+#: model:ir.model.fields,field_description:pos_product_requests.field_pos_product_request__product_text
+#: model_terms:ir.ui.view,arch_db:pos_product_requests.pos_product_request_view_form
 #, python-format
 msgid "Requested Product"
 msgstr "Producto solicitado"
@@ -162,3 +172,24 @@ msgstr "Esta captura ya se guardó con otros datos. Recupera los datos originale
 #, python-format
 msgid "We don't carry it"
 msgstr "No lo manejamos"
+
+#. module: pos_product_requests
+#: model:ir.model.fields,field_description:pos_product_requests.field_pos_product_request__company_id
+msgid "Company"
+msgstr "Compañía"
+
+#. module: pos_product_requests
+#: model_terms:ir.ui.view,arch_db:pos_product_requests.pos_product_request_view_search
+msgid "Group By"
+msgstr "Agrupar por"
+
+#. module: pos_product_requests
+#: model:ir.model.fields,field_description:pos_product_requests.field_pos_product_request__config_id
+#: model_terms:ir.ui.view,arch_db:pos_product_requests.pos_product_request_view_search
+msgid "Point of Sale"
+msgstr "Punto de venta"
+
+#. module: pos_product_requests
+#: model_terms:ir.ui.view,arch_db:pos_product_requests.pos_product_request_view_form
+msgid "Product Request"
+msgstr "Faltante"

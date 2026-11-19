@@ -1,6 +1,6 @@
 {
     "name": "POS Product Requests",
-    "version": "14.0.1.0.0",
+    "version": "14.0.1.1.0",
     "category": "Sales/Point of Sale",
     "summary": "Record and review unavailable product requests in the POS",
     "license": "AGPL-3",
@@ -9,6 +9,7 @@
         "security/pos_product_request_security.xml",
         "security/ir.model.access.csv",
         "views/assets.xml",
+        "views/pos_product_request_views.xml",
     ],
     "qweb": ["static/src/xml/product_requests.xml"],
     "installable": True,

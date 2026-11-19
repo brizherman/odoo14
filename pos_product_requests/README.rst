@@ -29,3 +29,11 @@ Pulsa **Volver** para retomar el ticket.
 El historial se comparte entre cajas y turnos que usan la misma configuración
 de POS. Se requiere una sesión abierta y conexión al servidor para guardar y
 consultar.
+
+Consultar faltantes desde el backend
+------------------------------------
+
+Con el permiso de administrador de Punto de venta, abre **Punto de venta →
+Órdenes → Faltantes**. Busca por producto, punto de venta o motivo y abre
+cualquier fila para ver el registro completo. La lista y el detalle son de
+solo lectura y muestran los registros de las compañías permitidas.

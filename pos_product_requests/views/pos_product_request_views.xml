@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="pos_product_request_view_tree" model="ir.ui.view">
+        <field name="name">pos.product.request.tree</field>
+        <field name="model">pos.product.request</field>
+        <field name="arch" type="xml">
+            <tree create="false" edit="false" delete="false" import="false" export_xlsx="false">
+                <field name="product_text"/>
+                <field name="reason"/>
+                <field name="config_id"/>
+                <field name="create_date" string="Date and Time"/>
+                <field name="company_id" groups="base.group_multi_company" optional="hide"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="pos_product_request_view_form" model="ir.ui.view">
+        <field name="name">pos.product.request.form</field>
+        <field name="model">pos.product.request</field>
+        <field name="arch" type="xml">
+            <form string="Product Request" create="false" edit="false" delete="false" duplicate="false">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="config_id"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                        <group>
+                            <field name="reason"/>
+                            <field name="create_date" string="Date and Time"/>
+                        </group>
+                    </group>
+                    <separator string="Requested Product"/>
+                    <field name="product_text" nolabel="1"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="pos_product_request_view_search" model="ir.ui.view">
+        <field name="name">pos.product.request.search</field>
+        <field name="model">pos.product.request</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="product_text"/>
+                <field name="config_id"/>
+                <field name="reason"/>
+                <filter name="request_date" string="Date and Time" date="create_date"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_config" string="Point of Sale" context="{'group_by': 'config_id'}"/>
+                    <filter name="group_reason" string="Reason" context="{'group_by': 'reason'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="pos_product_request_action" model="ir.actions.act_window">
+        <field name="name">Product Requests</field>
+        <field name="res_model">pos.product.request</field>
+        <field name="view_mode">tree,form</field>
+        <field name="search_view_id" ref="pos_product_request_view_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_empty_folder">No product requests have been recorded yet.</p>
+        </field>
+    </record>
+
+    <menuitem id="pos_product_request_menu"
+              name="Product Requests"
+              parent="point_of_sale.menu_point_of_sale"
+              action="pos_product_request_action"
+              sequence="10"
+              groups="point_of_sale.group_pos_manager"/>
+</odoo>
