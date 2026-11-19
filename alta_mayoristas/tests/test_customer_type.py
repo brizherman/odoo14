@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # pylint: disable=import-error,missing-function-docstring
 """Tests for res.partner customer_type field and POS create_from_ui."""
+from odoo.exceptions import UserError
 from odoo.tests import tagged
 from odoo.tests.common import TransactionCase
 
@@ -55,6 +56,63 @@ class TestCustomerType(TransactionCase):
         partner = self.env['res.partner'].browse(partner_id)
         self.assertEqual(partner.name, 'POS Customer')
         self.assertEqual(partner.customer_type, 'mayorista')
+
+    def test_create_from_ui_preserves_existing_mobile_when_omitted(self):
+        partners = self.env['res.partner']
+        partner = partners.create({
+            'name': 'Existing POS Customer',
+            'mobile': '5550000006',
+        })
+
+        partner_id = partners.create_from_ui({
+            'id': partner.id,
+            'name': 'Renamed POS Customer',
+        })
+
+        self.assertEqual(partner_id, partner.id)
+        self.assertEqual(partner.name, 'Renamed POS Customer')
+        self.assertEqual(partner.mobile, '5550000006')
+
+    def test_create_from_ui_updates_mobile_without_trailing_space(self):
+        partners = self.env['res.partner']
+        partner = partners.create({
+            'name': 'Existing POS Customer',
+            'mobile': '5550000006',
+        })
+
+        partners.create_from_ui({'id': partner.id, 'mobile': '5550000007'})
+
+        self.assertEqual(partner.mobile, '5550000007')
+
+    def test_create_from_ui_rejects_explicitly_blank_mobile_on_edit(self):
+        partners = self.env['res.partner']
+        partner = partners.create({
+            'name': 'Existing POS Customer',
+            'mobile': '5550000006',
+        })
+
+        for mobile in (False, '', '   '):
+            with self.subTest(mobile=mobile), self.assertRaisesRegex(
+                UserError, r'Movil \(Whatsapp\) es obligatorio',
+            ):
+                partners.create_from_ui({'id': partner.id, 'mobile': mobile})
+
+        self.assertEqual(partner.mobile, '5550000006')
+
+    def test_create_from_ui_rejects_missing_mobile(self):
+        partners = self.env['res.partner']
+        legacy = partners.create({'name': 'Legacy POS Customer'})
+
+        for values in (
+            {'name': 'New POS Customer'},
+            {'id': legacy.id, 'name': 'Changed'},
+        ):
+            with self.subTest(values=values), self.assertRaisesRegex(
+                UserError, r'Movil \(Whatsapp\) es obligatorio',
+            ):
+                partners.create_from_ui(values)
+
+        self.assertEqual(legacy.name, 'Legacy POS Customer')
 
     def test_create_from_ui_sets_customer_rank(self):
         partner_id = self.env['res.partner'].create_from_ui({

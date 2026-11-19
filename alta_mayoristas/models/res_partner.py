@@ -448,8 +448,10 @@ class ResPartner(models.Model):
         """Mark new POS customers as customers and assign sucursal once."""
         partner = dict(partner)
         partner_id = partner.get('id')
-        if not (partner.get('mobile') or '').strip():
-            raise UserError(_('Movil (Whatsapp) es obligatorio.'))
+        mobile = partner.get('mobile')
+        if partner_id and 'mobile' not in partner:
+            mobile = self.browse(partner_id).mobile
+        self._check_mobile_required_vals({'mobile': mobile})
         if not partner_id:
             if not partner.get('customer_rank'):
                 partner['customer_rank'] = 1
