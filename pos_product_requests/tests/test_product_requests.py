@@ -19,6 +19,10 @@ class TestProductRequests(SavepointCase):
         cls.system_user = new_test_user(
             cls.env, login="requests_system", groups="base.group_user,base.group_system",
         )
+        cls.manager = new_test_user(
+            cls.env, login="requests_manager",
+            groups="base.group_user,point_of_sale.group_pos_manager",
+        )
         cls.config = cls.env["pos.config"].create({"name": "Requests test POS"})
         cls.session = cls.env["pos.session"].create({
             "config_id": cls.config.id,
@@ -155,6 +159,25 @@ class TestProductRequests(SavepointCase):
             self.cashier_requests.with_context(
                 allowed_company_ids=company.ids,
             ).history_from_pos(session.id)
-        system_requests = self.requests.with_user(self.system_user)
-        self.assertIn(inside, system_requests.search([]).ids)
-        self.assertNotIn(outside, system_requests.search([]).ids)
+        for user in self.system_user | self.manager:
+            visible = self.requests.with_user(user).search([]).ids
+            self.assertIn(inside, visible)
+            self.assertNotIn(outside, visible)
+
+    def test_backend_menu_is_visible_to_pos_manager_with_read_only_access(self):
+        menu = self.env.ref("pos_product_requests.pos_product_request_menu")
+        self.assertEqual(menu.parent_id, self.env.ref("point_of_sale.menu_point_of_sale"))
+        self.assertEqual(menu.action.res_model, self.requests._name)
+        self.assertIn(menu.id, menu.with_user(self.manager)._visible_menu_ids())
+        self.assertNotIn(menu.id, menu.with_user(self.cashier)._visible_menu_ids())
+
+        manager_requests = self.requests.with_user(self.manager)
+        captured = manager_requests.browse(self.save())
+        self.assertEqual(captured.read(["product_text"])[0]["product_text"], "Special screw")
+        for operation in (
+            lambda: manager_requests.create({"product_text": "Direct request"}),
+            lambda: captured.write({"product_text": "Changed"}),
+            captured.unlink,
+        ):
+            with self.assertRaises(AccessError):
+                operation()
