@@ -149,6 +149,8 @@ class ResPartner(models.Model):
         config.check_access_rule("read")
         if not config or config.company_id not in self.env.user.company_ids:
             raise AccessError(_("No tiene acceso a esta compañía o configuración."))
+        if not config.customer_data_review_enabled:
+            raise AccessError(_("La revisión del cliente está apagada en esta caja."))
         partner = self.with_company(config.company_id).browse(partner_id).exists()
         partner.check_access_rights("write" if write else "read")
         partner.check_access_rule("write" if write else "read")

@@ -23,7 +23,13 @@ instala mayoreo, vendedor o módulos Enterprise.
 Uso en caja
 -----------
 
-Con el módulo instalado y la sesión POS abierta:
+En **Punto de Venta → Configuración → Puntos de venta**, un administrador
+puede activar **Revisar datos del cliente al cobrar** para cada caja. La opción
+está apagada por defecto. Guarda la configuración y recarga la pantalla de
+cada POS que estaba abierto. Las cajas con la opción apagada siguen el flujo
+habitual de pago.
+
+Con la opción encendida y la sesión POS abierta:
 
 1. Prepara el ticket, selecciona el cliente y entra a la pantalla de pago.
 2. Al pulsar **Validar**, se abre **Revisar datos del cliente**, también cuando

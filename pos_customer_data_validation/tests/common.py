@@ -20,6 +20,7 @@ class CustomerDataCommon(SavepointCase):
         cls.prices = cls.public_price | cls.wholesale_price | cls.distributor_price
         cls.config = cls.env["pos.config"].create({
             "name": "Customer review test",
+            "customer_data_review_enabled": True,
             "pricelist_id": cls.public_price.id,
             "available_pricelist_ids": [(6, 0, cls.prices.ids)],
         })

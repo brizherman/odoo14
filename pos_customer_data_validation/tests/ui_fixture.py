@@ -41,6 +41,7 @@ def create_ui_fixture(env, open_session=True):
         prices |= prices.create({"name": name, "company_id": env.company.id,
                                  "currency_id": env.company.currency_id.id})
     config = env["pos.config"].create({
+        "customer_data_review_enabled": True,
         "name": "Customer review UI", "journal_id": journal.id,
         "invoice_journal_id": journal.id, "pricelist_id": prices[0].id,
         "available_pricelist_ids": [(6, 0, prices.ids)], "use_pricelist": True,

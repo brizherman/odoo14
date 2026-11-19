@@ -58,7 +58,7 @@ function deferred() {
     const promise = new Promise(r => { resolve = r; });
     return { promise, resolve };
 }
-function setup(ordering = [review, ...optional]) {
+function setup(ordering = [review, ...optional], enabled = true) {
     const client = { id: 7, name: 'Customer', mobile: '123', customer_type: 'publico_general', property_product_pricelist: [1, 'Public'] };
     const listeners = new Map();
     const order = {
@@ -84,7 +84,7 @@ function setup(ordering = [review, ...optional]) {
         },
         pos: {
             get_order: () => order, on() {}, off() {},
-            config: { id: 1, payment_method_ids: [1] },
+            config: { id: 1, payment_method_ids: [1], customer_data_review_enabled: enabled },
             payment_methods: [{ id: 1, is_cash_count: true }],
             db: { partner_write_date: 'old', add_partners() {} },
             wholesaleControlActive: () => false,
@@ -98,7 +98,11 @@ function setup(ordering = [review, ...optional]) {
 }
 async function run() {
     for (const ordering of [[review, ...optional], [...optional, review]]) {
-        let x = setup(ordering);
+        let x = setup(ordering, false);
+        await x.screen.lockedValidateOrder();
+        assert.equal(x.order.sent, 1);
+        assert.ok(!x.calls.includes('CustomerDataPopup'));
+        x = setup(ordering);
         await x.screen.lockedValidateOrder();
         assert.equal(x.order.sent, 1);
         assert.equal(x.calls[0], 'CustomerDataPopup');

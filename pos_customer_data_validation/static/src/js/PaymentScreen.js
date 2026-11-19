@@ -8,6 +8,8 @@ odoo.define('pos_customer_data_validation.PaymentScreen', function (require) {
     const CustomerDataPaymentScreen = Base => class extends Base {
         constructor() {
             super(...arguments);
+            // Keep the previous behavior until the updated POS assets load the field.
+            if (this.env.pos.config.customer_data_review_enabled === false) return;
             // Core captured the complete validateOrder chain, including optional addons.
             const inheritedValidate = this.lockedValidateOrder;
             this.lockedValidateOrder = async (isForceValidate) => {

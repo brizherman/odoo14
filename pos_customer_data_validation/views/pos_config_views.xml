@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="pos_config_view_form_customer_review" model="ir.ui.view">
+        <field name="name">pos.config.form.customer.data.review</field>
+        <field name="model">pos.config</field>
+        <field name="inherit_id" ref="point_of_sale.pos_config_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@id='login_with_employees']/../.." position="after">
+                <div class="row mt16 o_settings_container" groups="base.group_system">
+                    <div class="col-12 col-lg-6 o_setting_box">
+                        <div class="o_setting_left_pane">
+                            <field name="customer_data_review_enabled"/>
+                        </div>
+                        <div class="o_setting_right_pane">
+                            <label for="customer_data_review_enabled"/>
+                            <div class="text-muted">
+                                Muestra la revisión antes de validar ventas con cliente seleccionado.
+                                Recarga el punto de venta después de cambiar esta opción.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>

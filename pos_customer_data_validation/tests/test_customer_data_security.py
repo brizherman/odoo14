@@ -94,3 +94,19 @@ class TestCustomerDataSecurity(CustomerDataCommon):
                 self.Partner.with_user(self.cashier).pos_customer_data_read(
                     partner_id, config_id,
                 )
+
+    def test_register_switch_blocks_review_only_for_the_selected_register(self):
+        other = self.config.copy({"name": "Caja sin revisión"})
+        self.assertFalse(other.customer_data_review_enabled)
+        partners = self.Partner.with_user(self.cashier)
+        with self.assertRaisesRegex(AccessError, "apagada"):
+            partners.pos_customer_data_read(self.partner.id, other.id)
+        with self.assertRaisesRegex(AccessError, "apagada"):
+            partners.pos_customer_data_save(self.partner.id, other.id, {"mobile": "6649990000"})
+        self.assertEqual(self.partner.mobile, "6641234567")
+        with self.assertRaises(AccessError):
+            self.config.with_user(self.cashier).write({"customer_data_review_enabled": False})
+        partners.pos_customer_data_read(self.partner.id, self.config.id)
+        self.config.customer_data_review_enabled = False
+        with self.assertRaisesRegex(AccessError, "apagada"):
+            partners.pos_customer_data_save(self.partner.id, self.config.id, {})
