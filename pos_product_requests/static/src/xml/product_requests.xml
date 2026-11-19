@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="pos_product_requests.RegisterButton" owl="1">
+        <button type="button" class="control-button register-product-request" t-on-click="onClick">
+            <i class="fa fa-plus-square-o" aria-hidden="true"/>
+            <span>Register Product Request</span>
+        </button>
+    </t>
+
+    <t t-name="pos_product_requests.Popup" owl="1">
+        <div class="modal-dialog product-request-overlay">
+            <form class="popup product-request-popup" role="dialog" aria-modal="true"
+                  aria-labelledby="product-request-heading" t-on-submit.prevent="confirm">
+                <h2 class="title" id="product-request-heading">Register Product Request</h2>
+                <div class="body">
+                    <label for="product-request-text">Requested Product</label>
+                    <textarea id="product-request-text" rows="2" t-ref="productInput"
+                              t-model="state.product" t-att-disabled="state.saving"/>
+                    <p t-if="state.errors.product" class="request-error" role="alert" t-esc="state.errors.product"/>
+                    <fieldset t-att-disabled="state.saving">
+                        <legend>Reason</legend>
+                        <div class="request-reasons">
+                            <button t-foreach="reasons" t-as="reason" t-key="reason.key" type="button"
+                                    t-att-aria-pressed="state.reason === reason.key ? 'true' : 'false'"
+                                    t-on-click="() => state.reason = reason.key" t-esc="reason.label"/>
+                        </div>
+                        <p t-if="state.errors.reason" class="request-error" role="alert" t-esc="state.errors.reason"/>
+                    </fieldset>
+                    <p t-if="state.saveError" class="request-error" role="alert" t-esc="state.saveError"/>
+                </div>
+                <footer class="footer">
+                    <button type="submit" class="button confirm" t-att-disabled="state.saving">Save</button>
+                    <button type="button" class="button cancel" t-on-click="cancel" t-att-disabled="state.saving">Cancel</button>
+                </footer>
+            </form>
+        </div>
+    </t>
+
+    <t t-inherit="point_of_sale.Chrome" t-inherit-mode="extension" owl="1">
+        <xpath expr="//OrderManagementButton" position="after">
+            <ProductRequestHistoryButton/>
+        </xpath>
+    </t>
+
+    <t t-name="pos_product_requests.HistoryButton" owl="1">
+        <button type="button" class="oe_status product-request-history-button"
+                t-att-title="label" t-att-aria-label="label" t-on-click="onClick">
+            <i class="fa fa-fw fa-list-alt oe_icon" aria-hidden="true"/>
+        </button>
+    </t>
+
+    <t t-name="pos_product_requests.History" owl="1">
+        <section class="product-request-history screen" aria-labelledby="product-request-history-title">
+            <div class="screen-content">
+                <header class="top-content">
+                    <button type="button" class="button back" t-on-click="back">
+                        <i class="fa fa-angle-double-left" aria-hidden="true"/> <span>Back</span>
+                    </button>
+                    <h1 id="product-request-history-title">Product Requests</h1>
+                </header>
+                <div class="request-history-content">
+                    <p t-if="state.loading" role="status">Loading product requests…</p>
+                    <p t-elif="state.error" role="alert">Could not load product requests. Check the connection and reopen the history.</p>
+                    <p t-elif="!state.rows.length" role="status">No product requests have been recorded yet.</p>
+                    <table t-else="">
+                        <thead>
+                            <tr>
+                                <th scope="col">Requested Product</th>
+                                <th scope="col">Reason</th>
+                                <th scope="col">Date and Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="state.rows" t-as="row" t-key="row.id">
+                                <td t-esc="row.product_text"/>
+                                <td t-esc="row.reason_label"/>
+                                <td t-esc="formatDate(row.create_date)"/>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </t>
+</templates>
