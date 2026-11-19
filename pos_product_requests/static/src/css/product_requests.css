@@ -1,0 +1,129 @@
+.pos .register-product-request {
+    min-height: 44px;
+}
+
+.pos .product-request-overlay {
+    padding: 0;
+    overflow: hidden;
+}
+
+.pos .modal-dialog .product-request-popup {
+    max-width: min(540px, calc(100% - 24px));
+    max-height: calc(100% - 24px);
+    overflow-y: auto;
+}
+
+.pos .product-request-popup .body {
+    text-align: left;
+}
+
+.pos .product-request-popup textarea {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 54px;
+    margin: 6px 0 12px;
+    padding: 8px;
+    font: inherit;
+    resize: vertical;
+    user-select: text;
+}
+
+.pos .product-request-popup fieldset {
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.pos .request-reasons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.pos .request-reasons button {
+    flex: 1 0 auto;
+    min-height: 44px;
+    padding: 6px 12px;
+    border: 1px solid #8f8f8f;
+    border-radius: 3px;
+    background: #fff;
+    color: #333;
+    cursor: pointer;
+}
+
+.pos .request-reasons button[aria-pressed="true"],
+.pos .product-request-popup .confirm {
+    border-color: #327356;
+    background: #327356;
+    color: #fff;
+}
+
+.pos .product-request-popup .button {
+    height: 44px;
+    font-size: 16px;
+}
+
+.pos .product-request-popup button:disabled {
+    opacity: .65;
+    cursor: default;
+}
+
+.pos .product-request-popup .request-error {
+    margin: 6px 0;
+    color: #a32323;
+}
+
+.pos .product-request-history-button {
+    border: 0;
+    background: transparent;
+}
+
+.pos .product-request-history .screen-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.pos .product-request-history h1 {
+    align-self: center;
+    margin: 0 12px;
+    font-size: 22px;
+}
+
+.pos .request-history-content {
+    flex: 1;
+    overflow: auto;
+}
+
+.pos .request-history-content p {
+    padding: 12px 18px;
+}
+
+.pos .request-history-content table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
+.pos .request-history-content th,
+.pos .request-history-content td {
+    padding: 10px 12px;
+    text-align: left;
+    overflow-wrap: anywhere;
+}
+
+.pos .request-history-content th {
+    position: sticky;
+    top: 0;
+    background: #e6e6e6;
+}
+
+.pos .request-history-content tbody tr:nth-child(even) {
+    background: #f0f0f0;
+}
+
+.pos .request-history-content th:first-child,
+.pos .request-history-content td:first-child {
+    width: 45%;
+    white-space: pre-wrap;
+}

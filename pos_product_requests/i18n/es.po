@@ -1,0 +1,164 @@
+# Translation of Odoo Server.
+# Spanish translations for POS Product Requests.
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 14.0\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. module: pos_product_requests
+#: code:addons/pos_product_requests/models/pos_product_request.py:0
+#, python-format
+msgid "An active point of sale session is required."
+msgstr "Se requiere una sesión abierta de Punto de venta."
+
+#. module: pos_product_requests
+#. openerp-web
+#: code:addons/pos_product_requests/static/src/xml/product_requests.xml:0
+#, python-format
+msgid "Back"
+msgstr "Volver"
+
+#. module: pos_product_requests
+#. openerp-web
+#: code:addons/pos_product_requests/static/src/xml/product_requests.xml:0
+#, python-format
+msgid "Cancel"
+msgstr "Cancelar"
+
+#. module: pos_product_requests
+#. openerp-web
+#: code:addons/pos_product_requests/static/src/xml/product_requests.xml:0
+#, python-format
+msgid "Could not load product requests. Check the connection and reopen the history."
+msgstr "No se pudo cargar el historial. Revisa la conexión y vuelve a abrir Faltantes."
+
+#. module: pos_product_requests
+#. openerp-web
+#: code:addons/pos_product_requests/static/src/js/product_requests.js:0
+#, python-format
+msgid "Could not save the request. Check the connection and try again."
+msgstr "No se pudo guardar el faltante. Revisa la conexión e inténtalo de nuevo."
+
+#. module: pos_product_requests
+#. openerp-web
+#: code:addons/pos_product_requests/static/src/xml/product_requests.xml:0
+#, python-format
+msgid "Date and Time"
+msgstr "Fecha y hora"
+
+#. module: pos_product_requests
+#. openerp-web
+#: code:addons/pos_product_requests/static/src/js/product_requests.js:0
+#: model:ir.model.fields.selection,name:pos_product_requests.selection__pos_product_request__reason__does_not_exist
+#, python-format
+msgid "Does not exist"
+msgstr "No existe"
+
+#. module: pos_product_requests
+#. openerp-web
+#: code:addons/pos_product_requests/static/src/js/product_requests.js:0
+#: code:addons/pos_product_requests/models/pos_product_request.py:0
+#, python-format
+msgid "Enter the requested product."
+msgstr "Escribe el producto solicitado."
+
+#. module: pos_product_requests
+#: code:addons/pos_product_requests/models/pos_product_request.py:0
+#, python-format
+msgid "Invalid capture key."
+msgstr "La clave de captura no es válida."
+
+#. module: pos_product_requests
+#. openerp-web
+#: code:addons/pos_product_requests/static/src/xml/product_requests.xml:0
+#, python-format
+msgid "Loading product requests…"
+msgstr "Cargando faltantes…"
+
+#. module: pos_product_requests
+#. openerp-web
+#: code:addons/pos_product_requests/static/src/xml/product_requests.xml:0
+#, python-format
+msgid "No product requests have been recorded yet."
+msgstr "Aún no hay faltantes registrados"
+
+#. module: pos_product_requests
+#. openerp-web
+#: code:addons/pos_product_requests/static/src/js/product_requests.js:0
+#: model:ir.model.fields.selection,name:pos_product_requests.selection__pos_product_request__reason__out_of_stock
+#, python-format
+msgid "Out of stock"
+msgstr "Sin stock"
+
+#. module: pos_product_requests
+#: code:addons/pos_product_requests/models/pos_product_request.py:0
+#, python-format
+msgid "Point of Sale access is required."
+msgstr "Se requiere acceso al Punto de venta."
+
+#. module: pos_product_requests
+#. openerp-web
+#: code:addons/pos_product_requests/static/src/xml/product_requests.xml:0
+#: code:addons/pos_product_requests/static/src/js/product_requests.js:0
+#, python-format
+msgid "Product Requests"
+msgstr "Faltantes"
+
+#. module: pos_product_requests
+#. openerp-web
+#: code:addons/pos_product_requests/static/src/xml/product_requests.xml:0
+#, python-format
+msgid "Reason"
+msgstr "Motivo"
+
+#. module: pos_product_requests
+#. openerp-web
+#: code:addons/pos_product_requests/static/src/xml/product_requests.xml:0
+#, python-format
+msgid "Register Product Request"
+msgstr "Registrar faltante"
+
+#. module: pos_product_requests
+#. openerp-web
+#: code:addons/pos_product_requests/static/src/xml/product_requests.xml:0
+#, python-format
+msgid "Requested Product"
+msgstr "Producto solicitado"
+
+#. module: pos_product_requests
+#. openerp-web
+#: code:addons/pos_product_requests/static/src/xml/product_requests.xml:0
+#, python-format
+msgid "Save"
+msgstr "Guardar"
+
+#. module: pos_product_requests
+#. openerp-web
+#: code:addons/pos_product_requests/static/src/js/product_requests.js:0
+#, python-format
+msgid "Select a reason."
+msgstr "Selecciona un motivo."
+
+#. module: pos_product_requests
+#: code:addons/pos_product_requests/models/pos_product_request.py:0
+#, python-format
+msgid "Select a valid reason."
+msgstr "Selecciona un motivo válido."
+
+#. module: pos_product_requests
+#: code:addons/pos_product_requests/models/pos_product_request.py:0
+#, python-format
+msgid "This capture was already saved with different details. Restore the original details or start a new capture."
+msgstr "Esta captura ya se guardó con otros datos. Recupera los datos originales o empieza una captura nueva."
+
+#. module: pos_product_requests
+#. openerp-web
+#: code:addons/pos_product_requests/static/src/js/product_requests.js:0
+#: model:ir.model.fields.selection,name:pos_product_requests.selection__pos_product_request__reason__not_carried
+#, python-format
+msgid "We don't carry it"
+msgstr "No lo manejamos"
